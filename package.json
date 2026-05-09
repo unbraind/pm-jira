@@ -1,0 +1,24 @@
+{
+  "name": "pm-ext-jira",
+  "version": "0.1.0",
+  "description": "Jira issue sync for pm-cli",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "@unbrained/pm-cli": ">=2026.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "keywords": ["pm-cli", "jira", "extension", "sync"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unbraind/pm-cli-ext-jira.git"
+  }
+}
