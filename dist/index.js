@@ -131,34 +131,36 @@ export default defineExtension({
                 "pm jira sync --jql 'project = PROJ AND assignee = currentUser()'",
                 "pm jira sync --project PROJ --status todo --dry-run",
             ],
-            flags: {
-                project: {
-                    type: "string",
+            flags: [
+                {
+                    long: "--project",
+                    short: "-p",
+                    value_name: "key",
                     description: "Jira project key (e.g. PROJ). Used to build the default JQL query.",
-                    alias: "p",
                 },
-                jql: {
-                    type: "string",
+                {
+                    long: "--jql",
+                    short: "-q",
+                    value_name: "query",
                     description: "Custom JQL query. Overrides --project default JQL when provided.",
-                    alias: "q",
                 },
-                "max-results": {
-                    type: "number",
+                {
+                    long: "--max-results",
+                    short: "-n",
+                    value_name: "n",
                     description: "Maximum number of issues to sync (default: 500)",
-                    default: 500,
-                    alias: "n",
                 },
-                "dry-run": {
-                    type: "boolean",
+                {
+                    long: "--dry-run",
                     description: "Preview what would be synced without writing any items",
-                    default: false,
                 },
-                status: {
-                    type: "string",
+                {
+                    long: "--status",
+                    short: "-s",
+                    value_name: "filter",
                     description: "Filter issues by pm status after mapping (todo|wip|done|blocked)",
-                    alias: "s",
                 },
-            },
+            ],
             async run(ctx) {
                 const project = ctx.args["project"];
                 const customJql = ctx.args["jql"];
