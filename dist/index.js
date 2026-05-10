@@ -1,6 +1,6 @@
 import https from "node:https";
 import { URL } from "node:url";
-import { defineExtension } from "@unbrained/pm-cli/sdk";
+function defineExtension(m){return m}
 function mapJiraPriority(jiraPriority) {
     if (!jiraPriority)
         return 3;
