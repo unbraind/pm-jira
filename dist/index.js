@@ -1,6 +1,7 @@
 import https from "node:https";
 import { URL } from "node:url";
-function defineExtension(m){return m}
+import { spawnSync } from "node:child_process";
+const defineExtension = ((extension) => extension);
 function mapJiraPriority(jiraPriority) {
     if (!jiraPriority)
         return 3;
@@ -23,15 +24,15 @@ function mapJiraStatus(jiraStatus) {
         name === "in review" ||
         name === "in development" ||
         name === "code review")
-        return "wip";
+        return "in_progress";
     if (name === "done" ||
         name === "resolved" ||
         name === "closed" ||
         name === "complete" ||
         name === "completed")
-        return "done";
+        return "closed";
     // Default: to do / open / backlog / any other
-    return "todo";
+    return "open";
 }
 // ---------------------------------------------------------------------------
 // Jira description (Atlassian Document Format) → plain text
@@ -129,84 +130,80 @@ export default defineExtension({
                 "pm jira sync --project PROJ",
                 "pm jira sync --project PROJ --max-results 200",
                 "pm jira sync --jql 'project = PROJ AND assignee = currentUser()'",
-                "pm jira sync --project PROJ --status todo --dry-run",
+                "pm jira sync --project PROJ --status open --dry-run",
             ],
             flags: [
                 {
                     long: "--project",
-                    short: "-p",
-                    value_name: "key",
-                    description: "Jira project key (e.g. PROJ). Used to build the default JQL query.",
+                    value_name: "KEY",
+                    description: "Jira project key (e.g. PROJ)",
                 },
                 {
                     long: "--jql",
-                    short: "-q",
                     value_name: "query",
-                    description: "Custom JQL query. Overrides --project default JQL when provided.",
+                    description: "Custom JQL query",
                 },
                 {
                     long: "--max-results",
-                    short: "-n",
                     value_name: "n",
-                    description: "Maximum number of issues to sync (default: 500)",
+                    description: "Max issues to sync (default: 500)",
                 },
                 {
                     long: "--dry-run",
-                    description: "Preview what would be synced without writing any items",
+                    description: "Preview without writing",
                 },
                 {
                     long: "--status",
-                    short: "-s",
                     value_name: "filter",
-                    description: "Filter issues by pm status after mapping (todo|wip|done|blocked)",
+                    description: "Filter by pm status (open|in_progress|closed|blocked)",
                 },
             ],
             async run(ctx) {
-                const project = ctx.args["project"];
-                const customJql = ctx.args["jql"];
-                const maxResults = ctx.args["max-results"] ?? 500;
-                const dryRun = ctx.args["dry-run"] ?? false;
-                const statusFilter = ctx.args["status"];
+                const project = ctx.options["project"];
+                const customJql = ctx.options["jql"];
+                const maxResults = ctx.options["max-results"] ?? 500;
+                const dryRun = ctx.options["dry-run"] ?? false;
+                const statusFilter = ctx.options["status"];
                 // Validate env vars
                 const baseUrl = process.env["JIRA_BASE_URL"];
                 const token = process.env["JIRA_API_TOKEN"];
                 const email = process.env["JIRA_EMAIL"];
                 if (!baseUrl || !token || !email) {
-                    ctx.log.error("Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL.");
+                    console.error("Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL.");
                     return { success: false, error: "Missing Jira credentials" };
                 }
                 if (!project && !customJql) {
-                    ctx.log.error("Provide either --project <KEY> or --jql <query> to specify which issues to sync.");
+                    console.error("Provide either --project <KEY> or --jql <query> to specify which issues to sync.");
                     return { success: false, error: "No project or JQL specified" };
                 }
                 const jql = customJql ??
                     `project = ${project} AND statusCategory != Done ORDER BY priority ASC`;
                 const authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
-                ctx.log.info(`Fetching issues from Jira... (JQL: ${jql})`);
+                console.error(`Fetching issues from Jira... (JQL: ${jql})`);
                 let issues;
                 try {
                     issues = await fetchAllJiraIssues(baseUrl.replace(/\/$/, ""), authHeader, jql, maxResults);
                 }
                 catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    ctx.log.error(`Failed to fetch issues from Jira: ${msg}`);
+                    console.error(`Failed to fetch issues from Jira: ${msg}`);
                     return { success: false, error: msg };
                 }
-                ctx.log.info(`Fetched ${issues.length} issues from Jira`);
+                console.error(`Fetched ${issues.length} issues from Jira`);
                 // Apply status filter before upsert
                 const filtered = statusFilter
                     ? issues.filter((issue) => mapJiraStatus(issue.fields.status.name) === statusFilter)
                     : issues;
                 if (statusFilter && filtered.length !== issues.length) {
-                    ctx.log.info(`Filtered to ${filtered.length} issues with pm status "${statusFilter}"`);
+                    console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter}"`);
                 }
                 if (dryRun) {
-                    ctx.log.info(`[dry-run] Would upsert ${filtered.length} items:`);
+                    console.error(`[dry-run] Would upsert ${filtered.length} items:`);
                     for (const issue of filtered.slice(0, 20)) {
-                        ctx.log.info(`  ${issue.key}: ${issue.fields.summary} [${mapJiraStatus(issue.fields.status.name)}]`);
+                        console.error(`  ${issue.key}: ${issue.fields.summary} [${mapJiraStatus(issue.fields.status.name)}]`);
                     }
                     if (filtered.length > 20) {
-                        ctx.log.info(`  ... and ${filtered.length - 20} more`);
+                        console.error(`  ... and ${filtered.length - 20} more`);
                     }
                     return {
                         success: true,
@@ -215,39 +212,27 @@ export default defineExtension({
                         project: project ?? "custom-jql",
                     };
                 }
-                // Upsert items
+                // Create items via pm CLI
                 let upserted = 0;
                 for (const issue of filtered) {
-                    const projectKey = project ?? issue.key.split("-")[0];
-                    const issueNumber = issue.key.split("-")[1] ?? issue.key;
-                    const idSuffix = `${projectKey}-${issueNumber}`;
                     const tags = [
                         ...(issue.fields.labels ?? []),
                         ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
                     ];
-                    const body = adfToPlainText(issue.fields.description);
-                    await ctx.pm.upsertItem({
-                        idSuffix,
-                        title: `[${issue.key}] ${issue.fields.summary}`,
-                        body: body || undefined,
-                        status: mapJiraStatus(issue.fields.status.name),
-                        priority: mapJiraPriority(issue.fields.priority?.name),
-                        tags: tags.length > 0 ? tags : undefined,
-                        meta: {
-                            jira_key: issue.key,
-                            jira_project: projectKey,
-                            ...(issue.fields.assignee
-                                ? { jira_assignee: issue.fields.assignee.displayName }
-                                : {}),
-                            ...(issue.fields.duedate
-                                ? { jira_duedate: issue.fields.duedate }
-                                : {}),
-                        },
-                    });
-                    upserted++;
+                    const result = spawnSync("pm", [
+                        "--path", ctx.pm_root,
+                        "create",
+                        "--title", `[${issue.key}] ${issue.fields.summary}`,
+                        "--status", mapJiraStatus(issue.fields.status.name),
+                        "--type", "Issue",
+                        ...(tags.length > 0 ? ["--tags", tags.join(",")] : []),
+                    ], { encoding: "utf-8" });
+                    if (result.status === 0) {
+                        upserted++;
+                    }
                 }
                 const projectLabel = project ?? "custom-jql";
-                ctx.log.info(`Synced ${upserted} issues from Jira project ${projectLabel}`);
+                console.error(`Synced ${upserted} issues from Jira project ${projectLabel}`);
                 return {
                     success: true,
                     synced: upserted,
@@ -260,57 +245,43 @@ export default defineExtension({
         // -----------------------------------------------------------------------
         // Importer: jira-sync
         // -----------------------------------------------------------------------
-        api.registerImporter("jira-sync", async ({ config, pm, log }) => {
-            const baseUrl = config["JIRA_BASE_URL"] ??
+        api.registerImporter("jira-sync", async (ctx) => {
+            const baseUrl = ctx.options["JIRA_BASE_URL"] ??
                 process.env["JIRA_BASE_URL"];
-            const token = config["JIRA_API_TOKEN"] ??
+            const token = ctx.options["JIRA_API_TOKEN"] ??
                 process.env["JIRA_API_TOKEN"];
-            const email = config["JIRA_EMAIL"] ??
+            const email = ctx.options["JIRA_EMAIL"] ??
                 process.env["JIRA_EMAIL"];
-            const project = config["project"];
-            const customJql = config["jql"];
-            const maxResults = config["maxResults"] ?? 500;
+            const project = ctx.options["project"];
+            const customJql = ctx.options["jql"];
+            const maxResults = ctx.options["maxResults"] ?? 500;
             if (!baseUrl || !token || !email) {
-                throw new Error("jira-sync importer requires JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL (via config or env)");
+                throw new Error("jira-sync importer requires JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL (via options or env)");
             }
             if (!project && !customJql) {
-                throw new Error("jira-sync importer requires either config.project or config.jql");
+                throw new Error("jira-sync importer requires either options.project or options.jql");
             }
             const jql = customJql ??
                 `project = ${project} AND statusCategory != Done ORDER BY priority ASC`;
             const authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
-            log.info(`[jira-sync] Fetching issues with JQL: ${jql}`);
+            console.error(`[jira-sync] Fetching issues with JQL: ${jql}`);
             const issues = await fetchAllJiraIssues(baseUrl.replace(/\/$/, ""), authHeader, jql, maxResults);
-            log.info(`[jira-sync] Importing ${issues.length} issues`);
+            console.error(`[jira-sync] Importing ${issues.length} issues`);
             for (const issue of issues) {
-                const projectKey = project ?? issue.key.split("-")[0];
-                const issueNumber = issue.key.split("-")[1] ?? issue.key;
-                const idSuffix = `${projectKey}-${issueNumber}`;
                 const tags = [
                     ...(issue.fields.labels ?? []),
                     ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
                 ];
-                const body = adfToPlainText(issue.fields.description);
-                await pm.upsertItem({
-                    idSuffix,
-                    title: `[${issue.key}] ${issue.fields.summary}`,
-                    body: body || undefined,
-                    status: mapJiraStatus(issue.fields.status.name),
-                    priority: mapJiraPriority(issue.fields.priority?.name),
-                    tags: tags.length > 0 ? tags : undefined,
-                    meta: {
-                        jira_key: issue.key,
-                        jira_project: projectKey,
-                        ...(issue.fields.assignee
-                            ? { jira_assignee: issue.fields.assignee.displayName }
-                            : {}),
-                        ...(issue.fields.duedate
-                            ? { jira_duedate: issue.fields.duedate }
-                            : {}),
-                    },
-                });
+                spawnSync("pm", [
+                    "--path", ctx.pm_root,
+                    "create",
+                    "--title", `[${issue.key}] ${issue.fields.summary}`,
+                    "--status", mapJiraStatus(issue.fields.status.name),
+                    "--type", "Issue",
+                    ...(tags.length > 0 ? ["--tags", tags.join(",")] : []),
+                ], { encoding: "utf-8" });
             }
-            log.info(`[jira-sync] Done. Imported ${issues.length} issues.`);
+            console.error(`[jira-sync] Done. Imported ${issues.length} issues.`);
         });
     },
 });
