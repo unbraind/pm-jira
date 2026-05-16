@@ -35,14 +35,14 @@ You need a Jira API token to authenticate. To create one:
 |---|---|---|
 | `JIRA_BASE_URL` | Your Jira instance base URL | `https://company.atlassian.net` |
 | `JIRA_EMAIL` | Email address for your Jira account | `you@company.com` |
-| `JIRA_API_TOKEN` | API token generated above | `ATATT3x...` |
+| `JIRA_API_TOKEN` | API token generated above | `<jira-api-token>` |
 
 Set them in your shell or `.env`:
 
 ```bash
 export JIRA_BASE_URL=https://company.atlassian.net
 export JIRA_EMAIL=you@company.com
-export JIRA_API_TOKEN=ATATT3xFfGF0...
+export JIRA_API_TOKEN=<jira-api-token>
 ```
 
 ## Usage
@@ -102,7 +102,7 @@ Credentials are read from environment variables or from the importer config:
     "jira-sync": {
       "JIRA_BASE_URL": "https://company.atlassian.net",
       "JIRA_EMAIL": "you@company.com",
-      "JIRA_API_TOKEN": "ATATT3x...",
+      "JIRA_API_TOKEN": "<jira-api-token>",
       "project": "PROJ"
     }
   }
