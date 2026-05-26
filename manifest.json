@@ -1,5 +1,5 @@
 {
-  "name": "pm-ext-jira",
+  "name": "pm-jira",
   "version": "0.1.0",
   "description": "Jira issue sync for pm-cli",
   "author": "@unbraind",
@@ -10,5 +10,8 @@
     "schema",
     "importers",
     "services"
-  ]
+  ],
+  "pm": {
+    "compatibility": "v2"
+  }
 }

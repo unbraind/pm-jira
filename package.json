@@ -1,40 +1,88 @@
 {
-  "name": "pm-ext-jira",
+  "name": "pm-jira",
   "version": "0.1.0",
   "description": "Jira issue sync for pm-cli",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/unbraind/pm-cli-ext-jira.git"
+    "url": "git+https://github.com/unbraind/pm-jira.git"
   },
   "bugs": {
-    "url": "https://github.com/unbraind/pm-cli-ext-jira/issues"
+    "url": "https://github.com/unbraind/pm-jira/issues"
   },
-  "homepage": "https://github.com/unbraind/pm-cli-ext-jira#readme",
+  "homepage": "https://github.com/unbraind/pm-jira#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist/",
     "manifest.json",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck",
+    "audit:prod": "npm audit --omit=dev",
+    "pack:dry-run": "npm pack --dry-run",
+    "changelog": "pm-changelog --pm-root .agents/pm --mode prepend --output CHANGELOG.md --release-version-from-package --since-previous-tag --until-release-tag --item-url-base https://github.com/unbraind/pm-jira/blob/main/.agents/pm",
+    "changelog:full": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-jira/blob/main/.agents/pm",
+    "changelog:check": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-jira/blob/main/.agents/pm --check",
+    "release:check": "npm run typecheck && npm run build && npm run audit:prod && npm run pack:dry-run && npm run changelog:check"
   },
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.5.0"
+    "@unbrained/pm-cli": ">=2026.5.24"
   },
   "devDependencies": {
-    "@unbrained/pm-cli": "^2026.5.10",
-    "typescript": "^5.4.0"
+    "@unbrained/pm-cli": "^2026.5.24",
+    "typescript": "^6.0.3",
+    "pm-changelog": "^2026.5.25",
+    "@types/node": "^25.9.1"
   },
   "keywords": [
-    "pm-cli",
-    "jira",
     "extension",
+    "jira",
+    "pm-cli",
+    "pm-extension",
+    "pm-package",
     "sync"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "@unbraind",
+  "pm": {
+    "aliases": [
+      "jira"
+    ],
+    "extensions": [
+      "."
+    ],
+    "catalog": {
+      "display_name": "Jira Sync",
+      "category": "sync",
+      "summary": "Jira issue sync for pm-cli",
+      "tags": [
+        "jira",
+        "sync",
+        "import"
+      ],
+      "links": {
+        "docs": "https://github.com/unbraind/pm-jira#readme",
+        "npm": "https://www.npmjs.com/package/pm-jira",
+        "repository": "https://github.com/unbraind/pm-jira",
+        "report": "https://github.com/unbraind/pm-jira/issues"
+      }
+    },
+    "docs": [
+      "README.md",
+      "CHANGELOG.md"
+    ],
+    "examples": [
+      "README.md"
+    ]
+  }
 }
