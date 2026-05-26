@@ -187,7 +187,7 @@ async function fetchAllJiraIssues(
 
 export default defineExtension({
   name: "pm-jira",
-  version: "0.1.0",
+  version: "2026.5.26",
 
   activate(api) {
     // -----------------------------------------------------------------------
