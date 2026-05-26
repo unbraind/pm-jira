@@ -1,4 +1,4 @@
-# pm-ext-jira
+# pm-jira
 
 A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues into pm items using the Jira REST API v3.
 
@@ -13,11 +13,16 @@ A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues 
 
 ## Installation
 
-Place the extension directory (or its built `dist/`) in your pm-cli extensions folder, or reference it in your pm-cli config.
+Install with pm from GitHub:
 
 ```bash
-# Build from source
-npm install
+pm install github.com/unbraind/pm-jira
+```
+
+Or build locally from source:
+
+```bash
+npm ci
 npm run build
 ```
 
@@ -187,3 +192,7 @@ npm run dev
 ## License
 
 MIT
+
+## Release Automation
+
+This package is release-ready for GitHub, npm, and Bun-compatible installs. CI runs type checking, build, production dependency audit, package packing, Bun install verification, and pm-changelog validation. The daily release workflow publishes only when commits exist after the latest release tag and uses pm-changelog to generate CHANGELOG.md and GitHub release notes.

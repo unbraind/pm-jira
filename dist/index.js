@@ -116,7 +116,7 @@ async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
 // Extension definition
 // ---------------------------------------------------------------------------
 export default defineExtension({
-    name: "pm-ext-jira",
+    name: "pm-jira",
     version: "0.1.0",
     activate(api) {
         // -----------------------------------------------------------------------
