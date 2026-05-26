@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add bun-install verification to release workflow ([pm-jira-iycb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-iycb.toon))
+
 ## 2026.05.26 - 2026-05-26
 
 ### Fixed
