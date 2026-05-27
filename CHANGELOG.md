@@ -12,6 +12,8 @@
 
 - Add bun-install verification to release workflow ([pm-jira-iycb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-iycb.toon))
 
+## 2026.05.26 - 2026-05-26
+
 ### Fixed
 
 - ci: fix release workflow step ordering ([pm-jira-469v](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-469v.toon))
