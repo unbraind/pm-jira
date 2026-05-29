@@ -148,7 +148,7 @@ async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
 // ---------------------------------------------------------------------------
 export default defineExtension({
     name: "pm-jira",
-    version: "2026.5.29",
+    version: "2026.5.29-1",
     activate(api) {
         // -----------------------------------------------------------------------
         // Command: pm jira sync
