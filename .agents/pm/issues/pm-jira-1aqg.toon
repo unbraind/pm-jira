@@ -1,0 +1,12 @@
+id: pm-jira-1aqg
+title: description (ADF) and priority fetched but never written to pm items
+description: ""
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-05-29T15:45:35.322Z"
+updated_at: "2026-05-29T15:45:35.322Z"
+author: codex
+parent: pm-jira-xfd9
+body: "SYMPTOM: synced pm items had no body and no priority. The Jira API response includes description (Atlassian Document Format) and priority, and the code even defined adfToPlainText() and mapJiraPriority() — but both were DEAD CODE; the pm create spawn passed only --title/--status/--type/--tags. Real-world data (long descriptions, priorities, due dates) was silently dropped.\n\nREPRO: sync any project; inspect created item -> body empty, priority defaulted.\n\nOBSERVED vs EXPECTED: observed body/priority/deadline missing; expected mapped from Jira.\n\nFIX: write path (command + importer) now passes --priority (mapJiraPriority), --body (adfToPlainText of description) when present, and --deadline from fields.duedate. Missing optional fields handled (priority defaults to 3; body/deadline/tags omitted when absent). Verified via stubbed-network + real pm create: stored item has priority:2, body:DESC-BODY-MARKER, deadline:2026-06-15, tags:lbl1,v9."

@@ -1,0 +1,12 @@
+id: pm-jira-dhsn
+title: dry-run/max-results flags read kebab keys; --dry-run silently writes
+description: ""
+type: Issue
+status: closed
+priority: 1
+tags: []
+created_at: "2026-05-29T15:45:16.094Z"
+updated_at: "2026-05-29T15:45:16.094Z"
+author: codex
+parent: pm-jira-xfd9
+body: "SYMPTOM: `pm jira sync --project PROJ --dry-run` does NOT preview — it executes the write path and creates pm items. Same for --max-results being ignored (always 500).\n\nREPRO: pm jira sync --project PROJ --dry-run (with valid creds). Items get created despite dry-run.\n\nROOT CAUSE: pm CLI normalizes loose extension flags to camelCase (extension-command-options.js toLooseOptionKey: --dry-run -> dryRun, --max-results -> maxResults). Code read ctx.options['dry-run'] / ['max-results'] (kebab) which are always undefined -> dryRun=false -> write path taken. Proven: probe showed ctx.options['dry-run']=undefined, ctx.options['dryRun']=true.\n\nOBSERVED vs EXPECTED: observed = silent writes during 'preview'; expected = no writes, preview only.\n\nFIX: added readStringOption/readNumberOption/readBooleanOption helpers that check BOTH kebab and camelCase keys; applied to project/jql/max-results/dry-run/status in both command and importer. Verified via stubbed-network probe: dry-run now makes 0 pm create calls and returns dryRun:true."
