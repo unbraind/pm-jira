@@ -6,31 +6,6 @@ import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/s
 
 const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
-// Flags may arrive under their kebab-case (`max-results`) or camelCase
-// (`maxResults`) key depending on runtime normalization, so check every form.
-export function optionString(options: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const k of keys) {
-    const v = options[k];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-    if (typeof v === "number") return String(v);
-  }
-  return undefined;
-}
-
-export function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean {
-  return keys.some((k) => {
-    const v = options[k];
-    return v === true || v === "true" || v === "1";
-  });
-}
-
-export function optionInt(options: Record<string, unknown>, fallback: number, ...keys: string[]): number {
-  const raw = optionString(options, ...keys);
-  if (raw === undefined) return fallback;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
 // ---------------------------------------------------------------------------
 // Jira REST API types
 // ---------------------------------------------------------------------------
@@ -124,6 +99,49 @@ function adfToPlainText(
       .trim();
   }
   return "";
+}
+
+// ---------------------------------------------------------------------------
+// Option readers — tolerate both kebab-case and camelCase keys.
+// The pm CLI normalizes loose extension flags to camelCase (e.g. --dry-run
+// arrives as `dryRun`, --max-results as `maxResults`). Reading only the
+// kebab key silently yields undefined, which for --dry-run means a "preview"
+// that actually writes. Always check both spellings.
+// ---------------------------------------------------------------------------
+
+function camelKey(kebab: string): string {
+  return kebab.replace(/-([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
+}
+
+function readStringOption(
+  options: Record<string, unknown>,
+  kebab: string
+): string | undefined {
+  const v = options[kebab] ?? options[camelKey(kebab)];
+  return typeof v === "string" ? v : v === undefined ? undefined : String(v);
+}
+
+function readNumberOption(
+  options: Record<string, unknown>,
+  kebab: string
+): number | undefined {
+  const v = options[kebab] ?? options[camelKey(kebab)];
+  if (v === undefined || v === null) return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function readBooleanOption(
+  options: Record<string, unknown>,
+  kebab: string
+): boolean {
+  const v = options[kebab] ?? options[camelKey(kebab)];
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "";
+  }
+  return Boolean(v);
 }
 
 // ---------------------------------------------------------------------------
@@ -257,16 +275,11 @@ export default defineExtension({
       ],
 
       async run(ctx) {
-        const project = optionString(ctx.options, "project");
-        const customJql = optionString(ctx.options, "jql");
-        // Read both kebab and camelCase keys and coerce to an int — the runtime
-        // normalizes "--max-results" to "maxResults", so the kebab-only read
-        // silently ignored the flag (always 500) and never coerced the string.
-        const maxResults = optionInt(ctx.options, 500, "max-results", "maxResults");
-        // "--dry-run" normalizes to "dryRun"; the kebab-only read meant dry-run
-        // was always false and the sync wrote real items in "preview" mode.
-        const dryRun = optionEnabled(ctx.options, "dry-run", "dryRun");
-        const statusFilter = optionString(ctx.options, "status");
+        const project = readStringOption(ctx.options, "project");
+        const customJql = readStringOption(ctx.options, "jql");
+        const maxResults = readNumberOption(ctx.options, "max-results") ?? 500;
+        const dryRun = readBooleanOption(ctx.options, "dry-run");
+        const statusFilter = readStringOption(ctx.options, "status");
 
         // Validate env vars
         const baseUrl = process.env["JIRA_BASE_URL"];
@@ -274,8 +287,6 @@ export default defineExtension({
         const email = process.env["JIRA_EMAIL"];
 
         if (!baseUrl || !token || !email) {
-          // Throw so the CLI exits non-zero — a returned { error } is treated
-          // as a successful run by the runtime.
           throw new Error(
             "Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL."
           );
@@ -305,7 +316,6 @@ export default defineExtension({
           );
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          // Throw so a failed fetch exits non-zero.
           throw new Error(`Failed to fetch issues from Jira: ${msg}`);
         }
 
@@ -350,6 +360,8 @@ export default defineExtension({
             ...(issue.fields.labels ?? []),
             ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
           ];
+          const body = adfToPlainText(issue.fields.description);
+          const priority = mapJiraPriority(issue.fields.priority?.name);
 
           const result = spawnSync(
             "pm",
@@ -359,6 +371,9 @@ export default defineExtension({
               "--title", `[${issue.key}] ${issue.fields.summary}`,
               "--status", mapJiraStatus(issue.fields.status.name),
               "--type", "Issue",
+              "--priority", String(priority),
+              ...(body ? ["--body", body] : []),
+              ...(issue.fields.duedate ? ["--deadline", issue.fields.duedate] : []),
               ...(tags.length > 0 ? ["--tags", tags.join(",")] : []),
             ],
             { encoding: "utf-8" }
@@ -366,16 +381,14 @@ export default defineExtension({
 
           if (result.status === 0) {
             upserted++;
+          } else {
+            console.error(
+              `Failed to create item for ${issue.key}: ${result.stderr ?? ""}`
+            );
           }
         }
 
         const projectLabel = project ?? "custom-jql";
-        if (upserted === 0 && filtered.length > 0) {
-          // Every create failed — surface as a non-zero exit for automation.
-          throw new Error(
-            `Synced 0 of ${filtered.length} issues from Jira project ${projectLabel}; all creates failed.`
-          );
-        }
         console.error(
           `Synced ${upserted} issues from Jira project ${projectLabel}`
         );
@@ -403,9 +416,9 @@ export default defineExtension({
       const email =
         (ctx.options["JIRA_EMAIL"] as string | undefined) ??
         process.env["JIRA_EMAIL"];
-      const project = ctx.options["project"] as string | undefined;
-      const customJql = ctx.options["jql"] as string | undefined;
-      const maxResults = (ctx.options["maxResults"] as number | undefined) ?? 500;
+      const project = readStringOption(ctx.options, "project");
+      const customJql = readStringOption(ctx.options, "jql");
+      const maxResults = readNumberOption(ctx.options, "max-results") ?? 500;
 
       if (!baseUrl || !token || !email) {
         throw new Error(
@@ -441,6 +454,8 @@ export default defineExtension({
           ...(issue.fields.labels ?? []),
           ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
         ];
+        const body = adfToPlainText(issue.fields.description);
+        const priority = mapJiraPriority(issue.fields.priority?.name);
 
         spawnSync(
           "pm",
@@ -450,6 +465,9 @@ export default defineExtension({
             "--title", `[${issue.key}] ${issue.fields.summary}`,
             "--status", mapJiraStatus(issue.fields.status.name),
             "--type", "Issue",
+            "--priority", String(priority),
+            ...(body ? ["--body", body] : []),
+            ...(issue.fields.duedate ? ["--deadline", issue.fields.duedate] : []),
             ...(tags.length > 0 ? ["--tags", tags.join(",")] : []),
           ],
           { encoding: "utf-8" }

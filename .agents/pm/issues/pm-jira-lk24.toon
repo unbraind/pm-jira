@@ -1,0 +1,12 @@
+id: pm-jira-lk24
+title: "sync failures return {success:false} instead of throwing -> exit code 0"
+description: ""
+type: Issue
+status: closed
+priority: 1
+tags: []
+created_at: "2026-05-29T15:45:31.194Z"
+updated_at: "2026-05-29T15:45:31.194Z"
+author: codex
+parent: pm-jira-xfd9
+body: "SYMPTOM: missing credentials, missing --project/--jql, and Jira fetch failures all returned { success:false, error } from run(), which the CLI treats as a successful command -> exit code 0. A CI/script chaining on exit status proceeds as if the sync succeeded.\n\nREPRO: unset JIRA_BASE_URL JIRA_API_TOKEN JIRA_EMAIL; pm jira sync --project PROJ >/dev/null 2>&1; echo $? -> 0 (before fix).\n\nOBSERVED vs EXPECTED: observed exit 0 on failure; expected non-zero.\n\nFIX: replaced the three `return { success:false, ... }` paths with `throw new Error(...)`. Verified live after fix: no-creds=1, no-project=1, fetch-failure=1."
