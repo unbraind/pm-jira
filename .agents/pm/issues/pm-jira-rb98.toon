@@ -1,0 +1,13 @@
+id: pm-jira-rb98
+title: Failures exited 0 (missing creds / no project / fetch error)
+description: "Three paths returned { success:false, error }, which the runtime treats as success (exit 0). Switched to throwing so the CLI exits non-zero; also fail when every create fails."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-05-29T09:45:37.976Z"
+updated_at: "2026-05-29T09:45:40.086Z"
+author: codex
+parent: pm-jira-rjp3
+close_reason: "Fixed, tested (7 unit tests) and verified exit codes end-to-end."
+body: ""

@@ -1,0 +1,12 @@
+id: pm-jira-rjp3
+title: Production-harden jira sync command
+description: "Fix flag handling and exit codes in 'pm jira sync' so preview mode is honored, --max-results works, and failures exit non-zero."
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-05-29T09:45:33.207Z"
+updated_at: "2026-05-29T09:45:43.388Z"
+author: codex
+close_reason: "Fixed, tested (7 unit tests) and verified exit codes end-to-end."
+body: ""

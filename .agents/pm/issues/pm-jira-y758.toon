@@ -1,0 +1,13 @@
+id: pm-jira-y758
+title: "--max-results ignored (always 500)"
+description: "Read as ctx.options['max-results'] (runtime uses 'maxResults') and never coerced from string. Now read via optionInt() across both keys with integer coercion."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-05-29T09:45:36.660Z"
+updated_at: "2026-05-29T09:45:41.157Z"
+author: codex
+parent: pm-jira-rjp3
+close_reason: "Fixed, tested (7 unit tests) and verified exit codes end-to-end."
+body: ""
