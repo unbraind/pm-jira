@@ -113,35 +113,61 @@ function camelKey(kebab: string): string {
   return kebab.replace(/-([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
 }
 
-function readStringOption(
+function readOptionValue(options: Record<string, unknown>, kebab: string): unknown {
+  return options[kebab] ?? options[camelKey(kebab)];
+}
+
+export function readStringOption(
   options: Record<string, unknown>,
   kebab: string
 ): string | undefined {
-  const v = options[kebab] ?? options[camelKey(kebab)];
-  return typeof v === "string" ? v : v === undefined ? undefined : String(v);
+  const v = readOptionValue(options, kebab);
+  const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
-function readNumberOption(
+export function readNumberOption(
   options: Record<string, unknown>,
   kebab: string
 ): number | undefined {
-  const v = options[kebab] ?? options[camelKey(kebab)];
+  const v = readOptionValue(options, kebab);
   if (v === undefined || v === null) return undefined;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function readBooleanOption(
+export function readBooleanOption(
   options: Record<string, unknown>,
   kebab: string
 ): boolean {
-  const v = options[kebab] ?? options[camelKey(kebab)];
+  const v = readOptionValue(options, kebab);
   if (typeof v === "boolean") return v;
   if (typeof v === "string") {
     const s = v.trim().toLowerCase();
     return s === "true" || s === "1" || s === "yes" || s === "";
   }
   return Boolean(v);
+}
+
+export function optionString(options: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = readStringOption(options, key);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+export function optionInt(options: Record<string, unknown>, defaultValue: number, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = readNumberOption(options, key);
+    if (value !== undefined) return value;
+  }
+  return defaultValue;
+}
+
+export function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean {
+  return keys.some((key) => readBooleanOption(options, key));
 }
 
 // ---------------------------------------------------------------------------
