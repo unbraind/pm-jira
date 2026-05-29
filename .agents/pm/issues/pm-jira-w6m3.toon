@@ -1,0 +1,13 @@
+id: pm-jira-w6m3
+title: "--dry-run silently wrote items instead of previewing"
+description: "Flag read as ctx.options['dry-run'] but runtime normalizes to camelCase 'dryRun'; dry-run was always false so 'preview' created real pm items. Now reads both keys via optionEnabled()."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-05-29T09:45:35.466Z"
+updated_at: "2026-05-29T09:45:42.236Z"
+author: codex
+parent: pm-jira-rjp3
+close_reason: "Fixed, tested (7 unit tests) and verified exit codes end-to-end."
+body: ""

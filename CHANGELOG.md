@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Production-harden jira sync command ([pm-jira-rjp3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-rjp3.toon))
+
+### Other
+
+- --dry-run silently wrote items instead of previewing ([pm-jira-w6m3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-w6m3.toon))
+- --max-results ignored \(always 500\) ([pm-jira-y758](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-y758.toon))
+- Failures exited 0 \(missing creds / no project / fetch error\) ([pm-jira-rb98](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-rb98.toon))
+
 ## 2026.05.28 - 2026-05-28
 
 ### Added

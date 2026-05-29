@@ -2,6 +2,31 @@ import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
 const defineExtension = ((extension) => extension);
+// Flags may arrive under their kebab-case (`max-results`) or camelCase
+// (`maxResults`) key depending on runtime normalization, so check every form.
+export function optionString(options, ...keys) {
+    for (const k of keys) {
+        const v = options[k];
+        if (typeof v === "string" && v.trim().length > 0)
+            return v.trim();
+        if (typeof v === "number")
+            return String(v);
+    }
+    return undefined;
+}
+export function optionEnabled(options, ...keys) {
+    return keys.some((k) => {
+        const v = options[k];
+        return v === true || v === "true" || v === "1";
+    });
+}
+export function optionInt(options, fallback, ...keys) {
+    const raw = optionString(options, ...keys);
+    if (raw === undefined)
+        return fallback;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+}
 function mapJiraPriority(jiraPriority) {
     if (!jiraPriority)
         return 3;
@@ -117,7 +142,7 @@ async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
 // ---------------------------------------------------------------------------
 export default defineExtension({
     name: "pm-jira",
-    version: "2026.5.28",
+    version: "2026.5.29",
     activate(api) {
         // -----------------------------------------------------------------------
         // Command: pm jira sync
@@ -159,22 +184,27 @@ export default defineExtension({
                 },
             ],
             async run(ctx) {
-                const project = ctx.options["project"];
-                const customJql = ctx.options["jql"];
-                const maxResults = ctx.options["max-results"] ?? 500;
-                const dryRun = ctx.options["dry-run"] ?? false;
-                const statusFilter = ctx.options["status"];
+                const project = optionString(ctx.options, "project");
+                const customJql = optionString(ctx.options, "jql");
+                // Read both kebab and camelCase keys and coerce to an int — the runtime
+                // normalizes "--max-results" to "maxResults", so the kebab-only read
+                // silently ignored the flag (always 500) and never coerced the string.
+                const maxResults = optionInt(ctx.options, 500, "max-results", "maxResults");
+                // "--dry-run" normalizes to "dryRun"; the kebab-only read meant dry-run
+                // was always false and the sync wrote real items in "preview" mode.
+                const dryRun = optionEnabled(ctx.options, "dry-run", "dryRun");
+                const statusFilter = optionString(ctx.options, "status");
                 // Validate env vars
                 const baseUrl = process.env["JIRA_BASE_URL"];
                 const token = process.env["JIRA_API_TOKEN"];
                 const email = process.env["JIRA_EMAIL"];
                 if (!baseUrl || !token || !email) {
-                    console.error("Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL.");
-                    return { success: false, error: "Missing Jira credentials" };
+                    // Throw so the CLI exits non-zero — a returned { error } is treated
+                    // as a successful run by the runtime.
+                    throw new Error("Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL.");
                 }
                 if (!project && !customJql) {
-                    console.error("Provide either --project <KEY> or --jql <query> to specify which issues to sync.");
-                    return { success: false, error: "No project or JQL specified" };
+                    throw new Error("Provide either --project <KEY> or --jql <query> to specify which issues to sync.");
                 }
                 const jql = customJql ??
                     `project = ${project} AND statusCategory != Done ORDER BY priority ASC`;
@@ -186,8 +216,8 @@ export default defineExtension({
                 }
                 catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    console.error(`Failed to fetch issues from Jira: ${msg}`);
-                    return { success: false, error: msg };
+                    // Throw so a failed fetch exits non-zero.
+                    throw new Error(`Failed to fetch issues from Jira: ${msg}`);
                 }
                 console.error(`Fetched ${issues.length} issues from Jira`);
                 // Apply status filter before upsert
@@ -232,6 +262,10 @@ export default defineExtension({
                     }
                 }
                 const projectLabel = project ?? "custom-jql";
+                if (upserted === 0 && filtered.length > 0) {
+                    // Every create failed — surface as a non-zero exit for automation.
+                    throw new Error(`Synced 0 of ${filtered.length} issues from Jira project ${projectLabel}; all creates failed.`);
+                }
                 console.error(`Synced ${upserted} issues from Jira project ${projectLabel}`);
                 return {
                     success: true,
