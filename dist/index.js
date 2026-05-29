@@ -61,19 +61,24 @@ function adfToPlainText(node) {
 function camelKey(kebab) {
     return kebab.replace(/-([a-z0-9])/g, (_m, c) => c.toUpperCase());
 }
-function readStringOption(options, kebab) {
-    const v = options[kebab] ?? options[camelKey(kebab)];
-    return typeof v === "string" ? v : v === undefined ? undefined : String(v);
+function readOptionValue(options, kebab) {
+    return options[kebab] ?? options[camelKey(kebab)];
 }
-function readNumberOption(options, kebab) {
-    const v = options[kebab] ?? options[camelKey(kebab)];
+export function readStringOption(options, kebab) {
+    const v = readOptionValue(options, kebab);
+    const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
+}
+export function readNumberOption(options, kebab) {
+    const v = readOptionValue(options, kebab);
     if (v === undefined || v === null)
         return undefined;
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : undefined;
 }
-function readBooleanOption(options, kebab) {
-    const v = options[kebab] ?? options[camelKey(kebab)];
+export function readBooleanOption(options, kebab) {
+    const v = readOptionValue(options, kebab);
     if (typeof v === "boolean")
         return v;
     if (typeof v === "string") {
@@ -81,6 +86,25 @@ function readBooleanOption(options, kebab) {
         return s === "true" || s === "1" || s === "yes" || s === "";
     }
     return Boolean(v);
+}
+export function optionString(options, ...keys) {
+    for (const key of keys) {
+        const value = readStringOption(options, key);
+        if (value !== undefined)
+            return value;
+    }
+    return undefined;
+}
+export function optionInt(options, defaultValue, ...keys) {
+    for (const key of keys) {
+        const value = readNumberOption(options, key);
+        if (value !== undefined)
+            return value;
+    }
+    return defaultValue;
+}
+export function optionEnabled(options, ...keys) {
+    return keys.some((key) => readBooleanOption(options, key));
 }
 // ---------------------------------------------------------------------------
 // HTTP helper using Node.js native https module
