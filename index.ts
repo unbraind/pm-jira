@@ -6,6 +6,28 @@ import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/s
 
 const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
+// pm's extension command runtime only treats a thrown error as a cleanly
+// handled non-zero exit when the error carries a numeric `exitCode` property
+// (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
+// fall through to its "unhandled" path, which RE-INVOKES the command handler a
+// second time and exits with a generic code. We mirror the SDK's EXIT_CODE
+// contract here rather than importing it: standalone-installed extensions load
+// only their own `dist/`, so `@unbrained/pm-cli` is not resolvable at runtime.
+const EXIT_CODE = {
+  GENERIC_FAILURE: 1,
+  USAGE: 2,
+  NOT_FOUND: 3,
+} as const;
+
+class CommandError extends Error {
+  exitCode: number;
+  constructor(message: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE) {
+    super(message);
+    this.name = "CommandError";
+    this.exitCode = exitCode;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Jira REST API types
 // ---------------------------------------------------------------------------
@@ -313,14 +335,16 @@ export default defineExtension({
         const email = process.env["JIRA_EMAIL"];
 
         if (!baseUrl || !token || !email) {
-          throw new Error(
-            "Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL."
+          throw new CommandError(
+            "Missing required environment variables. Please set JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL.",
+            EXIT_CODE.USAGE
           );
         }
 
         if (!project && !customJql) {
-          throw new Error(
-            "Provide either --project <KEY> or --jql <query> to specify which issues to sync."
+          throw new CommandError(
+            "Provide either --project <KEY> or --jql <query> to specify which issues to sync.",
+            EXIT_CODE.USAGE
           );
         }
 
@@ -342,7 +366,7 @@ export default defineExtension({
           );
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(`Failed to fetch issues from Jira: ${msg}`);
+          throw new CommandError(`Failed to fetch issues from Jira: ${msg}`);
         }
 
         console.error(`Fetched ${issues.length} issues from Jira`);
@@ -447,14 +471,16 @@ export default defineExtension({
       const maxResults = readNumberOption(ctx.options, "max-results") ?? 500;
 
       if (!baseUrl || !token || !email) {
-        throw new Error(
-          "jira-sync importer requires JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL (via options or env)"
+        throw new CommandError(
+          "jira-sync importer requires JIRA_BASE_URL, JIRA_API_TOKEN, and JIRA_EMAIL (via options or env)",
+          EXIT_CODE.USAGE
         );
       }
 
       if (!project && !customJql) {
-        throw new Error(
-          "jira-sync importer requires either options.project or options.jql"
+        throw new CommandError(
+          "jira-sync importer requires either options.project or options.jql",
+          EXIT_CODE.USAGE
         );
       }
 

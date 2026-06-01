@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- jira sync threw plain Error \(no exitCode\) → runtime double-invocation ([pm-jira-6cr5](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-6cr5.toon))
+
 ## 2026.05.29-1 - 2026-05-29
 
 ### Added
