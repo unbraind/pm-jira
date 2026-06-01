@@ -1,0 +1,13 @@
+id: pm-jira-6cr5
+title: jira sync threw plain Error (no exitCode) → runtime double-invocation
+description: "jira sync (and the jira-sync importer) threw plain Error on missing env/args and fetch failure; pm re-invokes the handler on the unhandled path. Added CommandError mirroring SDK EXIT_CODE; missing-env/args=2, fetch-failure=1; single invocation."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-01T10:32:55.526Z"
+updated_at: "2026-06-01T10:32:55.823Z"
+author: codex
+parent: pm-jira-rjp3
+close_reason: "Fixed: CommandError carries exitCode. Verified missing-env/args exit 2, fetch-failure exits 1, single invocation; 7 tests pass."
+body: ""
