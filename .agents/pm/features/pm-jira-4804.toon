@@ -1,0 +1,11 @@
+id: pm-jira-4804
+title: "pm-jira: domain-max SDK enhancement (idempotent import, preflight, rate-limit backoff)"
+description: ""
+type: Feature
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-06-02T08:00:44.671Z"
+updated_at: "2026-06-02T08:00:44.671Z"
+author: codex
+body: "Deepen pm-jira to domain-appropriate maximum against SDK 2026.5.31.\n\nVALUE: pm-jira already had jira sync/import/export + schema fields + status-map (commit dbf38cf). This feature closes the remaining real gaps from the enhancement brief.\n\nOUTCOME: idempotent re-import (update existing pm items matched on Jira key instead of duplicating; persist jira_key/jira_url), a real credential+reachability preflight surfaced as the 'preflight' capability, rate-limit/backoff robustness, and an --assignee filter. Manifest capabilities corrected to match what is actually registered (drop unregistered 'services' filler; add 'preflight').\n\nACCEPTANCE CRITERIA:\n- pm jira import re-run updates matched items (no duplicates), keyed on Jira key provenance + jira_key field.\n- jira_key/jira_url persisted onto items (via pm update --field or description marker fallback).\n- pm jira preflight validates creds + base URL + reachability with clear failure_hints; registerPreflight guard registered.\n- 429/503 responses retried with exponential backoff + Retry-After honoring.\n- --assignee filter augments default JQL.\n- manifest capabilities == registered surfaces exactly.\n- typecheck/build/test/changelog:check/release:check all green; new unit tests for idempotency match + backoff parse + preflight.\n- Functionally tested in --dry-run against scratch workspace with fixture JSON."
