@@ -1,6 +1,12 @@
 # Changelog
 
-## 2026.6.1 - 2026-06-01
+## 2026.6.2 - 2026-06-02
+
+### Added
+
+- Adopt full SDK surface: jira import/export + schema fields + flags ([pm-jira-27sk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-27sk.toon))
+
+## 2026.06.01 - 2026-06-01
 
 ### Fixed
 
