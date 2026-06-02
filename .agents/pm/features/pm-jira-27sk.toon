@@ -1,0 +1,14 @@
+id: pm-jira-27sk
+title: "Adopt full SDK surface: jira import/export + schema fields + flags"
+description: ""
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T05:34:22.354Z"
+updated_at: "2026-06-02T05:34:38.543Z"
+author: codex
+notes[1]{created_at,author,text}:
+  "2026-06-02T05:34:38.543Z",codex,"Verified: build clean, tsc --noEmit clean, 20/20 tests pass (pure transforms issueToItem/itemToJiraPayload/parseStatusMap/ADF round-trip + graceful no-creds for sync/import/export --push). Functional: throwaway pm init+install, extension doctor active 0 failures; jira import/sync/export --push emit structured CommandError exit 2 with no creds; jira export renders valid ADF Jira payload."
+close_reason: "Shipped: importer/exporter/schema/flags added, all verification passed"
+body: ""
