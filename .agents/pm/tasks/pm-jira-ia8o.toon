@@ -1,0 +1,12 @@
+id: pm-jira-ia8o
+title: "Filters: --assignee augments default JQL"
+description: ""
+type: Task
+status: in_progress
+priority: 3
+tags: []
+created_at: "2026-06-02T08:00:53.387Z"
+updated_at: "2026-06-02T08:00:53.387Z"
+author: codex
+parent: pm-jira-4804
+body: ""
