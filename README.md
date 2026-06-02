@@ -4,12 +4,14 @@ A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues 
 
 ## Features
 
-- Sync issues from any Jira project into pm items with full deduplication
-- Custom JQL support for fine-grained control over what gets synced
-- Automatic mapping of Jira statuses and priorities to pm equivalents
+- Pull issues from any Jira project into pm items via `pm jira import` or `pm jira sync`
+- Export pm items back out as Jira create payloads via `pm jira export` (preview, or `--push` to create issues)
+- Custom JQL support for fine-grained control over what gets pulled
+- Automatic mapping of Jira statuses and priorities to pm equivalents, with a `--status-map` override
 - Labels and fix versions mapped as pm tags
+- Jira provenance (key + browse URL) persisted in the item description and declared as `jira_key` / `jira_url` schema fields
 - Dry-run mode to preview changes before writing
-- Works as both a `pm jira sync` command and a `jira-sync` importer
+- Works as a `pm jira sync`/`pm jira import` command, a `pm jira export` exporter, and a config-driven `jira-sync` importer
 
 ## Installation
 
@@ -74,17 +76,57 @@ pm jira sync --project PROJ --status wip
 pm jira sync --project PROJ --max-results 100 --status todo --dry-run
 ```
 
-### Flags
+### Command / Importer: `pm jira import`
 
-| Flag | Alias | Type | Default | Description |
-|---|---|---|---|---|
-| `--project` | `-p` | string | — | Jira project key (e.g. `PROJ`). Used to build default JQL. |
-| `--jql` | `-q` | string | — | Custom JQL query. Overrides `--project` default JQL. |
-| `--max-results` | `-n` | number | `500` | Maximum number of issues to sync. |
-| `--dry-run` | — | boolean | `false` | Preview what would be synced without writing. |
-| `--status` | `-s` | string | — | Filter by mapped pm status (`todo`, `wip`, `done`, `blocked`). |
+`pm jira import` is the native importer pipeline equivalent of `pm jira sync` — it
+pulls issues via JQL and creates pm items. Both share the same flags and logic.
 
-### Importer: `jira-sync`
+```bash
+# Pull all open issues from a project
+pm jira import --project PROJ
+
+# Use a custom Jira host (instead of JIRA_BASE_URL) + custom JQL
+pm jira import --host https://company.atlassian.net --jql "project = PROJ AND assignee = currentUser()"
+
+# Override status mapping
+pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
+```
+
+### Pull flags (`pm jira sync` / `pm jira import`)
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--project` | string | — | Jira project key (e.g. `PROJ`). Used to build default JQL. |
+| `--jql` | string | — | Custom JQL query. Overrides `--project` default JQL. |
+| `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
+| `--max-results` | number | `500` | Maximum number of issues to pull. |
+| `--status` | string | — | Filter by mapped pm status (`open`, `in_progress`, `closed`, `blocked`). |
+| `--status-map` | string | — | Override mapping, e.g. `"In Review=in_progress,QA=blocked"`. |
+| `--dry-run` | boolean | `false` | Preview what would be created without writing. |
+
+### Exporter: `pm jira export`
+
+Render pm items as Jira create payloads. Prints JSON by default; with `--push`
+(and credentials + `--project`) it POSTs each payload to Jira's create-issue API.
+
+```bash
+# Preview the Jira create payloads for all pm items (no network, no creds needed)
+pm jira export --project PROJ
+
+# Actually create the issues in Jira (requires creds + --project)
+pm jira export --push --project PROJ
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--project` | string | — | Target Jira project key for created issues (required for `--push`). |
+| `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
+| `--push` | boolean | `false` | POST payloads to Jira (requires credentials + `--project`). |
+
+Items whose description carries a `Jira <KEY>: <url>` provenance marker (added on
+import) can be matched back to their upstream issue.
+
+### Importer: `jira-sync` (config-driven)
 
 Use the `jira-sync` importer in your pm-cli config for automated syncing:
 
@@ -116,11 +158,13 @@ Credentials are read from environment variables or from the importer config:
 
 ## Status Mapping
 
+The default mapping (override per-status with `--status-map`):
+
 | Jira Status | pm Status |
 |---|---|
-| To Do, Open, Backlog, (any other) | `todo` |
-| In Progress, In Review, In Development, Code Review | `wip` |
-| Done, Resolved, Closed, Complete, Completed | `done` |
+| To Do, Open, Backlog, (any other) | `open` |
+| In Progress, In Review, In Development, Code Review | `in_progress` |
+| Done, Resolved, Closed, Complete, Completed | `closed` |
 | Blocked | `blocked` |
 
 ## Priority Mapping
@@ -134,19 +178,20 @@ Credentials are read from environment variables or from the importer config:
 
 ## Item Structure
 
-Each synced item uses `${PROJECT}-${NUMBER}` as the idSuffix for deduplication (e.g. `PROJ-123`). Running sync again updates existing items rather than creating duplicates.
-
-Items include:
+Each imported item includes:
 
 - **title**: `[PROJ-123] Issue summary`
 - **body**: Issue description (converted from Atlassian Document Format to plain text)
+- **description**: A provenance marker `Jira PROJ-123: https://…/browse/PROJ-123` so the
+  Jira key + URL survive round-trips and power `pm jira export`. The extension also
+  declares `jira_key` and `jira_url` as optional item schema fields (capability `schema`).
 - **status**: Mapped from Jira status (see table above)
 - **priority**: Mapped from Jira priority (see table above)
 - **tags**: Jira labels + fix version names
-- **meta.jira_key**: Original Jira issue key (e.g. `PROJ-123`)
-- **meta.jira_project**: Jira project key (e.g. `PROJ`)
-- **meta.jira_assignee**: Assignee display name (if set)
-- **meta.jira_duedate**: Due date in `YYYY-MM-DD` format (if set)
+- **deadline**: Jira due date (`YYYY-MM-DD`), if set
+
+> Note: pm's `create` has no generic custom-field setter for a standalone extension, so
+> provenance is stored in the description marker rather than as structured metadata.
 
 ## JQL Examples
 
