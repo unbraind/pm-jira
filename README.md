@@ -130,6 +130,17 @@ pm jira import --project PROJ --map "issuetype=Task,assignee=skip"
 pm jira import --project PROJ --map "status=in_progress"
 ```
 
+#### Progress + transparency notes (STDERR)
+
+For large paginated imports the importer prints `Fetched N/total...` progress to
+**STDERR** after each page, so a multi-page pull surfaces feedback instead of
+looking hung. This is additive and never touches the stdout / `--json` output.
+
+If any fetched issue carries **attachments or comments**, the importer logs a
+one-line note to STDERR that those are **not imported** (pm-jira imports
+title / body / status / priority / labels / due-date only). This prevents a
+silent expectation that attachment or comment data came across.
+
 ### Exporter: `pm jira export`
 
 Render pm items as Jira create payloads. Prints JSON by default; with `--push`
@@ -147,6 +158,12 @@ pm jira export --project PROJ --rich --dry-run
 
 # Actually create the issues in Jira (requires creds + --project)
 pm jira export --push --project PROJ
+
+# Also PUT changed fields back to issues that already carry a Jira key
+pm jira export --push --project PROJ --update-existing
+
+# Preview exactly what --update-existing would do (no network)
+pm jira export --project PROJ --update-existing --dry-run
 ```
 
 | Flag | Type | Default | Description |
@@ -154,14 +171,21 @@ pm jira export --push --project PROJ
 | `--project` | string | — | Target Jira project key for created issues (required for `--push`). |
 | `--map` | string | — | Override field mapping, e.g. `"issuetype=Story"`. |
 | `--rich` | boolean | `false` | Derive Jira `issuetype` + `priority` from the pm item type/priority. |
+| `--update-existing` | boolean | `false` | PUT changed fields to issues that already carry a Jira key. Without it, those items are skipped (no duplicate, no mutation). |
 | `--dry-run` | boolean | `false` | Print the Jira POST/PUT mutations that would run; **no network call**. |
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--push` | boolean | `false` | POST payloads to Jira (requires credentials + `--project`). |
 
 Items whose description carries a `Jira <KEY>: <url>` provenance marker (added on
-import) are matched back to their upstream issue: `--dry-run` shows them as an
-`update` (PUT), and `--push` **skips** them so a re-export never duplicates an
-existing Jira issue (only items without a key are created).
+import) are matched back to their upstream issue and become an `update` (PUT):
+
+- **By default** (`--push` alone) those items are **skipped** so a re-export
+  never duplicates or unexpectedly mutates an existing Jira issue — only items
+  without a key are created. `--dry-run` shows them as `SKIP`.
+- **With `--update-existing`** each matched item is PUT to Jira's edit-issue
+  endpoint (`/rest/api/3/issue/<KEY>`) with its changed fields (the immutable
+  `project` field is stripped, as Jira's edit API rejects it). `--dry-run` shows
+  them as `UPDATE PUT ...` so you can review the exact mutations offline first.
 
 ### Command: `pm jira validate`
 

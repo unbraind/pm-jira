@@ -1,6 +1,12 @@
 # Changelog
 
-## 2026.6.3 - 2026-06-03
+## Unreleased
+
+### Other
+
+- Export --update-existing PUT + import progress and attachment/comment transparency ([pm-jira-yhm3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-yhm3.toon))
+
+## 2026.06.03 - 2026-06-03
 
 ### Added
 

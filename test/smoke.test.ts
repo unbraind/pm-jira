@@ -29,6 +29,8 @@ import extension, {
   buildExportPlan,
   diagnoseCreds,
   decidePushOnWrite,
+  formatImportProgress,
+  countIssueExtras,
 } from "../dist/index.js";
 
 // Mirror the real ExtensionApi surface so activate() can register every
@@ -529,6 +531,79 @@ test("itemToJiraPayload default (no rich) stays Task with no priority", () => {
   const p = itemToJiraPayload({ title: "x", type: "Bug", priority: 1 });
   assert.strictEqual(p.fields.issuetype.name, "Task");
   assert.strictEqual(p.fields.priority, undefined);
+});
+
+// --- update-existing export plan / payloads -------------------------------
+
+test("buildExportPlan update entries carry a PUT to the issue endpoint and a payload", () => {
+  // The --update-existing push path filters on op==='update' and PUTs each
+  // entry; assert the plan supplies exactly what that path needs.
+  const plan = buildExportPlan(
+    [
+      { id: "new1", title: "Brand new", tags: [] },
+      {
+        id: "old1",
+        title: "Has a key",
+        description: jiraProvenance("PROJ-42", "https://x.atlassian.net/browse/PROJ-42"),
+        body: "updated body",
+      },
+    ],
+    "https://x.atlassian.net",
+    { projectKey: "PROJ" }
+  );
+  const updates = plan.entries.filter((e) => e.op === "update");
+  const creates = plan.entries.filter((e) => e.op === "create");
+  assert.strictEqual(updates.length, 1, "provenance-matched item -> update");
+  assert.strictEqual(creates.length, 1, "unkeyed item -> create");
+  const upd = updates[0]!;
+  assert.strictEqual(upd.method, "PUT");
+  assert.strictEqual(upd.existingKey, "PROJ-42");
+  assert.ok(upd.endpoint.endsWith("/rest/api/3/issue/PROJ-42"));
+  // The payload the PUT will send (project stripped at PUT time, but summary
+  // is what the user sees in the dry-run plan).
+  assert.strictEqual(upd.payload.fields.summary, "Has a key");
+  assert.strictEqual(adfToPlainText(upd.payload.fields.description as any), "updated body");
+});
+
+// --- import progress feedback ---------------------------------------------
+
+test("formatImportProgress clamps the denominator to maxResults", () => {
+  assert.strictEqual(formatImportProgress(100, 512, 500), "Fetched 100/500...");
+  assert.strictEqual(formatImportProgress(50, 50, 500), "Fetched 50/50...");
+  // When Jira reports fewer than the cap, the real total wins.
+  assert.strictEqual(formatImportProgress(30, 30, 1000), "Fetched 30/30...");
+});
+
+// --- attachment / comment transparency ------------------------------------
+
+test("countIssueExtras counts attachments and comments (total or array length)", () => {
+  const withBoth = {
+    key: "X-1",
+    fields: {
+      summary: "s",
+      status: { name: "To Do", statusCategory: { key: "new" } },
+      attachment: [{}, {}],
+      comment: { total: 3 },
+    },
+  } as any;
+  const r = countIssueExtras(withBoth);
+  assert.strictEqual(r.attachments, 2);
+  assert.strictEqual(r.comments, 3);
+  assert.strictEqual(r.hasExtras, true);
+
+  // comment.total absent -> fall back to comments array length.
+  const arrComments = countIssueExtras({
+    key: "X-2",
+    fields: { summary: "s", status: { name: "To Do", statusCategory: { key: "new" } }, comment: { comments: [{}] } },
+  } as any);
+  assert.strictEqual(arrComments.comments, 1);
+
+  // None present -> hasExtras false, zero counts.
+  const none = countIssueExtras({
+    key: "X-3",
+    fields: { summary: "s", status: { name: "To Do", statusCategory: { key: "new" } } },
+  } as any);
+  assert.deepStrictEqual(none, { attachments: 0, comments: 0, hasExtras: false });
 });
 
 // --- credential diagnostics (jira validate) -------------------------------

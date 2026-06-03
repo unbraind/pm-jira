@@ -1,0 +1,14 @@
+id: pm-jira-yhm3
+title: Export --update-existing PUT + import progress and attachment/comment transparency
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-03T23:33:14.862Z"
+updated_at: "2026-06-03T23:33:39.514Z"
+author: codex
+comments[1]{created_at,author,text}:
+  "2026-06-03T23:33:28.798Z",codex,"Implemented: (1) httpsPut helper + --update-existing wired into export --push (PUTs provenance items, strips immutable project field; default still skips for back-compat). (2) formatImportProgress + onProgress streaming Fetched N/total to stderr in runImport and jira-sync. (3) countIssueExtras + SEARCH_FIELDS now requests attachment,comment; importer logs a stderr note when present. 46 unit tests pass (3 new). Functional dry-run confirmed 2 CREATE + 2 UPDATE PUT for PROJ-100/PROJ-205, SKIP without flag. No secrets leaked."
+close_reason: "Shipped --update-existing PUT, import progress, attachment/comment transparency; 46 tests green, functionally verified offline"
+body: "Wire the existing PUT helper into export --push behind a new opt-in --update-existing flag: provenance-matched items are PUT to /rest/api/3/issue/<KEY> (project field stripped) instead of being skipped. Add per-page 'Fetched N/total...' import progress to STDERR. Add a STDERR transparency note when fetched issues carry attachments/comments that are not imported. All additive, offline-testable via --dry-run."

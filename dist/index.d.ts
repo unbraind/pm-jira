@@ -42,6 +42,11 @@ interface JiraIssue {
         issuetype?: {
             name: string;
         } | null;
+        attachment?: Array<unknown> | null;
+        comment?: {
+            total?: number;
+            comments?: Array<unknown>;
+        } | null;
     };
 }
 type PmPriority = 1 | 2 | 3 | 4;
@@ -110,6 +115,7 @@ export interface CredDiagnostics {
     missing: string[];
 }
 export declare function diagnoseCreds(options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): CredDiagnostics;
+export declare function formatImportProgress(fetched: number, jiraTotal: number, maxResults: number): string;
 export interface IssueToItem {
     title: string;
     status: PmStatus;
@@ -132,6 +138,12 @@ export interface JiraSearchRequest {
     url: string;
     fields: string;
 }
+export interface IssueExtras {
+    attachments: number;
+    comments: number;
+    hasExtras: boolean;
+}
+export declare function countIssueExtras(issue: JiraIssue): IssueExtras;
 export declare function buildSearchRequest(baseUrl: string, jql: string, startAt: number, maxResults: number): JiraSearchRequest;
 interface PmItem {
     id?: string;

@@ -477,10 +477,58 @@ function httpsPost(url, authHeader, payload) {
         req.end();
     });
 }
+// PUT an existing Jira issue (the update path). Jira's edit-issue endpoint
+// returns 204 No Content on success with an empty body, so we resolve with the
+// (possibly empty) body and let callers treat a non-4xx/5xx as success.
+function httpsPut(url, authHeader, payload) {
+    return new Promise((resolve, reject) => {
+        const parsed = new URL(url);
+        const options = {
+            hostname: parsed.hostname,
+            path: parsed.pathname + parsed.search,
+            method: "PUT",
+            headers: {
+                Authorization: authHeader,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "Content-Length": String(Buffer.byteLength(payload)),
+            },
+        };
+        const req = https.request(options, (res) => {
+            let body = "";
+            res.on("data", (chunk) => {
+                body += chunk.toString();
+            });
+            res.on("end", () => {
+                if (res.statusCode && res.statusCode >= 400) {
+                    reject(new Error(`Jira API error ${res.statusCode}: ${body.slice(0, 200)}`));
+                }
+                else {
+                    resolve(body);
+                }
+            });
+        });
+        req.on("error", reject);
+        req.setTimeout(30000, () => {
+            req.destroy();
+            reject(new Error("Jira API request timed out"));
+        });
+        req.write(payload);
+        req.end();
+    });
+}
 // ---------------------------------------------------------------------------
 // Fetch all pages from Jira search API
 // ---------------------------------------------------------------------------
-async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
+// Format a per-page import progress line, e.g. "Fetched 200/512...". The
+// effective total is clamped to maxResults (we never fetch beyond it) so the
+// denominator reflects what the import will actually pull. Pure + testable;
+// the importer streams these to STDERR only (stdout/json contract unchanged).
+export function formatImportProgress(fetched, jiraTotal, maxResults) {
+    const effectiveTotal = Math.min(jiraTotal, maxResults);
+    return `Fetched ${fetched}/${effectiveTotal}...`;
+}
+async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults, onProgress) {
     const allIssues = [];
     let startAt = 0;
     const pageSize = Math.min(maxResults, 100);
@@ -496,6 +544,9 @@ async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
             break;
         allIssues.push(...data.issues);
         startAt += data.issues.length;
+        // Stream paginated progress to the caller (stderr-only). Emitted per page
+        // so a large multi-page import surfaces feedback instead of looking hung.
+        onProgress?.(allIssues.length, data.total);
         if (startAt >= data.total)
             break;
     }
@@ -569,7 +620,19 @@ function createPmItem(pmRoot, item) {
     const result = spawnSync("pm", args, { encoding: "utf-8" });
     return result.status === 0;
 }
-const SEARCH_FIELDS = "summary,description,status,priority,labels,assignee,duedate,fixVersions,issuetype";
+const SEARCH_FIELDS = "summary,description,status,priority,labels,assignee,duedate,fixVersions,issuetype,attachment,comment";
+export function countIssueExtras(issue) {
+    const attachments = Array.isArray(issue.fields.attachment)
+        ? issue.fields.attachment.length
+        : 0;
+    const c = issue.fields.comment;
+    const comments = typeof c?.total === "number"
+        ? c.total
+        : Array.isArray(c?.comments)
+            ? c.comments.length
+            : 0;
+    return { attachments, comments, hasExtras: attachments > 0 || comments > 0 };
+}
 export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
     const url = `${baseUrl.replace(/\/$/, "")}/rest/api/3/search` +
         `?jql=${encodeURIComponent(jql)}` +
@@ -613,7 +676,10 @@ async function runImport(options, pmRoot, opts = {}) {
     console.error(`Fetching issues from Jira... (JQL: ${jql})`);
     let issues;
     try {
-        issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults);
+        issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults, 
+        // Per-page progress to STDERR for large paginated imports. Additive:
+        // does not touch the stdout/json contract.
+        (fetched, jiraTotal) => console.error(formatImportProgress(fetched, jiraTotal, maxResults)));
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -621,6 +687,23 @@ async function runImport(options, pmRoot, opts = {}) {
         throw new CommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
     }
     console.error(`Fetched ${issues.length} issues from Jira`);
+    // Transparency: attachments + comments are NOT imported. Surface their
+    // presence so a user never silently expects that data to have come across.
+    let extraAttachments = 0;
+    let extraComments = 0;
+    let issuesWithExtras = 0;
+    for (const issue of issues) {
+        const extras = countIssueExtras(issue);
+        if (extras.hasExtras) {
+            issuesWithExtras++;
+            extraAttachments += extras.attachments;
+            extraComments += extras.comments;
+        }
+    }
+    if (issuesWithExtras > 0) {
+        console.error(`Note: ${issuesWithExtras} issue(s) carry ${extraAttachments} attachment(s) and ` +
+            `${extraComments} comment(s) that are NOT imported (pm-jira imports title/body/status/labels only).`);
+    }
     const mapped = issues.map((issue) => ({
         issue,
         item: issueToItem(issue, creds.baseUrl, { statusMap, fieldMap }),
@@ -774,6 +857,7 @@ const EXPORT_FLAGS = [
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
     { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Story"' },
     { long: "--rich", description: "Derive Jira issuetype + priority from pm item type/priority" },
+    { long: "--update-existing", description: "PUT changed fields to issues that already carry a Jira key (else they are skipped)" },
     { long: "--dry-run", description: "Print the Jira mutations that would be made, without any network call" },
     { long: "--push", description: "POST the payloads to Jira (requires creds + --project)" },
 ];
@@ -843,8 +927,12 @@ export default defineExtension({
             }
             const jql = buildJql(readJqlFilters(options));
             console.error(`[jira-sync] Fetching issues with JQL: ${jql}`);
-            const issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults);
+            const issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults, (fetched, jiraTotal) => console.error(`[jira-sync] ${formatImportProgress(fetched, jiraTotal, maxResults)}`));
             console.error(`[jira-sync] Importing ${issues.length} issues`);
+            const syncExtras = issues.reduce((n, i) => (countIssueExtras(i).hasExtras ? n + 1 : n), 0);
+            if (syncExtras > 0) {
+                console.error(`[jira-sync] Note: ${syncExtras} issue(s) carry attachments/comments that are NOT imported.`);
+            }
             let created = 0;
             for (const issue of issues) {
                 if (createPmItem(ctx.pm_root, issueToItem(issue, creds.baseUrl, { statusMap, fieldMap })))
@@ -863,6 +951,7 @@ export default defineExtension({
             const push = readBooleanOption(options, "push");
             const dryRun = readBooleanOption(options, "dry-run");
             const rich = readBooleanOption(options, "rich");
+            const updateExistingFlag = readBooleanOption(options, "update-existing");
             const project = readStringOption(options, "project");
             const fieldMap = parseFieldMap(readStringOption(options, "map"));
             const items = readPmItems(ctx.pm_root);
@@ -880,16 +969,26 @@ export default defineExtension({
                 });
                 const creates = plan.entries.filter((e) => e.op === "create").length;
                 const updates = plan.entries.filter((e) => e.op === "update").length;
+                // Mirror what a real --push would do: updates are only applied with
+                // --update-existing; otherwise they are skipped. Surface that here so
+                // the preview matches the live behavior exactly.
+                const updateVerb = updateExistingFlag ? "update" : "skip";
                 console.error(`[dry-run] No network call will be made.`);
-                console.error(`[dry-run] Would issue ${plan.entries.length} Jira mutation(s): ${creates} create, ${updates} update.`);
+                console.error(`[dry-run] Would issue ${creates} create` +
+                    `${updateExistingFlag ? ` + ${updates} update` : ""} Jira mutation(s)` +
+                    `${updateExistingFlag ? "" : ` (and ${updates} skip — pass --update-existing to PUT them)`}.`);
                 for (const entry of plan.entries.slice(0, 20)) {
-                    const tag = entry.op === "update" ? ` (existing ${entry.existingKey})` : "";
-                    console.error(`[dry-run]   ${entry.method} ${entry.endpoint}${tag} :: ${entry.payload.fields.summary}`);
+                    if (entry.op === "update") {
+                        console.error(`[dry-run]   ${updateVerb.toUpperCase()} ${entry.method} ${entry.endpoint} (existing ${entry.existingKey}) :: ${entry.payload.fields.summary}`);
+                    }
+                    else {
+                        console.error(`[dry-run]   CREATE ${entry.method} ${entry.endpoint} :: ${entry.payload.fields.summary}`);
+                    }
                 }
                 if (plan.entries.length > 20) {
                     console.error(`[dry-run]   ... and ${plan.entries.length - 20} more`);
                 }
-                return { dryRun: true, pushed: false, plan };
+                return { dryRun: true, pushed: false, updateExisting: updateExistingFlag, plan };
             }
             if (push) {
                 // Resolve creds first so the missing-creds path returns a structured
@@ -898,15 +997,17 @@ export default defineExtension({
                 if (!project) {
                     throw new CommandError("--push requires --project <KEY> (the target Jira project for new issues).", EXIT_CODE.USAGE);
                 }
-                // Only CREATE new issues here; items that already carry a Jira key are
-                // skipped so a re-export never duplicates upstream issues.
+                const updateExisting = readBooleanOption(options, "update-existing");
                 const plan = buildExportPlan(items, creds.baseUrl, {
                     projectKey: project,
                     fieldMap,
                     richMapping: rich,
                 });
                 const toCreate = plan.entries.filter((e) => e.op === "create");
-                const skipped = plan.entries.length - toCreate.length;
+                // Provenance-matched items become updates. By default they are still
+                // SKIPPED (back-compat: a re-export never mutates upstream). With
+                // --update-existing they are PUT to Jira's edit-issue endpoint instead.
+                const toUpdate = plan.entries.filter((e) => e.op === "update");
                 let created = 0;
                 for (const entry of toCreate) {
                     try {
@@ -918,9 +1019,30 @@ export default defineExtension({
                         throw new CommandError(`Failed to create Jira issue: ${msg}`);
                     }
                 }
+                let updated = 0;
+                if (updateExisting) {
+                    for (const entry of toUpdate) {
+                        try {
+                            // Jira's edit-issue API rejects the immutable `project` field on a
+                            // PUT, so strip it; only mutable fields are sent.
+                            const { project: _project, ...mutableFields } = entry.payload.fields;
+                            await httpsPut(entry.endpoint, creds.authHeader, JSON.stringify({ fields: mutableFields }));
+                            updated++;
+                        }
+                        catch (err) {
+                            const msg = err instanceof Error ? err.message : String(err);
+                            throw new CommandError(`Failed to update Jira issue ${entry.existingKey}: ${msg}`);
+                        }
+                    }
+                }
+                const skipped = updateExisting ? 0 : toUpdate.length;
                 console.error(`Created ${created} issue(s) in Jira project ${project}.` +
-                    (skipped > 0 ? ` Skipped ${skipped} item(s) that already have a Jira key.` : ""));
-                return { pushed: true, created, skipped, project };
+                    (updateExisting
+                        ? ` Updated ${updated} existing issue(s).`
+                        : skipped > 0
+                            ? ` Skipped ${skipped} item(s) that already have a Jira key (pass --update-existing to PUT them).`
+                            : ""));
+                return { pushed: true, created, updated, skipped, project };
             }
             const baseUrl = readStringOption(options, "host") ??
                 (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>");
