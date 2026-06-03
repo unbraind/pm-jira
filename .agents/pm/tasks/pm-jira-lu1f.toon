@@ -2,11 +2,12 @@ id: pm-jira-lu1f
 title: manifest capabilities correctness + README + tests + functional verification
 description: ""
 type: Task
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-06-02T08:00:53.607Z"
-updated_at: "2026-06-02T08:00:53.607Z"
+updated_at: "2026-06-03T05:19:05.866Z"
 author: codex
 parent: pm-jira-4804
+close_reason: "Done: manifest capabilities corrected (dropped phantom 'services', added 'hooks'), README updated, new unit tests added (43 pass), functionally verified offline. Superseded by pm-jira-i7fd / pm-jira-wsn0."
 body: ""

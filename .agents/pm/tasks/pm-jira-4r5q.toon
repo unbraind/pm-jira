@@ -1,0 +1,11 @@
+id: pm-jira-4r5q
+title: "--dry-run on import AND export (no-network), with strace proof"
+description: ""
+type: Task
+status: closed
+priority: 1
+tags: []
+created_at: "2026-06-03T05:18:39.537Z"
+updated_at: "2026-06-03T05:18:39.537Z"
+author: codex
+body: "Import dry-run builds+prints the exact GET via buildSearchRequest and returns {jql,request}; makes NO Jira call. Export dry-run builds buildExportPlan (create vs update by provenance) and prints would-be POST/PUT, no creds/network. strace proof: bogus JIRA_BASE_URL never resolved; only connect is pm-cli's own baseline 443 (identical on plain 'pm list')."

@@ -1,0 +1,12 @@
+id: pm-jira-i7fd
+title: "pm-jira: deepen filters/dry-run/field-mapping/validate/hooks (enhancement brief 2026-06-03)"
+description: ""
+type: Feature
+status: closed
+priority: 1
+tags: []
+created_at: "2026-06-03T05:18:21.412Z"
+updated_at: "2026-06-03T05:19:28.764Z"
+author: codex
+close_reason: "All offline-testable enhancements implemented, unit-tested (43 pass), functionally verified with real pm data, release:check green. Shipping as the daily release."
+body: "Enhance pm-jira per the 2026-06-03 release-engineer brief, scoped to offline-testable value since no live Jira creds are available.\n\nDelivered:\n1. JQL builder (buildJql) + convenience filters --project/--status/--assignee/--issue-type/--label/--updated-since composing into a single quoted JQL; --jql still verbatim. Pure + unit-tested.\n2. --dry-run on BOTH import and export. Import prints JQL + exact GET request and makes ZERO network calls. Export prints the would-be POST/PUT Jira mutations from real pm items, no creds/network.\n3. Field-mapping depth: statusCategory fallback, issuetype->pm type, assignee->tag, reverse priority/type maps for export, plus --map jiraField=pmField overrides. Pure + unit-tested.\n4. export-on-write hook (opt-in via PM_JIRA_PUSH_ON_WRITE, best-effort no-op without creds). Added 'hooks' capability (verified active: hook_counts write:1).\n5. pm jira validate diagnostics: reports cred/base-url readiness without leaking secrets (hostname-only preview), --json returns the object.\n6. Manifest capability correctness: dropped phantom 'services' (never registered; #96 risk), added 'hooks'. registerExporter is gated by 'importers' (exporters is NOT a valid token).\n\nNEEDS LIVE CREDS (could not exercise): actual JQL fetch, real issue POST/PUT on --push, live reachability. All logic feeding them is dry-run/unit verified."

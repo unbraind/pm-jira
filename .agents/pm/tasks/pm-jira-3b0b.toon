@@ -2,11 +2,12 @@ id: pm-jira-3b0b
 title: "Idempotent import: match on Jira key, update instead of duplicate; persist jira_key/jira_url"
 description: ""
 type: Task
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-06-02T08:00:52.352Z"
-updated_at: "2026-06-02T08:00:52.352Z"
+updated_at: "2026-06-03T05:19:18.146Z"
 author: codex
 parent: pm-jira-4804
+close_reason: "Deferred (not in 2026-06-03 brief scope). buildExportPlan already detects existing Jira keys via provenance and emits PUT/update vs POST/create so re-EXPORT does not duplicate; jira_key/jira_url remain persisted in the description marker (#97: no custom-field setter). Full idempotent re-IMPORT (update matched pm items in place) is a larger change left for a future release to avoid destabilizing the working import path."
 body: ""

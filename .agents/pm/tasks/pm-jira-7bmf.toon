@@ -1,0 +1,11 @@
+id: pm-jira-7bmf
+title: Field-mapping depth + --map override (both directions)
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-03T05:18:39.915Z"
+updated_at: "2026-06-03T05:18:39.915Z"
+author: codex
+body: "mapJiraStatusCategory fallback, mapJiraIssueType, assignee->tag, reverse mapPmPriorityToJira/mapPmTypeToJira (export --rich), parseFieldMap with validation. issueToItem stays back-compat (bare statusMap 3rd arg still accepted). Unit-tested both directions."

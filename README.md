@@ -6,12 +6,15 @@ A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues 
 
 - Pull issues from any Jira project into pm items via `pm jira import` or `pm jira sync`
 - Export pm items back out as Jira create payloads via `pm jira export` (preview, or `--push` to create issues)
-- Custom JQL support for fine-grained control over what gets pulled
-- Automatic mapping of Jira statuses and priorities to pm equivalents, with a `--status-map` override
-- Labels and fix versions mapped as pm tags
-- Jira provenance (key + browse URL) persisted in the item description and declared as `jira_key` / `jira_url` schema fields
-- Dry-run mode to preview changes before writing
+- **Convenience JQL filters** — `--project`, `--status`, `--assignee`, `--issue-type`, `--label`, `--updated-since` compose into a single JQL query (or pass full `--jql` to override)
+- **Rich field mapping** — Jira status (by name, with a `statusCategory` fallback for custom workflows), priority, issue type → pm type, labels/fix-versions → tags, assignee → tag; configurable with `--status-map` and a general `--map jiraField=pmField`
+- **`--dry-run` everywhere** — both import and export print the exact request / mutations they *would* make and perform **no network call** (the offline-testable, creds-free path)
+- **`pm jira validate`** — report Jira credential/base-URL readiness without leaking any secret (hostname-only preview); `--json` aware
+- Optional, opt-in **export-on-write hook** (`PM_JIRA_PUSH_ON_WRITE`) — best-effort, never breaks your pm command, no-op without credentials
+- Jira provenance (key + browse URL) persisted in the item description and declared as `jira_key` / `jira_url` schema fields; on export, items that already carry a Jira key become an `update` (PUT) instead of a duplicate create
 - Works as a `pm jira sync`/`pm jira import` command, a `pm jira export` exporter, and a config-driven `jira-sync` importer
+
+> **Which features need live Jira credentials?** Everything except the actual network round-trip is usable and testable offline. Building JQL, previewing requests/mutations with `--dry-run`, field mapping in both directions, and `pm jira validate` all work with **no creds and no network**. You only need `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` for: a real import fetch, `pm jira export --push` (creating/updating issues), and live reachability.
 
 ## Installation
 
@@ -96,13 +99,36 @@ pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--project` | string | — | Jira project key (e.g. `PROJ`). Used to build default JQL. |
-| `--jql` | string | — | Custom JQL query. Overrides `--project` default JQL. |
+| `--project` | string | — | Jira project key (e.g. `PROJ`). Composed into JQL. |
+| `--jql` | string | — | Custom JQL query. Used verbatim; overrides all convenience filters below. |
+| `--status` | string | — | Filter by pm status (`open`/`in_progress`/`closed`/`blocked`, mapped to a `statusCategory` clause) or a raw Jira status name. Also filters imported items client-side. |
+| `--assignee` | string | — | Filter by assignee (accountId, name, or a function like `currentUser()`). |
+| `--issue-type` | string | — | Filter by Jira issue type (e.g. `Bug`). |
+| `--label` | string | — | Filter by Jira label. |
+| `--updated-since` | string | — | Filter by updated date, relative (`-7d`) or absolute (`2026-01-01`). |
+| `--status-map` | string | — | Override status mapping, e.g. `"In Review=in_progress,QA=blocked"`. |
+| `--map` | string | — | Override field mapping, e.g. `"issuetype=Task,assignee=skip"`. |
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--max-results` | number | `500` | Maximum number of issues to pull. |
-| `--status` | string | — | Filter by mapped pm status (`open`, `in_progress`, `closed`, `blocked`). |
-| `--status-map` | string | — | Override mapping, e.g. `"In Review=in_progress,QA=blocked"`. |
-| `--dry-run` | boolean | `false` | Preview what would be created without writing. |
+| `--dry-run` | boolean | `false` | Print the JQL + exact GET request that would run; **no network call**. |
+
+When no `--jql` is given, the convenience filters are AND-combined; if you don't
+filter on status, a `statusCategory != Done` clause is appended so an unscoped
+pull stays focused on active work (the historical default).
+
+#### `--map` field overrides
+
+`--map` accepts a comma list of `jiraField=pmTarget` pairs. Recognized Jira-side
+keys: `status`, `statuscategory`, `priority`, `issuetype` (alias `type`),
+`labels`, `assignee`, `duedate`. Examples:
+
+```bash
+# Pin every imported item's type, and skip the assignee tag
+pm jira import --project PROJ --map "issuetype=Task,assignee=skip"
+
+# Force a pm status regardless of the Jira workflow state
+pm jira import --project PROJ --map "status=in_progress"
+```
 
 ### Exporter: `pm jira export`
 
@@ -113,6 +139,12 @@ Render pm items as Jira create payloads. Prints JSON by default; with `--push`
 # Preview the Jira create payloads for all pm items (no network, no creds needed)
 pm jira export --project PROJ
 
+# Print the exact mutations that WOULD run (create vs update), no network/creds
+pm jira export --project PROJ --dry-run
+
+# Derive Jira issuetype + priority from each pm item's type/priority
+pm jira export --project PROJ --rich --dry-run
+
 # Actually create the issues in Jira (requires creds + --project)
 pm jira export --push --project PROJ
 ```
@@ -120,11 +152,36 @@ pm jira export --push --project PROJ
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--project` | string | — | Target Jira project key for created issues (required for `--push`). |
+| `--map` | string | — | Override field mapping, e.g. `"issuetype=Story"`. |
+| `--rich` | boolean | `false` | Derive Jira `issuetype` + `priority` from the pm item type/priority. |
+| `--dry-run` | boolean | `false` | Print the Jira POST/PUT mutations that would run; **no network call**. |
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--push` | boolean | `false` | POST payloads to Jira (requires credentials + `--project`). |
 
 Items whose description carries a `Jira <KEY>: <url>` provenance marker (added on
-import) can be matched back to their upstream issue.
+import) are matched back to their upstream issue: `--dry-run` shows them as an
+`update` (PUT), and `--push` **skips** them so a re-export never duplicates an
+existing Jira issue (only items without a key are created).
+
+### Command: `pm jira validate`
+
+Report whether pm-jira has the credentials/base URL it needs — **without making
+a network call and without leaking any secret value** (it prints a hostname-only
+preview, never the token or email):
+
+```bash
+pm jira validate            # human-readable readiness summary
+pm jira validate --json     # structured object: { ready, baseUrlPresent, ... }
+pm jira validate --host https://company.atlassian.net
+```
+
+### Export-on-write hook (opt-in)
+
+Setting `PM_JIRA_PUSH_ON_WRITE=1` activates a best-effort `onWrite` hook. It is a
+strict no-op unless both the env flag is truthy **and** Jira credentials are
+present, and it can never fail your `pm` command (the pm hook runtime swallows
+any error). It intentionally does **not** auto-POST on every write; use the
+explicit, reviewable `pm jira export --push` to mirror items upstream.
 
 ### Importer: `jira-sync` (config-driven)
 
@@ -166,6 +223,22 @@ The default mapping (override per-status with `--status-map`):
 | In Progress, In Review, In Development, Code Review | `in_progress` |
 | Done, Resolved, Closed, Complete, Completed | `closed` |
 | Blocked | `blocked` |
+
+When the Jira status *name* is unrecognized (custom workflows), pm-jira falls
+back to the issue's `statusCategory` bucket: `new` → `open`, `indeterminate` →
+`in_progress`, `done` → `closed`.
+
+### Issue type mapping
+
+| Jira Issue Type | pm Type |
+|---|---|
+| Bug, Defect | `Bug` |
+| Story, Epic | `Feature` |
+| Task, Sub-task | `Task` |
+| (any other) | `Issue` |
+
+Override with `--map issuetype=<pmType>` (import) or `--map issuetype=<jiraType>`
+(export, with `--rich`).
 
 ## Priority Mapping
 
@@ -230,9 +303,9 @@ npm run dev
 
 ## Requirements
 
-- Node.js 18+ (uses native `https` module and `Buffer`)
-- pm-cli `>=2026.5.0`
-- TypeScript 5.x (dev dependency)
+- Node.js 20+ (uses native `https` module and `Buffer`)
+- pm-cli `>=2026.5.31`
+- TypeScript 6.x (dev dependency)
 
 ## License
 
