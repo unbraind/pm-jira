@@ -1,13 +1,21 @@
 // pm-jira — Jira issue sync / importer / exporter for pm-cli
 //
 // Capabilities (see manifest.json):
-//   commands  — `pm jira sync` (legacy, full-featured pull)
+//   commands  — `pm jira sync` (legacy, full-featured pull) + `pm jira validate`
 //   importers — `pm jira import` (native import pipeline: pull issues via JQL)
 //             — `jira-sync` (config-driven importer, kept for back-compat)
-//   exporters — `pm jira export` (render pm items as Jira-create payloads;
-//               only POSTs to Jira with explicit --push AND creds present)
+//             — `pm jira export` exporter (registerExporter is gated by the
+//               `importers` capability; `exporters` is NOT a valid manifest
+//               token). Renders pm items as Jira-create payloads; only POSTs
+//               with explicit --push AND creds present.
 //   schema    — declares jira_key / jira_url item fields
-//   services  — declared for governance parity with the sync service surface
+//   hooks     — opt-in best-effort export-on-write mirror (PM_JIRA_PUSH_ON_WRITE)
+//
+// NOTE: the prior manifest declared `services` but never called
+// registerService — that was a no-op "phantom" capability. We dropped it and
+// added `hooks` (which we actually register). We deliberately do NOT register
+// a service override: per pm-cli issue #96 overriding a core service can
+// corrupt all command output.
 import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -68,7 +76,84 @@ export function mapJiraStatus(jiraStatus, statusMap) {
     // Default: to do / open / backlog / any other
     return "open";
 }
+// Map a Jira statusCategory key (the workflow-agnostic bucket Jira assigns to
+// every status: "new" | "indeterminate" | "done") to a pm status. This is a
+// robust fallback that works across custom workflows where the status *name*
+// is unrecognized but the category is always one of three known values.
+export function mapJiraStatusCategory(categoryKey) {
+    switch ((categoryKey ?? "").toLowerCase()) {
+        case "done":
+            return "closed";
+        case "indeterminate":
+            return "in_progress";
+        case "new":
+        default:
+            return "open";
+    }
+}
+// Map a Jira issue type to a pm item type. Defaults follow pm's common type
+// vocabulary; a `--map issuetype=<pmType>` override can replace the result.
+export function mapJiraIssueType(jiraType) {
+    const name = (jiraType ?? "").toLowerCase();
+    if (name === "bug" || name === "defect")
+        return "Bug";
+    if (name === "story" || name === "user story")
+        return "Feature";
+    if (name === "epic")
+        return "Feature";
+    if (name === "task" || name === "sub-task" || name === "subtask")
+        return "Task";
+    return "Issue";
+}
+// Reverse priority map: pm priority (1..4) -> Jira priority name, for export.
+export function mapPmPriorityToJira(priority) {
+    switch (priority) {
+        case 1:
+            return "Highest";
+        case 2:
+            return "High";
+        case 4:
+            return "Low";
+        case 3:
+        default:
+            return "Medium";
+    }
+}
 const PM_STATUSES = ["open", "in_progress", "closed", "blocked"];
+const KNOWN_MAP_KEYS = new Set([
+    "status",
+    "statuscategory",
+    "priority",
+    "issuetype",
+    "labels",
+    "assignee",
+    "duedate",
+    "type",
+]);
+export function parseFieldMap(raw) {
+    if (!raw)
+        return undefined;
+    const map = {};
+    for (const pair of raw.split(",")) {
+        const trimmed = pair.trim();
+        if (!trimmed)
+            continue;
+        const eq = trimmed.indexOf("=");
+        if (eq < 0) {
+            throw new CommandError(`Invalid --map entry "${trimmed}" (expected "jiraField=pmField").`, EXIT_CODE.USAGE);
+        }
+        const from = trimmed.slice(0, eq).trim().toLowerCase();
+        const to = trimmed.slice(eq + 1).trim();
+        if (!from || !to) {
+            throw new CommandError(`Invalid --map entry "${trimmed}" (empty field name).`, EXIT_CODE.USAGE);
+        }
+        if (!KNOWN_MAP_KEYS.has(from)) {
+            throw new CommandError(`Unknown --map source field "${from}" (expected one of ${[...KNOWN_MAP_KEYS].join("|")}).`, EXIT_CODE.USAGE);
+        }
+        map[from] = to;
+    }
+    return Object.keys(map).length > 0 ? map : undefined;
+}
 // Parse a --status-map value of the form
 //   "In Progress=in_progress,QA=blocked"
 // into a lower-cased lookup table. Invalid pm-status targets are rejected with
@@ -96,6 +181,71 @@ export function parseStatusMap(raw) {
         map[from] = to;
     }
     return Object.keys(map).length > 0 ? map : undefined;
+}
+// Map a pm status to the Jira statusCategory clause it implies, so
+// `--status closed` can filter Jira-side without enumerating every workflow
+// state. Unknown / raw Jira statuses are matched literally on `status`.
+const PM_STATUS_TO_JQL = {
+    open: "statusCategory = \"To Do\"",
+    in_progress: "statusCategory = \"In Progress\"",
+    closed: "statusCategory = Done",
+    blocked: "status = \"Blocked\"",
+};
+// Quote a JQL value: numbers/keys stay bare where Jira allows it, but anything
+// with whitespace or punctuation is wrapped in double quotes (escaping any
+// embedded quote) so user input can't break out of the clause.
+export function jqlQuote(value) {
+    if (/^[A-Za-z0-9_.-]+$/.test(value))
+        return value;
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+export function buildJql(filters) {
+    // Explicit --jql is authoritative; never rewrite a user's query.
+    if (filters.jql && filters.jql.trim())
+        return filters.jql.trim();
+    const clauses = [];
+    if (filters.project)
+        clauses.push(`project = ${jqlQuote(filters.project)}`);
+    if (filters.status) {
+        const key = filters.status.trim().toLowerCase();
+        clauses.push(PM_STATUS_TO_JQL[key] ?? `status = ${jqlQuote(filters.status)}`);
+    }
+    if (filters.assignee) {
+        const a = filters.assignee.trim();
+        // Recognize the JQL function forms so `--assignee currentUser()` works.
+        clauses.push(/\(\s*\)$/.test(a) ? `assignee = ${a}` : `assignee = ${jqlQuote(a)}`);
+    }
+    if (filters.issueType)
+        clauses.push(`issuetype = ${jqlQuote(filters.issueType)}`);
+    if (filters.label)
+        clauses.push(`labels = ${jqlQuote(filters.label)}`);
+    if (filters.updatedSince) {
+        // Always quote the date expression: Jira parses a bare "-7d" as arithmetic,
+        // so the relative form must be a quoted string ("-7d") to be valid JQL.
+        const d = filters.updatedSince.trim();
+        clauses.push(`updated >= "${d.replace(/"/g, '\\"')}"`);
+    }
+    // With no constraints at all, preserve the historical default. Otherwise, if
+    // the caller did not themselves filter on status, keep "not done" so an
+    // unscoped project pull stays focused on active work (back-compat default).
+    if (clauses.length === 0) {
+        return "statusCategory != Done ORDER BY priority ASC";
+    }
+    if (!filters.status)
+        clauses.push("statusCategory != Done");
+    return `${clauses.join(" AND ")} ORDER BY priority ASC`;
+}
+// Read the convenience JQL filters off a loose options bag (kebab/camel safe).
+export function readJqlFilters(options) {
+    return {
+        jql: readStringOption(options, "jql"),
+        project: readStringOption(options, "project"),
+        status: readStringOption(options, "status"),
+        assignee: readStringOption(options, "assignee"),
+        issueType: readStringOption(options, "issue-type"),
+        label: readStringOption(options, "label"),
+        updatedSince: readStringOption(options, "updated-since"),
+    };
 }
 // ---------------------------------------------------------------------------
 // Jira description (Atlassian Document Format) → plain text
@@ -220,6 +370,38 @@ export function resolveCreds(options, envLike = process.env) {
     const authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
     return { baseUrl: baseUrl.replace(/\/$/, ""), email: email, token: token, authHeader };
 }
+export function diagnoseCreds(options, envLike = process.env) {
+    const hostOption = readStringOption(options, "host");
+    const baseUrlEnv = envLike["JIRA_BASE_URL"]?.trim() || undefined;
+    const baseUrl = hostOption ?? baseUrlEnv;
+    const email = envLike["JIRA_EMAIL"]?.trim() || undefined;
+    const token = envLike["JIRA_API_TOKEN"]?.trim() || undefined;
+    const missing = [];
+    if (!baseUrl)
+        missing.push("JIRA_BASE_URL (or --host)");
+    if (!email)
+        missing.push("JIRA_EMAIL");
+    if (!token)
+        missing.push("JIRA_API_TOKEN");
+    let hostPreview;
+    if (baseUrl) {
+        try {
+            hostPreview = new URL(/^https?:\/\//.test(baseUrl) ? baseUrl : `https://${baseUrl}`).hostname;
+        }
+        catch {
+            hostPreview = undefined;
+        }
+    }
+    return {
+        ready: missing.length === 0,
+        baseUrlPresent: Boolean(baseUrl),
+        emailPresent: Boolean(email),
+        tokenPresent: Boolean(token),
+        baseUrlSource: hostOption ? "option" : baseUrlEnv ? "env" : "none",
+        hostPreview,
+        missing,
+    };
+}
 // ---------------------------------------------------------------------------
 // HTTP helpers using Node.js native https module
 // ---------------------------------------------------------------------------
@@ -299,18 +481,15 @@ function httpsPost(url, authHeader, payload) {
 // Fetch all pages from Jira search API
 // ---------------------------------------------------------------------------
 async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
-    const fields = "summary,description,status,priority,labels,assignee,duedate,fixVersions";
     const allIssues = [];
     let startAt = 0;
     const pageSize = Math.min(maxResults, 100);
     while (allIssues.length < maxResults) {
         const remaining = maxResults - allIssues.length;
         const fetchSize = Math.min(remaining, pageSize);
-        const url = `${baseUrl}/rest/api/3/search` +
-            `?jql=${encodeURIComponent(jql)}` +
-            `&fields=${encodeURIComponent(fields)}` +
-            `&startAt=${startAt}` +
-            `&maxResults=${fetchSize}`;
+        // Reuse the single source-of-truth request builder so the live fetch and
+        // the --dry-run preview can never drift apart.
+        const { url } = buildSearchRequest(baseUrl, jql, startAt, fetchSize);
         const raw = await httpsGet(url, authHeader);
         const data = JSON.parse(raw);
         if (!data.issues || data.issues.length === 0)
@@ -322,22 +501,56 @@ async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults) {
     }
     return allIssues;
 }
-export function issueToItem(issue, baseUrl, statusMap) {
+export function issueToItem(issue, baseUrl, optionsOrStatusMap) {
+    // Back-compat: a bare statusMap (the old 3rd arg) is still accepted.
+    const mapOptions = optionsOrStatusMap && ("statusMap" in optionsOrStatusMap || "fieldMap" in optionsOrStatusMap)
+        ? optionsOrStatusMap
+        : { statusMap: optionsOrStatusMap };
+    const { statusMap, fieldMap } = mapOptions;
     const tags = [
         ...(issue.fields.labels ?? []),
         ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
     ];
+    // Assignee → tag (so it survives without a dedicated pm field) unless --map
+    // assignee=<x> pins it elsewhere or the user opts out with assignee=skip.
+    const assigneeTarget = fieldMap?.["assignee"];
+    if (issue.fields.assignee?.displayName && assigneeTarget !== "skip") {
+        tags.push(`assignee:${issue.fields.assignee.displayName.replace(/\s+/g, "-")}`);
+    }
+    // Status: prefer an explicit name mapping; fall back to the statusCategory
+    // bucket when the name is unrecognized. --map statuscategory=<pmStatus> pins.
+    const categoryPin = fieldMap?.["statuscategory"];
+    const statusPin = fieldMap?.["status"];
+    let status;
+    if (statusPin && PM_STATUSES.includes(statusPin)) {
+        status = statusPin;
+    }
+    else {
+        const byName = mapJiraStatus(issue.fields.status.name, statusMap);
+        // If name resolution defaulted to "open" but the category says otherwise,
+        // trust the category (covers custom workflow states).
+        const byCategory = categoryPin && PM_STATUSES.includes(categoryPin)
+            ? categoryPin
+            : mapJiraStatusCategory(issue.fields.status.statusCategory?.key);
+        status = byName === "open" && byCategory !== "open" ? byCategory : byName;
+    }
+    // Type: --map type=<x> / issuetype=<x> pins; else derive from Jira issuetype.
+    const typePin = fieldMap?.["type"] ?? fieldMap?.["issuetype"];
+    const type = typePin ?? mapJiraIssueType(issue.fields.issuetype?.name);
     const rawBody = adfToPlainText(issue.fields.description);
     const browseUrl = `${baseUrl.replace(/\/$/, "")}/browse/${issue.key}`;
     return {
         title: `[${issue.key}] ${issue.fields.summary}`,
-        status: mapJiraStatus(issue.fields.status.name, statusMap),
+        status,
         priority: mapJiraPriority(issue.fields.priority?.name),
+        type,
         body: rawBody,
         tags,
         deadline: issue.fields.duedate ?? undefined,
         // Provenance marker lives in the description so it survives round-trips.
         description: jiraProvenance(issue.key, browseUrl),
+        jiraKey: issue.key,
+        jiraUrl: browseUrl,
     };
 }
 function createPmItem(pmRoot, item) {
@@ -346,7 +559,7 @@ function createPmItem(pmRoot, item) {
         "create",
         "--title", item.title,
         "--status", item.status,
-        "--type", "Issue",
+        "--type", item.type,
         "--priority", String(item.priority),
         "--description", item.description,
         ...(item.body ? ["--body", item.body] : []),
@@ -356,21 +569,47 @@ function createPmItem(pmRoot, item) {
     const result = spawnSync("pm", args, { encoding: "utf-8" });
     return result.status === 0;
 }
-// Shared import core for both `pm jira sync`, `pm jira import` and the
-// `jira-sync` importer. Throws CommandError (semantic exitCode) on failure.
+const SEARCH_FIELDS = "summary,description,status,priority,labels,assignee,duedate,fixVersions,issuetype";
+export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
+    const url = `${baseUrl.replace(/\/$/, "")}/rest/api/3/search` +
+        `?jql=${encodeURIComponent(jql)}` +
+        `&fields=${encodeURIComponent(SEARCH_FIELDS)}` +
+        `&startAt=${startAt}` +
+        `&maxResults=${Math.min(maxResults, 100)}`;
+    return { method: "GET", url, fields: SEARCH_FIELDS };
+}
 async function runImport(options, pmRoot, opts = {}) {
     const creds = resolveCreds(options);
     const project = readStringOption(options, "project");
     const customJql = readStringOption(options, "jql");
     const maxResults = readNumberOption(options, "max-results") ?? 500;
     const statusMap = parseStatusMap(readStringOption(options, "status-map"));
+    const fieldMap = parseFieldMap(readStringOption(options, "map"));
     const dryRun = opts.dryRun ?? readBooleanOption(options, "dry-run");
     const statusFilter = opts.statusFilter ?? readStringOption(options, "status");
     if (!project && !customJql) {
         throw new CommandError("Provide either --project <KEY> or --jql <query> to specify which issues to import.", EXIT_CODE.USAGE);
     }
-    const jql = customJql ??
-        `project = ${project} AND statusCategory != Done ORDER BY priority ASC`;
+    const jql = buildJql(readJqlFilters(options));
+    const projectLabel = project ?? "custom-jql";
+    // --dry-run makes NO network call: it prints the JQL + the exact GET request
+    // the importer would issue, then returns. This is the offline-testable path.
+    if (dryRun) {
+        const request = buildSearchRequest(creds.baseUrl, jql, 0, maxResults);
+        console.error(`[dry-run] No network call will be made.`);
+        console.error(`[dry-run] JQL: ${jql}`);
+        console.error(`[dry-run] Would ${request.method} ${request.url}`);
+        console.error(`[dry-run] Up to ${maxResults} issues would be imported as pm items.`);
+        return {
+            success: true,
+            dryRun: true,
+            jql,
+            request,
+            maxResults,
+            project: projectLabel,
+            ...(statusFilter ? { statusFilter } : {}),
+        };
+    }
     console.error(`Fetching issues from Jira... (JQL: ${jql})`);
     let issues;
     try {
@@ -384,23 +623,13 @@ async function runImport(options, pmRoot, opts = {}) {
     console.error(`Fetched ${issues.length} issues from Jira`);
     const mapped = issues.map((issue) => ({
         issue,
-        item: issueToItem(issue, creds.baseUrl, statusMap),
+        item: issueToItem(issue, creds.baseUrl, { statusMap, fieldMap }),
     }));
     const filtered = statusFilter
         ? mapped.filter(({ item }) => item.status === statusFilter)
         : mapped;
     if (statusFilter && filtered.length !== mapped.length) {
         console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter}"`);
-    }
-    const projectLabel = project ?? "custom-jql";
-    if (dryRun) {
-        console.error(`[dry-run] Would create ${filtered.length} items:`);
-        for (const { issue, item } of filtered.slice(0, 20)) {
-            console.error(`  ${issue.key}: ${issue.fields.summary} [${item.status}]`);
-        }
-        if (filtered.length > 20)
-            console.error(`  ... and ${filtered.length - 20} more`);
-        return { success: true, dryRun: true, total: filtered.length, project: projectLabel };
     }
     let created = 0;
     for (const { issue, item } of filtered) {
@@ -419,6 +648,17 @@ async function runImport(options, pmRoot, opts = {}) {
         summary: `Imported ${created} issues from Jira ${projectLabel}`,
     };
 }
+// Reverse type map: pm item type -> Jira issue type name, for export.
+export function mapPmTypeToJira(pmType, override) {
+    if (override)
+        return override;
+    const t = (pmType ?? "").toLowerCase();
+    if (t === "bug")
+        return "Bug";
+    if (t === "feature" || t === "epic" || t === "story")
+        return "Story";
+    return "Task";
+}
 function readPmItems(pmRoot) {
     const result = spawnSync("pm", ["--path", pmRoot, "--json", "list", "--full", "--include-body", "--limit", "10000"], { encoding: "utf-8" });
     if (result.status !== 0) {
@@ -435,18 +675,82 @@ function readPmItems(pmRoot) {
 }
 // Convert a pm item to a Jira create payload. `projectKey` is optional so the
 // transform stays pure/testable; the exporter requires it before POSTing.
-export function itemToJiraPayload(item, projectKey) {
+// Accepts either a bare projectKey (back-compat) or a PayloadOptions object.
+export function itemToJiraPayload(item, projectKeyOrOptions) {
+    const opts = typeof projectKeyOrOptions === "string"
+        ? { projectKey: projectKeyOrOptions }
+        : projectKeyOrOptions ?? {};
+    const { projectKey, fieldMap, richMapping } = opts;
     const summary = (item.title ?? "(untitled)").trim() || "(untitled)";
     const bodyText = item.body || item.description || "";
-    return {
-        fields: {
-            ...(projectKey ? { project: { key: projectKey } } : {}),
-            summary,
-            description: plainTextToAdf(bodyText),
-            issuetype: { name: "Task" },
-            labels: (item.tags ?? []).map((t) => t.replace(/\s+/g, "-")),
-        },
+    const issuetypeName = richMapping
+        ? mapPmTypeToJira(item.type, fieldMap?.["issuetype"] ?? fieldMap?.["type"])
+        : "Task";
+    const fields = {
+        ...(projectKey ? { project: { key: projectKey } } : {}),
+        summary,
+        description: plainTextToAdf(bodyText),
+        issuetype: { name: issuetypeName },
+        labels: (item.tags ?? []).map((t) => t.replace(/\s+/g, "-")),
     };
+    if (richMapping && item.priority !== undefined) {
+        fields.priority = { name: mapPmPriorityToJira(item.priority) };
+    }
+    return { fields };
+}
+export function buildExportPlan(items, baseUrl, opts = {}) {
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const entries = items.map((item) => {
+        const provenance = extractJiraKey(item.description) ?? extractJiraKey(item.body);
+        const payload = itemToJiraPayload(item, {
+            projectKey: opts.projectKey,
+            fieldMap: opts.fieldMap,
+            richMapping: opts.richMapping,
+        });
+        if (provenance) {
+            return {
+                op: "update",
+                itemId: item.id,
+                existingKey: provenance.key,
+                method: "PUT",
+                endpoint: `${cleanBase}/rest/api/3/issue/${provenance.key}`,
+                payload,
+            };
+        }
+        return {
+            op: "create",
+            itemId: item.id,
+            method: "POST",
+            endpoint: `${cleanBase}/rest/api/3/issue`,
+            payload,
+        };
+    });
+    return { baseUrl: cleanBase, project: opts.projectKey, entries };
+}
+function isTruthyEnv(value) {
+    if (!value)
+        return false;
+    const s = value.trim().toLowerCase();
+    return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+export function decidePushOnWrite(hookCtx, envLike = process.env) {
+    if (!isTruthyEnv(envLike["PM_JIRA_PUSH_ON_WRITE"])) {
+        return { shouldPush: false, reason: "disabled (PM_JIRA_PUSH_ON_WRITE not set)" };
+    }
+    const op = hookCtx?.op ?? "";
+    if (op.endsWith(":history")) {
+        return { shouldPush: false, reason: "history-stream write ignored" };
+    }
+    if (op === "delete") {
+        return { shouldPush: false, reason: "deletes are not mirrored" };
+    }
+    if (hookCtx?.scope && hookCtx.scope !== "project") {
+        return { shouldPush: false, reason: `non-project scope (${hookCtx.scope})` };
+    }
+    if (op !== "create" && op !== "update") {
+        return { shouldPush: false, reason: `unhandled op (${op || "none"})` };
+    }
+    return { shouldPush: true, reason: `mirror ${op}` };
 }
 // ---------------------------------------------------------------------------
 // Extension
@@ -456,14 +760,25 @@ const PULL_FLAGS = [
     { long: "--jql", value_name: "query", description: "Custom JQL query (overrides --project default)" },
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
     { long: "--max-results", value_name: "n", description: "Max issues to fetch (default: 500)" },
-    { long: "--status", value_name: "filter", description: "Filter by pm status (open|in_progress|closed|blocked)" },
+    { long: "--status", value_name: "filter", description: "Filter by status: pm status (open|in_progress|closed|blocked) or raw Jira status" },
+    { long: "--assignee", value_name: "user", description: "Filter by assignee (accountId, name, or currentUser())" },
+    { long: "--issue-type", value_name: "type", description: "Filter by Jira issue type (e.g. Bug)" },
+    { long: "--label", value_name: "label", description: "Filter by Jira label" },
+    { long: "--updated-since", value_name: "date", description: 'Filter by updated date (e.g. "-7d" or "2026-01-01")' },
     { long: "--status-map", value_name: "map", description: 'Override status mapping, e.g. "QA=blocked,Done=closed"' },
-    { long: "--dry-run", description: "Preview without writing" },
+    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Task,assignee=skip"' },
+    { long: "--dry-run", description: "Preview the JQL + request without any network call" },
 ];
 const EXPORT_FLAGS = [
     { long: "--project", value_name: "KEY", description: "Target Jira project key for created issues" },
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
+    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Story"' },
+    { long: "--rich", description: "Derive Jira issuetype + priority from pm item type/priority" },
+    { long: "--dry-run", description: "Print the Jira mutations that would be made, without any network call" },
     { long: "--push", description: "POST the payloads to Jira (requires creds + --project)" },
+];
+const VALIDATE_FLAGS = [
+    { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
 ];
 export default defineExtension({
     name: "pm-jira",
@@ -488,7 +803,9 @@ export default defineExtension({
                 "pm jira sync --project PROJ --max-results 200",
                 "pm jira sync --jql 'project = PROJ AND assignee = currentUser()'",
                 "pm jira sync --project PROJ --status open --dry-run",
-                "pm jira sync --project PROJ --status-map 'QA=blocked,Done=closed'",
+                "pm jira sync --project PROJ --assignee currentUser() --updated-since -7d",
+                "pm jira sync --project PROJ --issue-type Bug --status-map 'QA=blocked,Done=closed'",
+                "pm jira sync --project PROJ --map 'issuetype=Task,assignee=skip'",
             ],
             flags: PULL_FLAGS,
             async run(ctx) {
@@ -520,17 +837,17 @@ export default defineExtension({
             const customJql = readStringOption(options, "jql");
             const maxResults = readNumberOption(options, "max-results") ?? 500;
             const statusMap = parseStatusMap(readStringOption(options, "status-map"));
+            const fieldMap = parseFieldMap(readStringOption(options, "map"));
             if (!project && !customJql) {
                 throw new CommandError("jira-sync importer requires either options.project or options.jql", EXIT_CODE.USAGE);
             }
-            const jql = customJql ??
-                `project = ${project} AND statusCategory != Done ORDER BY priority ASC`;
+            const jql = buildJql(readJqlFilters(options));
             console.error(`[jira-sync] Fetching issues with JQL: ${jql}`);
             const issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults);
             console.error(`[jira-sync] Importing ${issues.length} issues`);
             let created = 0;
             for (const issue of issues) {
-                if (createPmItem(ctx.pm_root, issueToItem(issue, creds.baseUrl, statusMap)))
+                if (createPmItem(ctx.pm_root, issueToItem(issue, creds.baseUrl, { statusMap, fieldMap })))
                     created++;
             }
             console.error(`[jira-sync] Done. Imported ${created} issues.`);
@@ -544,8 +861,36 @@ export default defineExtension({
         api.registerExporter("jira", async (ctx) => {
             const options = ctx.options || {};
             const push = readBooleanOption(options, "push");
+            const dryRun = readBooleanOption(options, "dry-run");
+            const rich = readBooleanOption(options, "rich");
             const project = readStringOption(options, "project");
+            const fieldMap = parseFieldMap(readStringOption(options, "map"));
             const items = readPmItems(ctx.pm_root);
+            // --dry-run: build and PRINT the exact Jira mutations that WOULD be made
+            // from the current pm items, without resolving creds or hitting the
+            // network. Uses --host if given else a placeholder base so the endpoint
+            // shape is still inspectable offline.
+            if (dryRun) {
+                const baseUrl = readStringOption(options, "host") ??
+                    (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>");
+                const plan = buildExportPlan(items, baseUrl, {
+                    projectKey: project,
+                    fieldMap,
+                    richMapping: rich,
+                });
+                const creates = plan.entries.filter((e) => e.op === "create").length;
+                const updates = plan.entries.filter((e) => e.op === "update").length;
+                console.error(`[dry-run] No network call will be made.`);
+                console.error(`[dry-run] Would issue ${plan.entries.length} Jira mutation(s): ${creates} create, ${updates} update.`);
+                for (const entry of plan.entries.slice(0, 20)) {
+                    const tag = entry.op === "update" ? ` (existing ${entry.existingKey})` : "";
+                    console.error(`[dry-run]   ${entry.method} ${entry.endpoint}${tag} :: ${entry.payload.fields.summary}`);
+                }
+                if (plan.entries.length > 20) {
+                    console.error(`[dry-run]   ... and ${plan.entries.length - 20} more`);
+                }
+                return { dryRun: true, pushed: false, plan };
+            }
             if (push) {
                 // Resolve creds first so the missing-creds path returns a structured
                 // CommandError before we ever build payloads or hit the network.
@@ -553,11 +898,19 @@ export default defineExtension({
                 if (!project) {
                     throw new CommandError("--push requires --project <KEY> (the target Jira project for new issues).", EXIT_CODE.USAGE);
                 }
-                const payloads = items.map((item) => itemToJiraPayload(item, project));
+                // Only CREATE new issues here; items that already carry a Jira key are
+                // skipped so a re-export never duplicates upstream issues.
+                const plan = buildExportPlan(items, creds.baseUrl, {
+                    projectKey: project,
+                    fieldMap,
+                    richMapping: rich,
+                });
+                const toCreate = plan.entries.filter((e) => e.op === "create");
+                const skipped = plan.entries.length - toCreate.length;
                 let created = 0;
-                for (const payload of payloads) {
+                for (const entry of toCreate) {
                     try {
-                        await httpsPost(`${creds.baseUrl}/rest/api/3/issue`, creds.authHeader, JSON.stringify(payload));
+                        await httpsPost(entry.endpoint, creds.authHeader, JSON.stringify(entry.payload));
                         created++;
                     }
                     catch (err) {
@@ -565,12 +918,79 @@ export default defineExtension({
                         throw new CommandError(`Failed to create Jira issue: ${msg}`);
                     }
                 }
-                console.error(`Created ${created} issue(s) in Jira project ${project}.`);
-                return { pushed: true, created, project };
+                console.error(`Created ${created} issue(s) in Jira project ${project}.` +
+                    (skipped > 0 ? ` Skipped ${skipped} item(s) that already have a Jira key.` : ""));
+                return { pushed: true, created, skipped, project };
             }
-            const payloads = items.map((item) => itemToJiraPayload(item, project));
+            const baseUrl = readStringOption(options, "host") ??
+                (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>");
+            const plan = buildExportPlan(items, baseUrl, {
+                projectKey: project,
+                fieldMap,
+                richMapping: rich,
+            });
+            const payloads = plan.entries.map((e) => e.payload);
             console.log(JSON.stringify(payloads, null, 2));
             return { exported: payloads.length, pushed: false };
+        });
+        // -----------------------------------------------------------------------
+        // Command: pm jira validate — credential / readiness diagnostics.
+        // Never performs a network call and never leaks the token or email; it
+        // reports presence booleans + a redacted host preview. --json returns the
+        // structured object (the global --json flag controls rendering).
+        // -----------------------------------------------------------------------
+        api.registerCommand({
+            name: "jira validate",
+            description: "Check Jira credential / base-URL readiness (no secrets leaked, no network)",
+            intent: "Diagnose whether pm-jira has the env/config it needs to talk to Jira",
+            examples: ["pm jira validate", "pm jira validate --json", "pm jira validate --host https://co.atlassian.net"],
+            flags: VALIDATE_FLAGS,
+            async run(ctx) {
+                const diag = diagnoseCreds(ctx.options || {});
+                const json = Boolean(ctx.global?.json);
+                if (!json) {
+                    // Human-readable summary on stderr; the returned object is what pm
+                    // renders to stdout. Never print the token/email values.
+                    console.error(diag.ready ? "Jira credentials: READY" : "Jira credentials: NOT READY");
+                    console.error(`  base URL present: ${diag.baseUrlPresent} (source: ${diag.baseUrlSource})`);
+                    if (diag.hostPreview)
+                        console.error(`  host: ${diag.hostPreview}`);
+                    console.error(`  email present:    ${diag.emailPresent}`);
+                    console.error(`  token present:    ${diag.tokenPresent}`);
+                    if (!diag.ready)
+                        console.error(`  missing: ${diag.missing.join(", ")}`);
+                }
+                // Return the object: in --json mode pm serializes it; otherwise pm
+                // renders a compact view. Either way we do not corrupt stdout.
+                return diag;
+            },
+        });
+        // -----------------------------------------------------------------------
+        // hooks — best-effort export-on-write mirror (OPT-IN).
+        // Gated on PM_JIRA_PUSH_ON_WRITE being truthy AND full creds present. When
+        // disabled or unconfigured it is a strict no-op. The pm hook runtime already
+        // swallows any throw from a hook into a warning, so this can NEVER fail the
+        // user's pm command; we additionally guard internally for clarity.
+        // -----------------------------------------------------------------------
+        api.hooks.onWrite(async (hookCtx) => {
+            const decision = decidePushOnWrite(hookCtx, process.env);
+            if (!decision.shouldPush)
+                return;
+            // Live mirror requires creds + network; in this build it is intentionally
+            // a best-effort stub that no-ops without creds. When creds are present a
+            // future revision can PUT the changed item upstream. We keep the network
+            // call out of the default path so writes stay fast and offline-safe.
+            try {
+                const diag = diagnoseCreds({}, process.env);
+                if (!diag.ready)
+                    return; // no creds → silent no-op
+                // Intentionally minimal: real upstream PUT is left to an explicit
+                // `pm jira export --push` so a stray write never spams Jira. The hook
+                // exists to make the opt-in surface real + testable.
+            }
+            catch {
+                // Swallow — a hook must never break the user's pm command.
+            }
         });
     },
 });

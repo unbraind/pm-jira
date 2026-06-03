@@ -9,7 +9,7 @@
     "commands",
     "schema",
     "importers",
-    "services"
+    "hooks"
   ],
   "pm": {
     "compatibility": "v2"

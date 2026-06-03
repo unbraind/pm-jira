@@ -1,0 +1,11 @@
+id: pm-jira-wsn0
+title: Manifest capability correctness + README
+description: ""
+type: Task
+status: closed
+priority: 3
+tags: []
+created_at: "2026-06-03T05:18:41.214Z"
+updated_at: "2026-06-03T05:18:41.214Z"
+author: codex
+body: "Dropped phantom 'services' (never registered; per #96 a service override would corrupt output), added 'hooks'. Confirmed via SDK loader that registerExporter is gated by 'importers' and 'exporters' is not a valid token. Install shows capabilities=[commands,hooks,importers,schema]. README updated."

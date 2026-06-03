@@ -17,6 +17,18 @@ import extension, {
   jiraProvenance,
   extractJiraKey,
   resolveCreds,
+  buildJql,
+  readJqlFilters,
+  jqlQuote,
+  parseFieldMap,
+  mapJiraStatusCategory,
+  mapJiraIssueType,
+  mapPmPriorityToJira,
+  mapPmTypeToJira,
+  buildSearchRequest,
+  buildExportPlan,
+  diagnoseCreds,
+  decidePushOnWrite,
 } from "../dist/index.js";
 
 // Mirror the real ExtensionApi surface so activate() can register every
@@ -307,4 +319,293 @@ test("jira sync throws when neither --project nor --jql is given", async () => {
     if (prev.token) process.env.JIRA_API_TOKEN = prev.token; else delete process.env.JIRA_API_TOKEN;
     if (prev.email) process.env.JIRA_EMAIL = prev.email; else delete process.env.JIRA_EMAIL;
   }
+});
+
+// --- JQL builder ----------------------------------------------------------
+
+test("buildJql returns an explicit --jql verbatim", () => {
+  assert.strictEqual(
+    buildJql({ jql: "project = X AND foo = bar" }),
+    "project = X AND foo = bar"
+  );
+  // Explicit JQL wins even if other filters are present.
+  assert.strictEqual(buildJql({ jql: "key = X-1", project: "Y" }), "key = X-1");
+});
+
+test("buildJql defaults to historical 'not done' when unconstrained", () => {
+  assert.strictEqual(buildJql({}), "statusCategory != Done ORDER BY priority ASC");
+});
+
+test("buildJql composes project + filters and keeps not-done default", () => {
+  assert.strictEqual(
+    buildJql({ project: "PROJ" }),
+    "project = PROJ AND statusCategory != Done ORDER BY priority ASC"
+  );
+  assert.strictEqual(
+    buildJql({ project: "PROJ", assignee: "currentUser()", updatedSince: "-7d" }),
+    'project = PROJ AND assignee = currentUser() AND updated >= "-7d" AND statusCategory != Done ORDER BY priority ASC'
+  );
+});
+
+test("buildJql maps pm status to statusCategory and does not re-add not-done", () => {
+  assert.strictEqual(
+    buildJql({ project: "PROJ", status: "closed" }),
+    'project = PROJ AND statusCategory = Done ORDER BY priority ASC'
+  );
+  // A raw Jira status name passes through as a status= clause.
+  assert.strictEqual(
+    buildJql({ status: "Code Review" }),
+    'status = "Code Review" ORDER BY priority ASC'
+  );
+});
+
+test("buildJql escapes / quotes values to prevent clause break-out", () => {
+  assert.strictEqual(buildJql({ label: "back end" }).startsWith('labels = "back end"'), true);
+  assert.strictEqual(jqlQuote('a"b'), '"a\\"b"');
+  assert.strictEqual(jqlQuote("PROJ-1"), "PROJ-1");
+});
+
+test("readJqlFilters reads kebab + camel keys", () => {
+  const f = readJqlFilters({ project: "P", "updated-since": "-1d", issueType: "Bug" });
+  assert.strictEqual(f.project, "P");
+  assert.strictEqual(f.updatedSince, "-1d");
+  assert.strictEqual(f.issueType, "Bug");
+});
+
+// --- field mapping depth --------------------------------------------------
+
+test("mapJiraStatusCategory buckets by category key", () => {
+  assert.strictEqual(mapJiraStatusCategory("done"), "closed");
+  assert.strictEqual(mapJiraStatusCategory("indeterminate"), "in_progress");
+  assert.strictEqual(mapJiraStatusCategory("new"), "open");
+  assert.strictEqual(mapJiraStatusCategory(undefined), "open");
+});
+
+test("mapJiraIssueType maps issue types to pm types", () => {
+  assert.strictEqual(mapJiraIssueType("Bug"), "Bug");
+  assert.strictEqual(mapJiraIssueType("Story"), "Feature");
+  assert.strictEqual(mapJiraIssueType("Epic"), "Feature");
+  assert.strictEqual(mapJiraIssueType("Task"), "Task");
+  assert.strictEqual(mapJiraIssueType("Spike"), "Issue");
+});
+
+test("mapPmPriorityToJira / mapPmTypeToJira reverse-map for export", () => {
+  assert.strictEqual(mapPmPriorityToJira(1), "Highest");
+  assert.strictEqual(mapPmPriorityToJira(2), "High");
+  assert.strictEqual(mapPmPriorityToJira(3), "Medium");
+  assert.strictEqual(mapPmPriorityToJira(4), "Low");
+  assert.strictEqual(mapPmTypeToJira("Bug"), "Bug");
+  assert.strictEqual(mapPmTypeToJira("Feature"), "Story");
+  assert.strictEqual(mapPmTypeToJira("Task"), "Task");
+  assert.strictEqual(mapPmTypeToJira("Task", "Sub-task"), "Sub-task"); // override
+});
+
+test("parseFieldMap parses pairs and rejects unknown / malformed", () => {
+  assert.deepStrictEqual(parseFieldMap("issuetype=Task,assignee=skip"), {
+    issuetype: "Task",
+    assignee: "skip",
+  });
+  assert.strictEqual(parseFieldMap(undefined), undefined);
+  assert.throws(() => parseFieldMap("bogus=x"), (e: unknown) => {
+    assert.strictEqual((e as CommandError).exitCode, EXIT_CODE.USAGE);
+    return true;
+  });
+  assert.throws(() => parseFieldMap("noequals"), /--map/);
+});
+
+test("issueToItem uses statusCategory fallback + issue type + assignee tag", () => {
+  const issue = {
+    key: "PROJ-9",
+    fields: {
+      summary: "Custom workflow item",
+      description: null,
+      // Unrecognized status NAME but category says in-progress.
+      status: { name: "Awaiting Triage", statusCategory: { key: "indeterminate" } },
+      priority: { name: "Low" },
+      labels: ["api"],
+      assignee: { displayName: "Ada Lovelace", emailAddress: "a@b.c" },
+      duedate: null,
+      fixVersions: [],
+      issuetype: { name: "Bug" },
+    },
+  };
+  const item = issueToItem(issue as any, "https://x.atlassian.net");
+  assert.strictEqual(item.status, "in_progress"); // via category fallback
+  assert.strictEqual(item.type, "Bug");
+  assert.strictEqual(item.priority, 4);
+  assert.ok(item.tags.includes("api"));
+  assert.ok(item.tags.includes("assignee:Ada-Lovelace"));
+  assert.strictEqual(item.jiraKey, "PROJ-9");
+});
+
+test("issueToItem honors --map type/status pins and assignee=skip", () => {
+  const issue = {
+    key: "PROJ-10",
+    fields: {
+      summary: "pinned",
+      description: null,
+      status: { name: "Done", statusCategory: { key: "done" } },
+      priority: null,
+      labels: [],
+      assignee: { displayName: "Someone", emailAddress: "s@x.y" },
+      duedate: null,
+      fixVersions: [],
+      issuetype: { name: "Task" },
+    },
+  };
+  const item = issueToItem(issue as any, "https://x.atlassian.net", {
+    fieldMap: { type: "Chore", status: "open", assignee: "skip" },
+  });
+  assert.strictEqual(item.type, "Chore");
+  assert.strictEqual(item.status, "open"); // pinned, overrides Done->closed
+  assert.ok(!item.tags.some((t) => t.startsWith("assignee:")));
+});
+
+test("issueToItem still accepts a bare statusMap (back-compat 3rd arg)", () => {
+  const issue = {
+    key: "PROJ-11",
+    fields: {
+      summary: "x",
+      description: null,
+      status: { name: "QA", statusCategory: { key: "indeterminate" } },
+      priority: null,
+      labels: [],
+      assignee: null,
+      duedate: null,
+      fixVersions: [],
+      issuetype: { name: "Task" },
+    },
+  };
+  const item = issueToItem(issue as any, "https://x.atlassian.net", parseStatusMap("QA=blocked"));
+  assert.strictEqual(item.status, "blocked");
+});
+
+// --- search request (dry-run import) --------------------------------------
+
+test("buildSearchRequest builds the exact GET url with encoded jql", () => {
+  const req = buildSearchRequest("https://x.atlassian.net/", "project = P AND a = b", 0, 250);
+  assert.strictEqual(req.method, "GET");
+  assert.ok(req.url.startsWith("https://x.atlassian.net/rest/api/3/search?"));
+  assert.ok(req.url.includes("jql=project%20%3D%20P%20AND%20a%20%3D%20b"));
+  assert.ok(req.url.includes("maxResults=100")); // capped at 100 per page
+  assert.ok(req.url.includes("issuetype")); // fields include issuetype
+});
+
+// --- export plan (dry-run export) -----------------------------------------
+
+test("buildExportPlan emits create for new items, update for keyed items", () => {
+  const plan = buildExportPlan(
+    [
+      { id: "a1", title: "New thing", tags: ["x"] },
+      {
+        id: "a2",
+        title: "Existing",
+        description: jiraProvenance("PROJ-5", "https://x.atlassian.net/browse/PROJ-5"),
+      },
+    ],
+    "https://x.atlassian.net",
+    { projectKey: "PROJ" }
+  );
+  assert.strictEqual(plan.entries.length, 2);
+  assert.strictEqual(plan.entries[0]!.op, "create");
+  assert.strictEqual(plan.entries[0]!.method, "POST");
+  assert.ok(plan.entries[0]!.endpoint.endsWith("/rest/api/3/issue"));
+  assert.strictEqual(plan.entries[1]!.op, "update");
+  assert.strictEqual(plan.entries[1]!.existingKey, "PROJ-5");
+  assert.ok(plan.entries[1]!.endpoint.endsWith("/rest/api/3/issue/PROJ-5"));
+});
+
+test("buildExportPlan richMapping derives issuetype + priority", () => {
+  const plan = buildExportPlan(
+    [{ id: "a", title: "Bugfix", type: "Bug", priority: 1, tags: [] }],
+    "https://x.atlassian.net",
+    { projectKey: "P", richMapping: true }
+  );
+  assert.strictEqual(plan.entries[0]!.payload.fields.issuetype.name, "Bug");
+  assert.strictEqual(plan.entries[0]!.payload.fields.priority?.name, "Highest");
+});
+
+test("itemToJiraPayload default (no rich) stays Task with no priority", () => {
+  const p = itemToJiraPayload({ title: "x", type: "Bug", priority: 1 });
+  assert.strictEqual(p.fields.issuetype.name, "Task");
+  assert.strictEqual(p.fields.priority, undefined);
+});
+
+// --- credential diagnostics (jira validate) -------------------------------
+
+test("diagnoseCreds reports not-ready + missing without leaking secrets", () => {
+  const d = diagnoseCreds({}, {} as NodeJS.ProcessEnv);
+  assert.strictEqual(d.ready, false);
+  assert.strictEqual(d.tokenPresent, false);
+  assert.strictEqual(d.baseUrlSource, "none");
+  assert.deepStrictEqual(
+    d.missing.sort(),
+    ["JIRA_API_TOKEN", "JIRA_BASE_URL (or --host)", "JIRA_EMAIL"].sort()
+  );
+  // The diagnostics object must never carry the raw token/email.
+  assert.strictEqual(JSON.stringify(d).includes("secret-token"), false);
+});
+
+test("diagnoseCreds redacts to hostname preview and reports source", () => {
+  const d = diagnoseCreds(
+    {},
+    { JIRA_BASE_URL: "https://co.atlassian.net/wiki", JIRA_EMAIL: "x@y.z", JIRA_API_TOKEN: "secret-token" } as NodeJS.ProcessEnv
+  );
+  assert.strictEqual(d.ready, true);
+  assert.strictEqual(d.hostPreview, "co.atlassian.net"); // hostname only
+  assert.strictEqual(d.baseUrlSource, "env");
+  assert.strictEqual(JSON.stringify(d).includes("secret-token"), false);
+});
+
+test("diagnoseCreds prefers --host and marks source=option", () => {
+  const d = diagnoseCreds(
+    { host: "https://opt.atlassian.net" },
+    { JIRA_EMAIL: "x@y.z", JIRA_API_TOKEN: "t" } as NodeJS.ProcessEnv
+  );
+  assert.strictEqual(d.baseUrlSource, "option");
+  assert.strictEqual(d.hostPreview, "opt.atlassian.net");
+});
+
+// --- export-on-write hook decision ----------------------------------------
+
+test("decidePushOnWrite is a no-op unless PM_JIRA_PUSH_ON_WRITE is truthy", () => {
+  assert.strictEqual(
+    decidePushOnWrite({ op: "create", scope: "project" }, {} as NodeJS.ProcessEnv).shouldPush,
+    false
+  );
+  assert.strictEqual(
+    decidePushOnWrite({ op: "create", scope: "project" }, { PM_JIRA_PUSH_ON_WRITE: "1" } as NodeJS.ProcessEnv).shouldPush,
+    true
+  );
+});
+
+test("decidePushOnWrite ignores history writes, deletes, and non-project scope", () => {
+  const env = { PM_JIRA_PUSH_ON_WRITE: "true" } as NodeJS.ProcessEnv;
+  assert.strictEqual(decidePushOnWrite({ op: "create:history", scope: "project" }, env).shouldPush, false);
+  assert.strictEqual(decidePushOnWrite({ op: "delete", scope: "project" }, env).shouldPush, false);
+  assert.strictEqual(decidePushOnWrite({ op: "create", scope: "global" }, env).shouldPush, false);
+  assert.strictEqual(decidePushOnWrite({ op: "update", scope: "project" }, env).shouldPush, true);
+});
+
+// --- activation: validate command + onWrite hook registered ---------------
+
+test("extension registers the jira validate command and an onWrite hook", () => {
+  const registered: string[] = [];
+  const commandNames: string[] = [];
+  const api = {
+    registerCommand: (def: any) => { registered.push("command"); commandNames.push(def.name); },
+    registerImporter: () => registered.push("importer"),
+    registerExporter: () => registered.push("exporter"),
+    registerItemFields: () => registered.push("itemFields"),
+    hooks: {
+      beforeCommand: () => registered.push("hook:before"),
+      afterCommand: () => registered.push("hook:after"),
+      onWrite: () => registered.push("hook:onWrite"),
+      onRead: () => registered.push("hook:onRead"),
+      onIndex: () => registered.push("hook:onIndex"),
+    },
+  };
+  extension.activate(api as any);
+  assert.ok(commandNames.includes("jira validate"), "should register jira validate");
+  assert.ok(registered.includes("hook:onWrite"), "should register an onWrite hook");
 });

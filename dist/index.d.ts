@@ -39,13 +39,33 @@ interface JiraIssue {
         fixVersions?: Array<{
             name: string;
         }>;
+        issuetype?: {
+            name: string;
+        } | null;
     };
 }
 type PmPriority = 1 | 2 | 3 | 4;
 type PmStatus = "open" | "in_progress" | "closed" | "blocked";
 export declare function mapJiraPriority(jiraPriority: string | undefined): PmPriority;
 export declare function mapJiraStatus(jiraStatus: string, statusMap?: Record<string, PmStatus>): PmStatus;
+export declare function mapJiraStatusCategory(categoryKey: string | undefined): PmStatus;
+export declare function mapJiraIssueType(jiraType: string | undefined): string;
+export declare function mapPmPriorityToJira(priority: PmPriority | number | undefined): string;
+export type FieldMap = Record<string, string>;
+export declare function parseFieldMap(raw: string | undefined): FieldMap | undefined;
 export declare function parseStatusMap(raw: string | undefined): Record<string, PmStatus> | undefined;
+export interface JqlFilters {
+    jql?: string;
+    project?: string;
+    status?: string;
+    assignee?: string;
+    issueType?: string;
+    label?: string;
+    updatedSince?: string;
+}
+export declare function jqlQuote(value: string): string;
+export declare function buildJql(filters: JqlFilters): string;
+export declare function readJqlFilters(options: Record<string, unknown>): JqlFilters;
 export declare function adfToPlainText(node: JiraIssue["fields"]["description"] | {
     type: string;
     content?: unknown[];
@@ -80,16 +100,39 @@ export interface JiraCreds {
     authHeader: string;
 }
 export declare function resolveCreds(options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): JiraCreds;
+export interface CredDiagnostics {
+    ready: boolean;
+    baseUrlPresent: boolean;
+    emailPresent: boolean;
+    tokenPresent: boolean;
+    baseUrlSource: "option" | "env" | "none";
+    hostPreview?: string;
+    missing: string[];
+}
+export declare function diagnoseCreds(options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): CredDiagnostics;
 export interface IssueToItem {
     title: string;
     status: PmStatus;
     priority: PmPriority;
+    type: string;
     body: string;
     tags: string[];
     deadline?: string;
     description: string;
+    jiraKey: string;
+    jiraUrl: string;
 }
-export declare function issueToItem(issue: JiraIssue, baseUrl: string, statusMap?: Record<string, PmStatus>): IssueToItem;
+export interface IssueMapOptions {
+    statusMap?: Record<string, PmStatus>;
+    fieldMap?: FieldMap;
+}
+export declare function issueToItem(issue: JiraIssue, baseUrl: string, optionsOrStatusMap?: IssueMapOptions | Record<string, PmStatus>): IssueToItem;
+export interface JiraSearchRequest {
+    method: "GET";
+    url: string;
+    fields: string;
+}
+export declare function buildSearchRequest(baseUrl: string, jql: string, startAt: number, maxResults: number): JiraSearchRequest;
 interface PmItem {
     id?: string;
     title?: string;
@@ -97,7 +140,10 @@ interface PmItem {
     body?: string;
     description?: string;
     tags?: string[];
+    priority?: number;
+    type?: string;
 }
+export declare function mapPmTypeToJira(pmType: string | undefined, override?: string): string;
 export interface JiraCreatePayload {
     fields: {
         project?: {
@@ -109,9 +155,44 @@ export interface JiraCreatePayload {
             name: string;
         };
         labels: string[];
+        priority?: {
+            name: string;
+        };
     };
 }
-export declare function itemToJiraPayload(item: PmItem, projectKey?: string): JiraCreatePayload;
+export interface PayloadOptions {
+    projectKey?: string;
+    fieldMap?: FieldMap;
+    richMapping?: boolean;
+}
+export declare function itemToJiraPayload(item: PmItem, projectKeyOrOptions?: string | PayloadOptions): JiraCreatePayload;
+export interface ExportPlanEntry {
+    op: "create" | "update";
+    itemId?: string;
+    existingKey?: string;
+    method: "POST" | "PUT";
+    endpoint: string;
+    payload: JiraCreatePayload;
+}
+export interface ExportPlan {
+    baseUrl: string;
+    project?: string;
+    entries: ExportPlanEntry[];
+}
+export declare function buildExportPlan(items: PmItem[], baseUrl: string, opts?: {
+    projectKey?: string;
+    fieldMap?: FieldMap;
+    richMapping?: boolean;
+}): ExportPlan;
+export interface PushOnWriteDecision {
+    shouldPush: boolean;
+    reason: string;
+}
+export declare function decidePushOnWrite(hookCtx: {
+    path?: string;
+    scope?: string;
+    op?: string;
+} | undefined, envLike?: NodeJS.ProcessEnv): PushOnWriteDecision;
 declare const _default: {
     name: string;
     version: string;

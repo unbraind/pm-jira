@@ -1,0 +1,11 @@
+id: pm-jira-7y1y
+title: "Decision: field-mapping model"
+description: ""
+type: Task
+status: closed
+priority: 3
+tags: []
+created_at: "2026-06-03T05:18:55.225Z"
+updated_at: "2026-06-03T05:18:55.225Z"
+author: codex
+body: "Jira->pm: status by NAME first, falling back to statusCategory bucket (new/indeterminate/done) so custom workflows resolve; --map status=/statuscategory= pins. issuetype->pm type heuristic (Bug/Story=Feature/Epic=Feature/Task) with --map type=/issuetype= override. assignee->'assignee:<name>' tag (no dedicated pm field; --map assignee=skip opts out; #97 means no custom-field setter). priority via existing name heuristic. Export reverse maps priority+issuetype only under --rich to keep the historical 'always Task, no priority' shape as default."
