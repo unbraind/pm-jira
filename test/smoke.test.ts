@@ -28,6 +28,9 @@ import extension, {
   buildSearchRequest,
   buildExportPlan,
   diagnoseCreds,
+  isMutatingJiraInvocation,
+  jiraPreflightShouldFailFast,
+  jiraPreflightErrorMessage,
   decidePushOnWrite,
   formatImportProgress,
   countIssueExtras,
@@ -86,6 +89,69 @@ test("extension registers importer, exporter, schema fields, and the sync comman
   assert.ok(names.importer.includes("jira"), "should register the `jira` importer (pm jira import)");
   assert.ok(names.importer.includes("jira-sync"), "should keep the legacy jira-sync importer");
   assert.ok(names.exporter.includes("jira"), "should register the `jira` exporter (pm jira export)");
+});
+
+test("activate registers a preflight override (registerPreflight)", () => {
+  const registered: string[] = [];
+  const api = fullApi((name) => registered.push(name));
+  extension.activate(api as any);
+  assert.ok(registered.includes("preflight"), "should register a preflight override");
+});
+
+test("preflight gate: fires only for network-mutating jira invocations", () => {
+  // Mutating: sync/import without --dry-run, export with --push.
+  assert.strictEqual(isMutatingJiraInvocation("jira sync", {}), true);
+  assert.strictEqual(isMutatingJiraInvocation("jira import", { project: "P" }), true);
+  assert.strictEqual(isMutatingJiraInvocation("jira export", { push: true }), true);
+  // Non-mutating: --dry-run (camelCase as normalized by pm), validate, export without push.
+  assert.strictEqual(isMutatingJiraInvocation("jira sync", { dryRun: true }), false);
+  assert.strictEqual(isMutatingJiraInvocation("jira import", { "dry-run": true }), false);
+  assert.strictEqual(isMutatingJiraInvocation("jira export", {}), false);
+  assert.strictEqual(isMutatingJiraInvocation("jira export", { push: true, dryRun: true }), false);
+  assert.strictEqual(isMutatingJiraInvocation("jira validate", {}), false);
+  // Unrelated commands never fire.
+  assert.strictEqual(isMutatingJiraInvocation("list", {}), false);
+  assert.strictEqual(isMutatingJiraInvocation("create", {}), false);
+});
+
+test("preflight gate: fails fast only when mutating AND creds missing", () => {
+  const noCreds: NodeJS.ProcessEnv = {};
+  const fullCreds: NodeJS.ProcessEnv = {
+    JIRA_BASE_URL: "https://co.atlassian.net",
+    JIRA_EMAIL: "a@b.com",
+    JIRA_API_TOKEN: "tok",
+  };
+  // Mutating + missing creds → fail fast.
+  assert.strictEqual(jiraPreflightShouldFailFast("jira sync", {}, noCreds), true);
+  assert.strictEqual(jiraPreflightShouldFailFast("jira import", { project: "P" }, noCreds), true);
+  assert.strictEqual(jiraPreflightShouldFailFast("jira export", { push: true }, noCreds), true);
+  // Mutating + creds present → pass.
+  assert.strictEqual(jiraPreflightShouldFailFast("jira sync", {}, fullCreds), false);
+  // --host satisfies the base-URL requirement without JIRA_BASE_URL.
+  assert.strictEqual(
+    jiraPreflightShouldFailFast(
+      "jira sync",
+      { host: "https://co.atlassian.net" },
+      { JIRA_EMAIL: "a@b.com", JIRA_API_TOKEN: "tok" }
+    ),
+    false
+  );
+  // Non-mutating never fails even with no creds.
+  assert.strictEqual(jiraPreflightShouldFailFast("jira sync", { dryRun: true }, noCreds), false);
+  assert.strictEqual(jiraPreflightShouldFailFast("jira validate", {}, noCreds), false);
+  assert.strictEqual(jiraPreflightShouldFailFast("jira export", {}, noCreds), false);
+});
+
+test("preflight error message is actionable and leaks no secrets", () => {
+  const diag = diagnoseCreds({}, {});
+  const msg = jiraPreflightErrorMessage("jira sync", diag);
+  assert.match(msg, /pm-jira preflight/);
+  assert.match(msg, /pm jira sync/);
+  assert.match(msg, /JIRA_BASE_URL/);
+  assert.match(msg, /JIRA_EMAIL/);
+  assert.match(msg, /JIRA_API_TOKEN/);
+  assert.match(msg, /jira validate/);
+  assert.match(msg, /--dry-run/);
 });
 
 test("optionEnabled honors kebab and camelCase keys", () => {
@@ -672,6 +738,7 @@ test("extension registers the jira validate command and an onWrite hook", () => 
     registerImporter: () => registered.push("importer"),
     registerExporter: () => registered.push("exporter"),
     registerItemFields: () => registered.push("itemFields"),
+    registerPreflight: () => registered.push("preflight"),
     hooks: {
       beforeCommand: () => registered.push("hook:before"),
       afterCommand: () => registered.push("hook:after"),

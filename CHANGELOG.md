@@ -1,6 +1,12 @@
 # Changelog
 
-## 2026.6.4 - 2026-06-04
+## Unreleased
+
+### Added
+
+- preflight: fail-fast Jira credential validation gate ([pm-jira-t867](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-t867.toon))
+
+## 2026.06.04 - 2026-06-04
 
 ### Other
 
