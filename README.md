@@ -10,6 +10,7 @@ A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues 
 - **Rich field mapping** — Jira status (by name, with a `statusCategory` fallback for custom workflows), priority, issue type → pm type, labels/fix-versions → tags, assignee → tag; configurable with `--status-map` and a general `--map jiraField=pmField`
 - **`--dry-run` everywhere** — both import and export print the exact request / mutations they *would* make and perform **no network call** (the offline-testable, creds-free path)
 - **`pm jira validate`** — report Jira credential/base-URL readiness without leaking any secret (hostname-only preview); `--json` aware
+- **Fail-fast preflight credential gate** — a network-mutating `pm jira sync` / `pm jira import` (and `pm jira export --push`) aborts immediately with a clear, actionable message **before any pm-store read or Jira call** if `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` are missing. `--dry-run` and `pm jira validate` are exempt (offline). See [Preflight gate](#preflight-gate).
 - Optional, opt-in **export-on-write hook** (`PM_JIRA_PUSH_ON_WRITE`) — best-effort, never breaks your pm command, no-op without credentials
 - Jira provenance (key + browse URL) persisted in the item description and declared as `jira_key` / `jira_url` schema fields; on export, items that already carry a Jira key become an `update` (PUT) instead of a duplicate create
 - Works as a `pm jira sync`/`pm jira import` command, a `pm jira export` exporter, and a config-driven `jira-sync` importer
@@ -198,6 +199,41 @@ pm jira validate            # human-readable readiness summary
 pm jira validate --json     # structured object: { ready, baseUrlPresent, ... }
 pm jira validate --host https://company.atlassian.net
 ```
+
+### Preflight gate
+
+pm-jira registers a **preflight credential gate** (pm-cli `preflight` capability /
+`registerPreflight`). Before a network-mutating command runs, it checks that the
+required credentials are present and, if not, **aborts immediately with a clear,
+actionable error and a non-zero exit code — before any pm-store read or Jira REST
+call**. This turns a deep, late failure into a fast, obvious one.
+
+It fires **only** for these invocations:
+
+| Invocation | Gated? |
+| --- | --- |
+| `pm jira sync` (no `--dry-run`) | yes — pulls over the network |
+| `pm jira import` (no `--dry-run`) | yes — pulls over the network |
+| `pm jira export --push` (no `--dry-run`) | yes — POSTs/PUTs to Jira |
+| `pm jira sync\|import --dry-run` | no — offline preview, no creds needed |
+| `pm jira export` (no `--push`) | no — prints payloads offline |
+| `pm jira validate` | no — diagnostics, must run without creds |
+| any other / non-pm-jira command | no |
+
+Example (no credentials set):
+
+```text
+$ pm jira sync --project PROJ
+pm-jira preflight: cannot run "pm jira sync" — missing Jira credentials:
+JIRA_BASE_URL (or --host), JIRA_EMAIL, JIRA_API_TOKEN. Set JIRA_BASE_URL
+(or pass --host), JIRA_EMAIL, and JIRA_API_TOKEN before a mutating command.
+Create a token at https://id.atlassian.com/manage-profile/security/api-tokens .
+Run "pm jira validate" to diagnose, or add --dry-run to preview offline.
+# exit code 2
+```
+
+The message names only the *missing variable names* — never the token or email
+value. When credentials are present the gate is a silent pass-through.
 
 ### Export-on-write hook (opt-in)
 

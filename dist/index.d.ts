@@ -115,6 +115,9 @@ export interface CredDiagnostics {
     missing: string[];
 }
 export declare function diagnoseCreds(options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): CredDiagnostics;
+export declare function isMutatingJiraInvocation(command: string, options: Record<string, unknown>): boolean;
+export declare function jiraPreflightShouldFailFast(command: string, options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): boolean;
+export declare function jiraPreflightErrorMessage(command: string, diag: CredDiagnostics): string;
 export declare function formatImportProgress(fetched: number, jiraTotal: number, maxResults: number): string;
 export interface IssueToItem {
     title: string;

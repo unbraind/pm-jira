@@ -10,6 +10,11 @@
 //               with explicit --push AND creds present.
 //   schema    — declares jira_key / jira_url item fields
 //   hooks     — opt-in best-effort export-on-write mirror (PM_JIRA_PUSH_ON_WRITE)
+//   preflight — fail-fast credential gate (registerPreflight): aborts a
+//               network-mutating `pm jira sync|import` (and `export --push`)
+//               BEFORE any pm-store read or Jira call when JIRA_BASE_URL /
+//               JIRA_EMAIL / JIRA_API_TOKEN are missing. Skips --dry-run and
+//               `jira validate` (offline diagnostics).
 //
 // NOTE: the prior manifest declared `services` but never called
 // registerService — that was a no-op "phantom" capability. We dropped it and
@@ -403,6 +408,59 @@ export function diagnoseCreds(options, envLike = process.env) {
     };
 }
 // ---------------------------------------------------------------------------
+// Preflight gate logic — pure + offline-testable.
+//
+// Decides whether the credential fail-fast gate should fire for a given
+// (command, options) pair. The gate fires ONLY for pm-jira's network-mutating
+// command paths AND only when the invocation will actually reach Jira:
+//
+//   "jira sync"   — pulls issues over the network UNLESS --dry-run.
+//   "jira import" — same native import pipeline; mutating UNLESS --dry-run.
+//   "jira export" — offline by default (prints payloads); only reaches Jira
+//                   with --push. So it is mutating ONLY when push is set AND
+//                   not --dry-run.
+//
+// It deliberately does NOT fire for:
+//   - any non-pm-jira command (scoped by command prefix),
+//   - "jira validate" (diagnostics; must work without creds),
+//   - any --dry-run invocation (offline preview must work without creds),
+//   - "jira export" without --push (offline payload print).
+//
+// When the invocation IS mutating, the gate fires iff creds are NOT ready.
+// Note: pm-cli normalizes extension flags to camelCase, so --dry-run arrives
+// as `dryRun` and --push as `push`; readBooleanOption already reads both forms.
+// ---------------------------------------------------------------------------
+export function isMutatingJiraInvocation(command, options) {
+    const dryRun = readBooleanOption(options, "dry-run");
+    switch (command) {
+        case "jira sync":
+        case "jira import":
+            // Network pull unless previewing.
+            return !dryRun;
+        case "jira export":
+            // Offline by default; only hits Jira with --push (and never on --dry-run).
+            return readBooleanOption(options, "push") && !dryRun;
+        default:
+            // Includes "jira validate" and every non-pm-jira command.
+            return false;
+    }
+}
+export function jiraPreflightShouldFailFast(command, options, envLike = process.env) {
+    if (!isMutatingJiraInvocation(command, options))
+        return false;
+    return !diagnoseCreds(options, envLike).ready;
+}
+// Build the actionable fail-fast message. Mirrors resolveCreds' guidance and
+// never echoes any secret value — only the names of the missing variables.
+export function jiraPreflightErrorMessage(command, diag) {
+    return (`pm-jira preflight: cannot run "pm ${command}" — missing Jira credentials: ` +
+        `${diag.missing.join(", ")}. ` +
+        `Set JIRA_BASE_URL (or pass --host), JIRA_EMAIL, and JIRA_API_TOKEN before a ` +
+        `mutating command. Create a token at ` +
+        `https://id.atlassian.com/manage-profile/security/api-tokens . ` +
+        `Run "pm jira validate" to diagnose, or add --dry-run to preview offline.`);
+}
+// ---------------------------------------------------------------------------
 // HTTP helpers using Node.js native https module
 // ---------------------------------------------------------------------------
 function httpsGet(url, authHeader) {
@@ -642,7 +700,6 @@ export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
     return { method: "GET", url, fields: SEARCH_FIELDS };
 }
 async function runImport(options, pmRoot, opts = {}) {
-    const creds = resolveCreds(options);
     const project = readStringOption(options, "project");
     const customJql = readStringOption(options, "jql");
     const maxResults = readNumberOption(options, "max-results") ?? 500;
@@ -656,9 +713,14 @@ async function runImport(options, pmRoot, opts = {}) {
     const jql = buildJql(readJqlFilters(options));
     const projectLabel = project ?? "custom-jql";
     // --dry-run makes NO network call: it prints the JQL + the exact GET request
-    // the importer would issue, then returns. This is the offline-testable path.
+    // the importer would issue, then returns. This is the offline-testable path,
+    // so it must NOT require credentials — only a base URL to shape the endpoint
+    // (from --host or JIRA_BASE_URL, else a placeholder). Mirrors the exporter's
+    // offline --dry-run, and keeps the preflight gate's "skip dry-run" correct.
     if (dryRun) {
-        const request = buildSearchRequest(creds.baseUrl, jql, 0, maxResults);
+        const dryRunBaseUrl = (readStringOption(options, "host") ??
+            (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>")).replace(/\/$/, "");
+        const request = buildSearchRequest(dryRunBaseUrl, jql, 0, maxResults);
         console.error(`[dry-run] No network call will be made.`);
         console.error(`[dry-run] JQL: ${jql}`);
         console.error(`[dry-run] Would ${request.method} ${request.url}`);
@@ -673,6 +735,10 @@ async function runImport(options, pmRoot, opts = {}) {
             ...(statusFilter ? { statusFilter } : {}),
         };
     }
+    // Live import: resolve creds now (throws a structured CommandError if any are
+    // missing). The preflight gate normally aborts earlier with a clearer message,
+    // but resolveCreds remains the authoritative guard for direct/importer entry.
+    const creds = resolveCreds(options);
     console.error(`Fetching issues from Jira... (JQL: ${jql})`);
     let issues;
     try {
@@ -875,6 +941,33 @@ export default defineExtension({
             { name: "jira_key", type: "string", optional: true },
             { name: "jira_url", type: "string", optional: true },
         ]);
+        // -----------------------------------------------------------------------
+        // preflight — fail-fast credential validation gate (registerPreflight).
+        //
+        // Fires ONLY for pm-jira's network-mutating command paths and ONLY when
+        // they are actually about to hit Jira (see isMutatingJiraInvocation). It
+        // validates that JIRA_BASE_URL (or --host), JIRA_EMAIL and JIRA_API_TOKEN
+        // are present and ABORTS the command with a clear, actionable error BEFORE
+        // any pm-store read or Jira REST call happens.
+        //
+        // IMPORTANT runtime fact: the pm-cli preflight-override runtime wraps this
+        // callback in a try/catch that SWALLOWS any throw into a non-fatal warning
+        // (extension_preflight_override_failed) and lets the command proceed. So a
+        // bare `throw` here can NOT fail-fast. To genuinely abort BEFORE the command
+        // body runs we print the actionable message and `process.exit()` directly —
+        // process termination bypasses the runtime's catch. Verified functionally.
+        // -----------------------------------------------------------------------
+        api.registerPreflight((ctx) => {
+            const command = ctx?.command ?? "";
+            const options = ctx?.options ?? {};
+            if (jiraPreflightShouldFailFast(command, options, process.env)) {
+                const diag = diagnoseCreds(options, process.env);
+                process.stderr.write(jiraPreflightErrorMessage(command, diag) + "\n");
+                process.exit(EXIT_CODE.USAGE);
+            }
+            // Success / not-applicable: silent pass-through (no decision delta).
+            return {};
+        });
         // -----------------------------------------------------------------------
         // Command: pm jira sync (legacy name; kept for back-compat)
         // -----------------------------------------------------------------------
