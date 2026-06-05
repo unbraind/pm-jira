@@ -27,6 +27,7 @@ import extension, {
   mapPmTypeToJira,
   buildSearchRequest,
   buildExportPlan,
+  runExportPush,
   diagnoseCreds,
   isMutatingJiraInvocation,
   jiraPreflightShouldFailFast,
@@ -750,4 +751,121 @@ test("extension registers the jira validate command and an onWrite hook", () => 
   extension.activate(api as any);
   assert.ok(commandNames.includes("jira validate"), "should register jira validate");
   assert.ok(registered.includes("hook:onWrite"), "should register an onWrite hook");
+});
+
+// ---------------------------------------------------------------------------
+// runExportPush — per-item failure isolation (regression: a single failed
+// create/update used to throw mid-batch and abandon every remaining item).
+// ---------------------------------------------------------------------------
+
+// Run `fn` while swallowing console.error, returning the captured lines.
+async function withCapturedStderr<T>(fn: () => Promise<T>): Promise<{ value: T; lines: string[] }> {
+  const original = console.error;
+  const lines: string[] = [];
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map((a) => String(a)).join(" "));
+  };
+  try {
+    const value = await fn();
+    return { value, lines };
+  } finally {
+    console.error = original;
+  }
+}
+
+// Three create-only pm items -> a 3-create export plan (no provenance).
+function threeCreatePlan() {
+  const items = [
+    { id: "item-1", title: "First", type: "task" },
+    { id: "item-2", title: "Second", type: "bug" },
+    { id: "item-3", title: "Third", type: "feature" },
+  ];
+  return buildExportPlan(items as any, "https://example.atlassian.net", { projectKey: "PROJ" });
+}
+
+test("runExportPush: a failing create item is isolated and the batch continues", async () => {
+  const plan = threeCreatePlan();
+  const attempted: string[] = [];
+  const deps = {
+    // Fail on the 2nd create; the 1st and 3rd must still be attempted.
+    post: async (url: string) => {
+      attempted.push(url);
+      if (attempted.length === 2) throw new Error("Jira API error 400: invalid issuetype");
+      return "{}";
+    },
+    put: async () => "{}",
+  };
+
+  const { value: result, lines } = await withCapturedStderr(() =>
+    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
+  );
+
+  assert.strictEqual(attempted.length, 3, "all three creates should be attempted (no abort)");
+  assert.strictEqual(result.created, 2, "two creates should have succeeded");
+  assert.strictEqual(result.failed, 1, "one create should be counted as failed");
+  assert.strictEqual(result.failures.length, 1, "one failure record should be captured");
+  assert.strictEqual(result.failures[0]!.op, "create");
+  assert.match(result.failures[0]!.message, /invalid issuetype/);
+  assert.ok(
+    lines.some((l) => /Failed to create Jira issue/.test(l)),
+    "the failure should be logged to stderr"
+  );
+});
+
+test("runExportPush: a failing update item is isolated and the batch continues", async () => {
+  // Two items that already carry Jira provenance -> two updates.
+  const items = [
+    { id: "item-a", title: "A", description: jiraProvenance("PROJ-1", "https://example.atlassian.net/browse/PROJ-1") },
+    { id: "item-b", title: "B", description: jiraProvenance("PROJ-2", "https://example.atlassian.net/browse/PROJ-2") },
+  ];
+  const plan = buildExportPlan(items as any, "https://example.atlassian.net", { projectKey: "PROJ" });
+  const attempted: string[] = [];
+  const deps = {
+    post: async () => "{}",
+    put: async (url: string) => {
+      attempted.push(url);
+      if (attempted.length === 1) throw new Error("Jira API error 403: forbidden");
+      return "";
+    },
+  };
+
+  const { value: result } = await withCapturedStderr(() =>
+    runExportPush(plan, { authHeader: "Basic x", updateExisting: true }, deps)
+  );
+
+  assert.strictEqual(attempted.length, 2, "both updates should be attempted (no abort)");
+  assert.strictEqual(result.updated, 1, "the second update should have succeeded");
+  assert.strictEqual(result.failed, 1, "the first update should be counted as failed");
+  assert.strictEqual(result.failures[0]!.op, "update");
+  assert.strictEqual(result.failures[0]!.ref, "PROJ-1", "failure should reference the Jira key");
+});
+
+test("runExportPush: happy path reports zero failures (no regression)", async () => {
+  const plan = threeCreatePlan();
+  const deps = { post: async () => "{}", put: async () => "{}" };
+  const { value: result } = await withCapturedStderr(() =>
+    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
+  );
+  assert.deepStrictEqual(
+    { created: result.created, updated: result.updated, skipped: result.skipped, failed: result.failed },
+    { created: 3, updated: 0, skipped: 0, failed: 0 }
+  );
+  assert.strictEqual(result.failures.length, 0);
+});
+
+test("runExportPush: never PUTs an existing item when updateExisting is off (counts it skipped)", async () => {
+  const items = [
+    { id: "new-1", title: "New", type: "task" },
+    { id: "old-1", title: "Old", description: jiraProvenance("PROJ-9", "https://example.atlassian.net/browse/PROJ-9") },
+  ];
+  const plan = buildExportPlan(items as any, "https://example.atlassian.net", { projectKey: "PROJ" });
+  let puts = 0;
+  const deps = { post: async () => "{}", put: async () => { puts++; return ""; } };
+  const { value: result } = await withCapturedStderr(() =>
+    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
+  );
+  assert.strictEqual(puts, 0, "no PUT should be issued when --update-existing is off");
+  assert.strictEqual(result.created, 1);
+  assert.strictEqual(result.skipped, 1, "the provenance-matched item is skipped, not failed");
+  assert.strictEqual(result.failed, 0);
 });

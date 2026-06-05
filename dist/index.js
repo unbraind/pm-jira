@@ -876,6 +876,52 @@ export function buildExportPlan(items, baseUrl, opts = {}) {
     });
     return { baseUrl: cleanBase, project: opts.projectKey, entries };
 }
+export async function runExportPush(plan, opts, deps = { post: httpsPost, put: httpsPut }) {
+    const toCreate = plan.entries.filter((e) => e.op === "create");
+    const toUpdate = plan.entries.filter((e) => e.op === "update");
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    const failures = [];
+    for (const entry of toCreate) {
+        const ref = entry.itemId ?? entry.endpoint;
+        try {
+            await deps.post(entry.endpoint, opts.authHeader, JSON.stringify(entry.payload));
+            created++;
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`Failed to create Jira issue for ${ref}: ${message}`);
+            failures.push({ ref, op: "create", message });
+            failed++;
+            continue;
+        }
+    }
+    if (opts.updateExisting) {
+        for (const entry of toUpdate) {
+            const ref = entry.existingKey ?? entry.itemId ?? entry.endpoint;
+            try {
+                // Jira's edit-issue API rejects the immutable `project` field on a
+                // PUT, so strip it; only mutable fields are sent.
+                const { project: _project, ...mutableFields } = entry.payload.fields;
+                await deps.put(entry.endpoint, opts.authHeader, JSON.stringify({ fields: mutableFields }));
+                updated++;
+            }
+            catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                console.error(`Failed to update Jira issue ${ref}: ${message}`);
+                failures.push({ ref, op: "update", message });
+                failed++;
+                continue;
+            }
+        }
+    }
+    // `skipped` keeps its existing meaning: provenance-matched items that were
+    // NOT PUT because --update-existing was off (back-compat). Failures are a
+    // distinct, separately-counted category.
+    const skipped = opts.updateExisting ? 0 : toUpdate.length;
+    return { created, updated, skipped, failed, failures };
+}
 function isTruthyEnv(value) {
     if (!value)
         return false;
@@ -1096,46 +1142,24 @@ export default defineExtension({
                     fieldMap,
                     richMapping: rich,
                 });
-                const toCreate = plan.entries.filter((e) => e.op === "create");
-                // Provenance-matched items become updates. By default they are still
-                // SKIPPED (back-compat: a re-export never mutates upstream). With
-                // --update-existing they are PUT to Jira's edit-issue endpoint instead.
-                const toUpdate = plan.entries.filter((e) => e.op === "update");
-                let created = 0;
-                for (const entry of toCreate) {
-                    try {
-                        await httpsPost(entry.endpoint, creds.authHeader, JSON.stringify(entry.payload));
-                        created++;
-                    }
-                    catch (err) {
-                        const msg = err instanceof Error ? err.message : String(err);
-                        throw new CommandError(`Failed to create Jira issue: ${msg}`);
-                    }
-                }
-                let updated = 0;
-                if (updateExisting) {
-                    for (const entry of toUpdate) {
-                        try {
-                            // Jira's edit-issue API rejects the immutable `project` field on a
-                            // PUT, so strip it; only mutable fields are sent.
-                            const { project: _project, ...mutableFields } = entry.payload.fields;
-                            await httpsPut(entry.endpoint, creds.authHeader, JSON.stringify({ fields: mutableFields }));
-                            updated++;
-                        }
-                        catch (err) {
-                            const msg = err instanceof Error ? err.message : String(err);
-                            throw new CommandError(`Failed to update Jira issue ${entry.existingKey}: ${msg}`);
-                        }
-                    }
-                }
-                const skipped = updateExisting ? 0 : toUpdate.length;
+                // Per-item failure isolation: a single bad item (invalid issuetype, a
+                // required custom field, a 4xx, ...) is caught + counted + logged and
+                // the batch CONTINUES, instead of a mid-batch throw that abandons every
+                // remaining item. Errors are streamed to stderr by runExportPush.
+                const { created, updated, skipped, failed, failures } = await runExportPush(plan, { authHeader: creds.authHeader, updateExisting });
                 console.error(`Created ${created} issue(s) in Jira project ${project}.` +
                     (updateExisting
                         ? ` Updated ${updated} existing issue(s).`
                         : skipped > 0
                             ? ` Skipped ${skipped} item(s) that already have a Jira key (pass --update-existing to PUT them).`
-                            : ""));
-                return { pushed: true, created, updated, skipped, project };
+                            : "") +
+                    (failed > 0 ? ` Failed ${failed} item(s) (see errors above).` : ""));
+                if (failed > 0 && created === 0 && updated === 0) {
+                    // Nothing landed at all — surface a non-zero exit so callers/CI notice,
+                    // but only after the whole batch was attempted and reported.
+                    throw new CommandError(`pm jira export --push failed: all ${failed} item(s) errored (see above).`);
+                }
+                return { pushed: true, created, updated, skipped, failed, failures, project };
             }
             const baseUrl = readStringOption(options, "host") ??
                 (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>");
