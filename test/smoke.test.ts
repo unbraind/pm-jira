@@ -758,19 +758,11 @@ test("extension registers the jira validate command and an onWrite hook", () => 
 // create/update used to throw mid-batch and abandon every remaining item).
 // ---------------------------------------------------------------------------
 
-// Run `fn` while swallowing console.error, returning the captured lines.
-async function withCapturedStderr<T>(fn: () => Promise<T>): Promise<{ value: T; lines: string[] }> {
-  const original = console.error;
+// A capturing logger injected via `deps.logError` — no global `console.error`
+// monkey-patching (which would leak across tests if a body threw).
+function makeLogCapture(): { logError: (m: string) => void; lines: string[] } {
   const lines: string[] = [];
-  console.error = (...args: unknown[]) => {
-    lines.push(args.map((a) => String(a)).join(" "));
-  };
-  try {
-    const value = await fn();
-    return { value, lines };
-  } finally {
-    console.error = original;
-  }
+  return { logError: (m: string) => lines.push(m), lines };
 }
 
 // Three create-only pm items -> a 3-create export plan (no provenance).
@@ -786,6 +778,7 @@ function threeCreatePlan() {
 test("runExportPush: a failing create item is isolated and the batch continues", async () => {
   const plan = threeCreatePlan();
   const attempted: string[] = [];
+  const cap = makeLogCapture();
   const deps = {
     // Fail on the 2nd create; the 1st and 3rd must still be attempted.
     post: async (url: string) => {
@@ -794,11 +787,11 @@ test("runExportPush: a failing create item is isolated and the batch continues",
       return "{}";
     },
     put: async () => "{}",
+    logError: cap.logError,
   };
 
-  const { value: result, lines } = await withCapturedStderr(() =>
-    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
-  );
+  const result = await runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps);
+  const lines = cap.lines;
 
   assert.strictEqual(attempted.length, 3, "all three creates should be attempted (no abort)");
   assert.strictEqual(result.created, 2, "two creates should have succeeded");
@@ -827,11 +820,10 @@ test("runExportPush: a failing update item is isolated and the batch continues",
       if (attempted.length === 1) throw new Error("Jira API error 403: forbidden");
       return "";
     },
+    logError: makeLogCapture().logError,
   };
 
-  const { value: result } = await withCapturedStderr(() =>
-    runExportPush(plan, { authHeader: "Basic x", updateExisting: true }, deps)
-  );
+  const result = await runExportPush(plan, { authHeader: "Basic x", updateExisting: true }, deps);
 
   assert.strictEqual(attempted.length, 2, "both updates should be attempted (no abort)");
   assert.strictEqual(result.updated, 1, "the second update should have succeeded");
@@ -842,10 +834,8 @@ test("runExportPush: a failing update item is isolated and the batch continues",
 
 test("runExportPush: happy path reports zero failures (no regression)", async () => {
   const plan = threeCreatePlan();
-  const deps = { post: async () => "{}", put: async () => "{}" };
-  const { value: result } = await withCapturedStderr(() =>
-    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
-  );
+  const deps = { post: async () => "{}", put: async () => "{}", logError: makeLogCapture().logError };
+  const result = await runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps);
   assert.deepStrictEqual(
     { created: result.created, updated: result.updated, skipped: result.skipped, failed: result.failed },
     { created: 3, updated: 0, skipped: 0, failed: 0 }
@@ -860,10 +850,8 @@ test("runExportPush: never PUTs an existing item when updateExisting is off (cou
   ];
   const plan = buildExportPlan(items as any, "https://example.atlassian.net", { projectKey: "PROJ" });
   let puts = 0;
-  const deps = { post: async () => "{}", put: async () => { puts++; return ""; } };
-  const { value: result } = await withCapturedStderr(() =>
-    runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps)
-  );
+  const deps = { post: async () => "{}", put: async () => { puts++; return ""; }, logError: makeLogCapture().logError };
+  const result = await runExportPush(plan, { authHeader: "Basic x", updateExisting: false }, deps);
   assert.strictEqual(puts, 0, "no PUT should be issued when --update-existing is off");
   assert.strictEqual(result.created, 1);
   assert.strictEqual(result.skipped, 1, "the provenance-matched item is skipped, not failed");

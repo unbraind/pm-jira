@@ -202,6 +202,9 @@ export declare function buildExportPlan(items: PmItem[], baseUrl: string, opts?:
 export interface ExportPushDeps {
     post: (url: string, authHeader: string, payload: string) => Promise<string>;
     put: (url: string, authHeader: string, payload: string) => Promise<string>;
+    /** Where per-item failures are logged. Injectable so tests don't have to
+     * monkey-patch the global `console.error`. Defaults to `console.error`. */
+    logError?: (message: string) => void;
 }
 export interface ExportPushFailure {
     /** pm item id when known, else the create endpoint / existing Jira key. */

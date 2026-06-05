@@ -1272,6 +1272,9 @@ export function buildExportPlan(
 export interface ExportPushDeps {
   post: (url: string, authHeader: string, payload: string) => Promise<string>;
   put: (url: string, authHeader: string, payload: string) => Promise<string>;
+  /** Where per-item failures are logged. Injectable so tests don't have to
+   * monkey-patch the global `console.error`. Defaults to `console.error`. */
+  logError?: (message: string) => void;
 }
 
 export interface ExportPushFailure {
@@ -1298,6 +1301,7 @@ export async function runExportPush(
 ): Promise<ExportPushResult> {
   const toCreate = plan.entries.filter((e) => e.op === "create");
   const toUpdate = plan.entries.filter((e) => e.op === "update");
+  const logError = deps.logError ?? ((message: string) => console.error(message));
 
   let created = 0;
   let updated = 0;
@@ -1307,11 +1311,12 @@ export async function runExportPush(
   for (const entry of toCreate) {
     const ref = entry.itemId ?? entry.endpoint;
     try {
+      if (!entry.payload) throw new Error("export entry has no payload");
       await deps.post(entry.endpoint, opts.authHeader, JSON.stringify(entry.payload));
       created++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`Failed to create Jira issue for ${ref}: ${message}`);
+      logError(`Failed to create Jira issue for ${ref}: ${message}`);
       failures.push({ ref, op: "create", message });
       failed++;
       continue;
@@ -1322,6 +1327,7 @@ export async function runExportPush(
     for (const entry of toUpdate) {
       const ref = entry.existingKey ?? entry.itemId ?? entry.endpoint;
       try {
+        if (!entry.payload?.fields) throw new Error("export entry has no fields to update");
         // Jira's edit-issue API rejects the immutable `project` field on a
         // PUT, so strip it; only mutable fields are sent.
         const { project: _project, ...mutableFields } = entry.payload.fields;
@@ -1333,7 +1339,7 @@ export async function runExportPush(
         updated++;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`Failed to update Jira issue ${ref}: ${message}`);
+        logError(`Failed to update Jira issue ${ref}: ${message}`);
         failures.push({ ref, op: "update", message });
         failed++;
         continue;
