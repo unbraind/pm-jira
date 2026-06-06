@@ -74,10 +74,12 @@ interface JiraIssue {
     };
     priority?: { name: string } | null;
     labels?: string[];
+    components?: Array<{ name: string }>;
     assignee?: { displayName: string; emailAddress: string } | null;
     duedate?: string | null;
     fixVersions?: Array<{ name: string }>;
     issuetype?: { name: string } | null;
+    customfield_10020?: Array<{ name?: string }> | { name?: string } | null;
     // Optional metadata used only for transparency notes: pm-jira does NOT
     // import attachments or comments, so we surface their presence to STDERR
     // rather than silently dropping them. `comment` is Jira's paginated comment
@@ -184,7 +186,8 @@ const PM_STATUSES: readonly PmStatus[] = ["open", "in_progress", "closed", "bloc
 // --map field overrides — a comma list of "jiraField=pmField" pairs that let a
 // caller remap which Jira field feeds which pm concept (or pin a pm type/
 // status). Pure + offline-testable. Recognized jira-side keys:
-//   status | statuscategory | priority | issuetype | labels | assignee | duedate
+//   status | statuscategory | priority | issuetype | labels | fixversions |
+//   components | sprint | assignee | duedate
 // Recognized pm-side targets are validated per key where it matters; freeform
 // values are accepted for type/status pins so custom workflows work.
 // ---------------------------------------------------------------------------
@@ -197,10 +200,22 @@ const KNOWN_MAP_KEYS = new Set([
   "priority",
   "issuetype",
   "labels",
+  "fixversions",
+  "components",
+  "sprint",
+  "sprints",
+  "customfield_10020",
   "assignee",
   "duedate",
   "type",
 ]);
+
+function fieldMapSkips(fieldMap: FieldMap | undefined, ...keys: string[]): boolean {
+  return keys.some((key) => {
+    const value = fieldMap?.[key]?.toLowerCase();
+    return value === "skip" || value === "ignore";
+  });
+}
 
 export function parseFieldMap(raw: string | undefined): FieldMap | undefined {
   if (!raw) return undefined;
@@ -864,15 +879,29 @@ export function issueToItem(
       : { statusMap: optionsOrStatusMap as Record<string, PmStatus> | undefined };
   const { statusMap, fieldMap } = mapOptions;
 
-  const tags: string[] = [
-    ...(issue.fields.labels ?? []),
-    ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
-  ];
+  const tags: string[] = [];
+  const addTag = (tag: string | undefined) => {
+    const clean = tag?.trim();
+    if (clean && !tags.includes(clean)) tags.push(clean);
+  };
+  if (!fieldMapSkips(fieldMap, "labels")) {
+    for (const label of issue.fields.labels ?? []) addTag(label);
+  }
+  if (!fieldMapSkips(fieldMap, "fixversions")) {
+    for (const version of issue.fields.fixVersions ?? []) addTag(version.name);
+  }
+  if (!fieldMapSkips(fieldMap, "components")) {
+    for (const component of issue.fields.components ?? []) addTag(`component:${component.name}`);
+  }
+  if (!fieldMapSkips(fieldMap, "sprint", "sprints", "customfield_10020")) {
+    const sprintField = issue.fields.customfield_10020;
+    const sprintEntries = Array.isArray(sprintField) ? sprintField : sprintField ? [sprintField] : [];
+    for (const sprint of sprintEntries) addTag(sprint.name ? `sprint:${sprint.name}` : undefined);
+  }
   // Assignee → tag (so it survives without a dedicated pm field) unless --map
-  // assignee=<x> pins it elsewhere or the user opts out with assignee=skip.
-  const assigneeTarget = fieldMap?.["assignee"];
-  if (issue.fields.assignee?.displayName && assigneeTarget !== "skip") {
-    tags.push(`assignee:${issue.fields.assignee.displayName.replace(/\s+/g, "-")}`);
+  // assignee=<x> pins it elsewhere or the user opts out with assignee=skip/ignore.
+  if (issue.fields.assignee?.displayName && !fieldMapSkips(fieldMap, "assignee")) {
+    addTag(`assignee:${issue.fields.assignee.displayName.replace(/\s+/g, "-")}`);
   }
 
   // Status: prefer an explicit name mapping; fall back to the statusCategory
@@ -905,7 +934,7 @@ export function issueToItem(
     type,
     body: rawBody,
     tags,
-    deadline: issue.fields.duedate ?? undefined,
+    deadline: fieldMapSkips(fieldMap, "duedate") ? undefined : issue.fields.duedate ?? undefined,
     // Provenance marker lives in the description so it survives round-trips.
     description: jiraProvenance(issue.key, browseUrl),
     jiraKey: issue.key,
@@ -941,7 +970,7 @@ export interface JiraSearchRequest {
 }
 
 const SEARCH_FIELDS =
-  "summary,description,status,priority,labels,assignee,duedate,fixVersions,issuetype,attachment,comment";
+  "summary,description,status,priority,labels,components,assignee,duedate,fixVersions,issuetype,customfield_10020,attachment,comment";
 
 // Count attachments + comments on a fetched issue. pm-jira imports neither, so
 // the importer surfaces these counts to STDERR as a transparency note (it

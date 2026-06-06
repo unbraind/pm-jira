@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Import Jira components and sprint context tags ([pm-jira-6r7i](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-6r7i.toon))
+
+### Other
+
+- Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-jira-5y0r](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-5y0r.toon))
+
 ## 2026.06.04-1 - 2026-06-04
 
 ### Added

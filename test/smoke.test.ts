@@ -246,9 +246,11 @@ test("issueToItem maps a Jira issue to pm-create fields with provenance", () => 
       status: { name: "In Progress", statusCategory: { key: "indeterminate" } },
       priority: { name: "High" },
       labels: ["backend"],
+      components: [{ name: "api" }],
       assignee: null,
       duedate: "2026-07-01",
       fixVersions: [{ name: "v2" }],
+      customfield_10020: [{ name: "Sprint 12" }],
     },
   };
   const item = issueToItem(issue as any, "https://x.atlassian.net");
@@ -256,7 +258,7 @@ test("issueToItem maps a Jira issue to pm-create fields with provenance", () => 
   assert.strictEqual(item.status, "in_progress");
   assert.strictEqual(item.priority, 2);
   assert.strictEqual(item.body, "details");
-  assert.deepStrictEqual(item.tags, ["backend", "v2"]);
+  assert.deepStrictEqual(item.tags, ["backend", "v2", "component:api", "sprint:Sprint 12"]);
   assert.strictEqual(item.deadline, "2026-07-01");
   assert.deepStrictEqual(extractJiraKey(item.description), {
     key: "PROJ-7",
@@ -470,9 +472,11 @@ test("mapPmPriorityToJira / mapPmTypeToJira reverse-map for export", () => {
 });
 
 test("parseFieldMap parses pairs and rejects unknown / malformed", () => {
-  assert.deepStrictEqual(parseFieldMap("issuetype=Task,assignee=skip"), {
+  assert.deepStrictEqual(parseFieldMap("issuetype=Task,assignee=skip,components=ignore,sprint=ignore"), {
     issuetype: "Task",
     assignee: "skip",
+    components: "ignore",
+    sprint: "ignore",
   });
   assert.strictEqual(parseFieldMap(undefined), undefined);
   assert.throws(() => parseFieldMap("bogus=x"), (e: unknown) => {
@@ -528,6 +532,30 @@ test("issueToItem honors --map type/status pins and assignee=skip", () => {
   assert.strictEqual(item.type, "Chore");
   assert.strictEqual(item.status, "open"); // pinned, overrides Done->closed
   assert.ok(!item.tags.some((t) => t.startsWith("assignee:")));
+});
+
+test("issueToItem can suppress noisy Jira context tags with --map ignore", () => {
+  const issue = {
+    key: "PROJ-12",
+    fields: {
+      summary: "customized context",
+      description: null,
+      status: { name: "To Do", statusCategory: { key: "new" } },
+      priority: null,
+      labels: ["backend"],
+      components: [{ name: "api" }],
+      assignee: { displayName: "Someone", emailAddress: "s@x.y" },
+      duedate: "2026-07-01",
+      fixVersions: [{ name: "v2" }],
+      customfield_10020: [{ name: "Sprint 12" }],
+      issuetype: { name: "Task" },
+    },
+  };
+  const item = issueToItem(issue as any, "https://x.atlassian.net", {
+    fieldMap: parseFieldMap("labels=ignore,fixversions=ignore,components=ignore,sprint=ignore,assignee=ignore,duedate=ignore"),
+  });
+  assert.deepStrictEqual(item.tags, []);
+  assert.strictEqual(item.deadline, undefined);
 });
 
 test("issueToItem still accepts a bare statusMap (back-compat 3rd arg)", () => {
