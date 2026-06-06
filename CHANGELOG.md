@@ -8,6 +8,7 @@
 
 ### Other
 
+- Harden release readiness checks ([pm-jira-tsju](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-tsju.toon))
 - Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-jira-5y0r](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-5y0r.toon))
 
 ## 2026.06.04-1 - 2026-06-04
