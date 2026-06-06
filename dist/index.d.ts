@@ -199,6 +199,32 @@ export declare function buildExportPlan(items: PmItem[], baseUrl: string, opts?:
     fieldMap?: FieldMap;
     richMapping?: boolean;
 }): ExportPlan;
+export interface ExportPushDeps {
+    post: (url: string, authHeader: string, payload: string) => Promise<string>;
+    put: (url: string, authHeader: string, payload: string) => Promise<string>;
+    /** Where per-item failures are logged. Injectable so tests don't have to
+     * monkey-patch the global `console.error`. Defaults to `console.error`. */
+    logError?: (message: string) => void;
+}
+export interface ExportPushFailure {
+    /** pm item id when known, else the create endpoint / existing Jira key. */
+    ref: string;
+    op: "create" | "update";
+    message: string;
+}
+export interface ExportPushResult {
+    created: number;
+    updated: number;
+    /** Items already carrying a Jira key, not PUT because --update-existing was off. */
+    skipped: number;
+    /** Items whose create/update API call FAILED and were isolated. */
+    failed: number;
+    failures: ExportPushFailure[];
+}
+export declare function runExportPush(plan: ExportPlan, opts: {
+    authHeader: string;
+    updateExisting: boolean;
+}, deps?: ExportPushDeps): Promise<ExportPushResult>;
 export interface PushOnWriteDecision {
     shouldPush: boolean;
     reason: string;

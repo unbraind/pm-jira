@@ -1256,6 +1256,106 @@ export function buildExportPlan(
 }
 
 // ---------------------------------------------------------------------------
+// Per-item-isolated push runner. Drives the create + update phases of
+// `pm jira export --push`, mirroring the import path's (and the sibling
+// pm-linear exporter's) per-item failure isolation: a single failed item
+// (invalid issuetype, a required custom field, a 4xx, a transient network
+// error, ...) is CAUGHT, counted into `failed`, logged to stderr, and the
+// loop CONTINUES — instead of a mid-batch `throw` that abandons every
+// remaining item with no record of what already succeeded. Successful items
+// are durable (counted/logged) before any later item can fail.
+//
+// The HTTP layer is injected (defaults to httpsPost/httpsPut) so the loop is
+// unit-testable offline without hitting the network.
+// ---------------------------------------------------------------------------
+
+export interface ExportPushDeps {
+  post: (url: string, authHeader: string, payload: string) => Promise<string>;
+  put: (url: string, authHeader: string, payload: string) => Promise<string>;
+  /** Where per-item failures are logged. Injectable so tests don't have to
+   * monkey-patch the global `console.error`. Defaults to `console.error`. */
+  logError?: (message: string) => void;
+}
+
+export interface ExportPushFailure {
+  /** pm item id when known, else the create endpoint / existing Jira key. */
+  ref: string;
+  op: "create" | "update";
+  message: string;
+}
+
+export interface ExportPushResult {
+  created: number;
+  updated: number;
+  /** Items already carrying a Jira key, not PUT because --update-existing was off. */
+  skipped: number;
+  /** Items whose create/update API call FAILED and were isolated. */
+  failed: number;
+  failures: ExportPushFailure[];
+}
+
+export async function runExportPush(
+  plan: ExportPlan,
+  opts: { authHeader: string; updateExisting: boolean },
+  deps: ExportPushDeps = { post: httpsPost, put: httpsPut }
+): Promise<ExportPushResult> {
+  const toCreate = plan.entries.filter((e) => e.op === "create");
+  const toUpdate = plan.entries.filter((e) => e.op === "update");
+  const logError = deps.logError ?? ((message: string) => console.error(message));
+
+  let created = 0;
+  let updated = 0;
+  let failed = 0;
+  const failures: ExportPushFailure[] = [];
+
+  for (const entry of toCreate) {
+    const ref = entry.itemId ?? entry.endpoint;
+    try {
+      if (!entry.payload) throw new Error("export entry has no payload");
+      await deps.post(entry.endpoint, opts.authHeader, JSON.stringify(entry.payload));
+      created++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError(`Failed to create Jira issue for ${ref}: ${message}`);
+      failures.push({ ref, op: "create", message });
+      failed++;
+      continue;
+    }
+  }
+
+  if (opts.updateExisting) {
+    for (const entry of toUpdate) {
+      const ref = entry.existingKey ?? entry.itemId ?? entry.endpoint;
+      try {
+        if (!entry.payload?.fields) throw new Error("export entry has no fields to update");
+        // Jira's edit-issue API rejects the immutable `project` field on a
+        // PUT, so strip it; only mutable fields are sent.
+        const { project: _project, ...mutableFields } = entry.payload.fields;
+        await deps.put(
+          entry.endpoint,
+          opts.authHeader,
+          JSON.stringify({ fields: mutableFields })
+        );
+        updated++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logError(`Failed to update Jira issue ${ref}: ${message}`);
+        failures.push({ ref, op: "update", message });
+        failed++;
+        continue;
+      }
+    }
+  }
+
+  // `skipped` keeps its existing meaning: provenance-matched items that were
+  // NOT PUT because --update-existing was off (back-compat). Failures are a
+  // distinct, separately-counted category.
+  const skipped = opts.updateExisting ? 0 : toUpdate.length;
+
+  return { created, updated, skipped, failed, failures };
+}
+
+// ---------------------------------------------------------------------------
 // Export-on-write hook decision — pure + offline-testable. Decides whether the
 // opt-in onWrite mirror should act for a given write event. It only acts when
 // PM_JIRA_PUSH_ON_WRITE is truthy AND the event is a project-scoped item
@@ -1529,45 +1629,15 @@ export default defineExtension({
           fieldMap,
           richMapping: rich,
         });
-        const toCreate = plan.entries.filter((e) => e.op === "create");
-        // Provenance-matched items become updates. By default they are still
-        // SKIPPED (back-compat: a re-export never mutates upstream). With
-        // --update-existing they are PUT to Jira's edit-issue endpoint instead.
-        const toUpdate = plan.entries.filter((e) => e.op === "update");
 
-        let created = 0;
-        for (const entry of toCreate) {
-          try {
-            await httpsPost(entry.endpoint, creds.authHeader, JSON.stringify(entry.payload));
-            created++;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            throw new CommandError(`Failed to create Jira issue: ${msg}`);
-          }
-        }
-
-        let updated = 0;
-        if (updateExisting) {
-          for (const entry of toUpdate) {
-            try {
-              // Jira's edit-issue API rejects the immutable `project` field on a
-              // PUT, so strip it; only mutable fields are sent.
-              const { project: _project, ...mutableFields } = entry.payload.fields;
-              await httpsPut(
-                entry.endpoint,
-                creds.authHeader,
-                JSON.stringify({ fields: mutableFields })
-              );
-              updated++;
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              throw new CommandError(
-                `Failed to update Jira issue ${entry.existingKey}: ${msg}`
-              );
-            }
-          }
-        }
-        const skipped = updateExisting ? 0 : toUpdate.length;
+        // Per-item failure isolation: a single bad item (invalid issuetype, a
+        // required custom field, a 4xx, ...) is caught + counted + logged and
+        // the batch CONTINUES, instead of a mid-batch throw that abandons every
+        // remaining item. Errors are streamed to stderr by runExportPush.
+        const { created, updated, skipped, failed, failures } = await runExportPush(
+          plan,
+          { authHeader: creds.authHeader, updateExisting }
+        );
 
         console.error(
           `Created ${created} issue(s) in Jira project ${project}.` +
@@ -1575,9 +1645,19 @@ export default defineExtension({
               ? ` Updated ${updated} existing issue(s).`
               : skipped > 0
                 ? ` Skipped ${skipped} item(s) that already have a Jira key (pass --update-existing to PUT them).`
-                : "")
+                : "") +
+            (failed > 0 ? ` Failed ${failed} item(s) (see errors above).` : "")
         );
-        return { pushed: true, created, updated, skipped, project };
+
+        if (failed > 0 && created === 0 && updated === 0) {
+          // Nothing landed at all — surface a non-zero exit so callers/CI notice,
+          // but only after the whole batch was attempted and reported.
+          throw new CommandError(
+            `pm jira export --push failed: all ${failed} item(s) errored (see above).`
+          );
+        }
+
+        return { pushed: true, created, updated, skipped, failed, failures, project };
       }
 
       const baseUrl =
