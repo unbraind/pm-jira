@@ -131,10 +131,21 @@ const KNOWN_MAP_KEYS = new Set([
     "priority",
     "issuetype",
     "labels",
+    "fixversions",
+    "components",
+    "sprint",
+    "sprints",
+    "customfield_10020",
     "assignee",
     "duedate",
     "type",
 ]);
+function fieldMapSkips(fieldMap, ...keys) {
+    return keys.some((key) => {
+        const value = fieldMap?.[key]?.toLowerCase();
+        return value === "skip" || value === "ignore";
+    });
+}
 export function parseFieldMap(raw) {
     if (!raw)
         return undefined;
@@ -616,15 +627,34 @@ export function issueToItem(issue, baseUrl, optionsOrStatusMap) {
         ? optionsOrStatusMap
         : { statusMap: optionsOrStatusMap };
     const { statusMap, fieldMap } = mapOptions;
-    const tags = [
-        ...(issue.fields.labels ?? []),
-        ...(issue.fields.fixVersions?.map((v) => v.name) ?? []),
-    ];
+    const tags = [];
+    const addTag = (tag) => {
+        const clean = tag?.trim();
+        if (clean && !tags.includes(clean))
+            tags.push(clean);
+    };
+    if (!fieldMapSkips(fieldMap, "labels")) {
+        for (const label of issue.fields.labels ?? [])
+            addTag(label);
+    }
+    if (!fieldMapSkips(fieldMap, "fixversions")) {
+        for (const version of issue.fields.fixVersions ?? [])
+            addTag(version.name);
+    }
+    if (!fieldMapSkips(fieldMap, "components")) {
+        for (const component of issue.fields.components ?? [])
+            addTag(`component:${component.name}`);
+    }
+    if (!fieldMapSkips(fieldMap, "sprint", "sprints", "customfield_10020")) {
+        const sprintField = issue.fields.customfield_10020;
+        const sprintEntries = Array.isArray(sprintField) ? sprintField : sprintField ? [sprintField] : [];
+        for (const sprint of sprintEntries)
+            addTag(sprint.name ? `sprint:${sprint.name}` : undefined);
+    }
     // Assignee → tag (so it survives without a dedicated pm field) unless --map
-    // assignee=<x> pins it elsewhere or the user opts out with assignee=skip.
-    const assigneeTarget = fieldMap?.["assignee"];
-    if (issue.fields.assignee?.displayName && assigneeTarget !== "skip") {
-        tags.push(`assignee:${issue.fields.assignee.displayName.replace(/\s+/g, "-")}`);
+    // assignee=<x> pins it elsewhere or the user opts out with assignee=skip/ignore.
+    if (issue.fields.assignee?.displayName && !fieldMapSkips(fieldMap, "assignee")) {
+        addTag(`assignee:${issue.fields.assignee.displayName.replace(/\s+/g, "-")}`);
     }
     // Status: prefer an explicit name mapping; fall back to the statusCategory
     // bucket when the name is unrecognized. --map statuscategory=<pmStatus> pins.
@@ -655,7 +685,7 @@ export function issueToItem(issue, baseUrl, optionsOrStatusMap) {
         type,
         body: rawBody,
         tags,
-        deadline: issue.fields.duedate ?? undefined,
+        deadline: fieldMapSkips(fieldMap, "duedate") ? undefined : issue.fields.duedate ?? undefined,
         // Provenance marker lives in the description so it survives round-trips.
         description: jiraProvenance(issue.key, browseUrl),
         jiraKey: issue.key,
@@ -678,7 +708,7 @@ function createPmItem(pmRoot, item) {
     const result = spawnSync("pm", args, { encoding: "utf-8" });
     return result.status === 0;
 }
-const SEARCH_FIELDS = "summary,description,status,priority,labels,assignee,duedate,fixVersions,issuetype,attachment,comment";
+const SEARCH_FIELDS = "summary,description,status,priority,labels,components,assignee,duedate,fixVersions,issuetype,customfield_10020,attachment,comment";
 export function countIssueExtras(issue) {
     const attachments = Array.isArray(issue.fields.attachment)
         ? issue.fields.attachment.length
