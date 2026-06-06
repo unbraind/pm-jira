@@ -7,7 +7,7 @@ A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues 
 - Pull issues from any Jira project into pm items via `pm jira import` or `pm jira sync`
 - Export pm items back out as Jira create payloads via `pm jira export` (preview, or `--push` to create issues)
 - **Convenience JQL filters** — `--project`, `--status`, `--assignee`, `--issue-type`, `--label`, `--updated-since` compose into a single JQL query (or pass full `--jql` to override)
-- **Rich field mapping** — Jira status (by name, with a `statusCategory` fallback for custom workflows), priority, issue type → pm type, labels/fix-versions → tags, assignee → tag; configurable with `--status-map` and a general `--map jiraField=pmField`
+- **Rich field mapping** — Jira status (by name, with a `statusCategory` fallback for custom workflows), priority, issue type → pm type, labels/fix-versions/components/sprints → tags, assignee → tag; configurable with `--status-map` and a general `--map jiraField=pmField`
 - **`--dry-run` everywhere** — both import and export print the exact request / mutations they *would* make and perform **no network call** (the offline-testable, creds-free path)
 - **`pm jira validate`** — report Jira credential/base-URL readiness without leaking any secret (hostname-only preview); `--json` aware
 - **Fail-fast preflight credential gate** — a network-mutating `pm jira sync` / `pm jira import` (and `pm jira export --push`) aborts immediately with a clear, actionable message **before any pm-store read or Jira call** if `JIRA_BASE_URL` / `JIRA_EMAIL` / `JIRA_API_TOKEN` are missing. `--dry-run` and `pm jira validate` are exempt (offline). See [Preflight gate](#preflight-gate).
@@ -121,11 +121,18 @@ pull stays focused on active work (the historical default).
 
 `--map` accepts a comma list of `jiraField=pmTarget` pairs. Recognized Jira-side
 keys: `status`, `statuscategory`, `priority`, `issuetype` (alias `type`),
-`labels`, `assignee`, `duedate`. Examples:
+`labels`, `fixversions`, `components`, `sprint`/`sprints`/`customfield_10020`,
+`assignee`, `duedate`. Imported tags include `component:<name>` from Jira
+components and `sprint:<name>` from Jira's common Sprint custom field
+(`customfield_10020`) when present; set noisy context fields to `skip` or
+`ignore` to suppress them. Examples:
 
 ```bash
 # Pin every imported item's type, and skip the assignee tag
 pm jira import --project PROJ --map "issuetype=Task,assignee=skip"
+
+# Keep labels but suppress sprint/component context tags
+pm jira import --project PROJ --map "components=ignore,sprint=ignore"
 
 # Force a pm status regardless of the Jira workflow state
 pm jira import --project PROJ --map "status=in_progress"

@@ -31,6 +31,9 @@ interface JiraIssue {
             name: string;
         } | null;
         labels?: string[];
+        components?: Array<{
+            name: string;
+        }>;
         assignee?: {
             displayName: string;
             emailAddress: string;
@@ -41,6 +44,11 @@ interface JiraIssue {
         }>;
         issuetype?: {
             name: string;
+        } | null;
+        customfield_10020?: Array<{
+            name?: string;
+        }> | {
+            name?: string;
         } | null;
         attachment?: Array<unknown> | null;
         comment?: {

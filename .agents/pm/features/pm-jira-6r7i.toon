@@ -1,0 +1,21 @@
+id: pm-jira-6r7i
+title: Import Jira components and sprint context tags
+description: ""
+type: Feature
+status: closed
+priority: 1
+tags[2]: context-management,enhancement
+created_at: "2026-06-06T19:29:27.177Z"
+updated_at: "2026-06-06T19:29:28.386Z"
+author: codex
+files[4]{path,scope,note}:
+  dist/index.d.ts,project,implementation
+  dist/index.js,project,implementation
+  index.ts,project,implementation
+  test/smoke.test.ts,project,implementation
+tests[1]{command,path,scope,timeout_seconds,pm_context_mode,env_set,env_clear,shared_host_safe,assert_stdout_contains,assert_stdout_regex,assert_stderr_contains,assert_stderr_regex,assert_stdout_min_lines,assert_json_field_equals,assert_json_field_gte,note}:
+  PM_PATH=.agents/pm PM_GLOBAL_PATH=.agents/pm npm test,null,project,180,null,null,null,null,null,null,null,null,null,null,null,package TypeScript test suite
+docs[1]{path,scope,note}:
+  README.md,project,"Jira import docs cover components,sprints,and suppressible context fields"
+close_reason: Jira imports now preserve component and sprint planning context with opt-out controls and tests.
+body: "Import Jira components as component:<name> and the common Sprint custom field as sprint:<name>; allow noisy labels, fix versions, components, sprints, assignee, and due dates to be suppressed through --map skip/ignore."
