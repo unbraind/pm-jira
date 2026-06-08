@@ -1461,7 +1461,7 @@ const VALIDATE_FLAGS = [
 
 export default defineExtension({
   name: "pm-jira",
-  version: "2026.6.4-1",
+  version: "2026.6.8",
 
   activate(api) {
     // -----------------------------------------------------------------------
