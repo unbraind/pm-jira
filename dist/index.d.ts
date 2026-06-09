@@ -64,6 +64,13 @@ export declare function mapJiraStatus(jiraStatus: string, statusMap?: Record<str
 export declare function mapJiraStatusCategory(categoryKey: string | undefined): PmStatus;
 export declare function mapJiraIssueType(jiraType: string | undefined): string;
 export declare function mapPmPriorityToJira(priority: PmPriority | number | undefined): string;
+export declare function normalizePmStatusInput(value: string | undefined): PmStatus | undefined;
+export interface StatusFilterResolution {
+    mode: "none" | "pm" | "jira";
+    raw?: string;
+    pmStatus?: PmStatus;
+}
+export declare function resolveStatusFilter(value: string | undefined): StatusFilterResolution;
 export type FieldMap = Record<string, string>;
 export declare function parseFieldMap(raw: string | undefined): FieldMap | undefined;
 export declare function parseStatusMap(raw: string | undefined): Record<string, PmStatus> | undefined;
