@@ -125,6 +125,51 @@ export function mapPmPriorityToJira(priority) {
     }
 }
 const PM_STATUSES = ["open", "in_progress", "closed", "blocked"];
+// Human-friendly status aliases accepted anywhere the user can provide a pm
+// status (e.g. --status and --status-map targets). This keeps canonical wire
+// values stable while making CLI input forgiving.
+const PM_STATUS_ALIASES = {
+    open: "open",
+    todo: "open",
+    to_do: "open",
+    backlog: "open",
+    new: "open",
+    in_progress: "in_progress",
+    inprogress: "in_progress",
+    wip: "in_progress",
+    active: "in_progress",
+    doing: "in_progress",
+    in_review: "in_progress",
+    in_development: "in_progress",
+    closed: "closed",
+    done: "closed",
+    complete: "closed",
+    completed: "closed",
+    resolved: "closed",
+    blocked: "blocked",
+    block: "blocked",
+    on_hold: "blocked",
+    hold: "blocked",
+};
+function normalizeStatusAliasKey(value) {
+    return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+export function normalizePmStatusInput(value) {
+    if (!value || !value.trim())
+        return undefined;
+    return PM_STATUS_ALIASES[normalizeStatusAliasKey(value)];
+}
+// Distinguish status input that should become a pm-side post-filter from a raw
+// Jira status name that should only be applied server-side in JQL.
+export function resolveStatusFilter(value) {
+    const raw = value?.trim();
+    if (!raw)
+        return { mode: "none" };
+    const pmStatus = normalizePmStatusInput(raw);
+    if (pmStatus)
+        return { mode: "pm", raw, pmStatus };
+    return { mode: "jira", raw };
+}
 const KNOWN_MAP_KEYS = new Set([
     "status",
     "statuscategory",
@@ -172,8 +217,8 @@ export function parseFieldMap(raw) {
 }
 // Parse a --status-map value of the form
 //   "In Progress=in_progress,QA=blocked"
-// into a lower-cased lookup table. Invalid pm-status targets are rejected with
-// a USAGE CommandError so a typo never silently maps everything to "open".
+// into a lower-cased lookup table. Target values accept canonical pm statuses
+// plus common aliases (e.g. done -> closed, wip -> in_progress).
 export function parseStatusMap(raw) {
     if (!raw)
         return undefined;
@@ -187,12 +232,14 @@ export function parseStatusMap(raw) {
             throw new CommandError(`Invalid --status-map entry "${trimmed}" (expected "JiraStatus=pm_status").`, EXIT_CODE.USAGE);
         }
         const from = trimmed.slice(0, eq).trim().toLowerCase();
-        const to = trimmed.slice(eq + 1).trim();
+        const toRaw = trimmed.slice(eq + 1).trim();
         if (!from) {
             throw new CommandError(`Invalid --status-map entry "${trimmed}" (empty Jira status).`, EXIT_CODE.USAGE);
         }
-        if (!PM_STATUSES.includes(to)) {
-            throw new CommandError(`Invalid --status-map target "${to}" (expected one of ${PM_STATUSES.join("|")}).`, EXIT_CODE.USAGE);
+        const to = normalizePmStatusInput(toRaw);
+        if (!to) {
+            throw new CommandError(`Invalid --status-map target "${toRaw}" (expected one of ${PM_STATUSES.join("|")} ` +
+                `or aliases like todo/wip/done/on-hold).`, EXIT_CODE.USAGE);
         }
         map[from] = to;
     }
@@ -223,8 +270,9 @@ export function buildJql(filters) {
     if (filters.project)
         clauses.push(`project = ${jqlQuote(filters.project)}`);
     if (filters.status) {
-        const key = filters.status.trim().toLowerCase();
-        clauses.push(PM_STATUS_TO_JQL[key] ?? `status = ${jqlQuote(filters.status)}`);
+        const raw = filters.status.trim();
+        const pmStatus = normalizePmStatusInput(raw);
+        clauses.push(pmStatus ? PM_STATUS_TO_JQL[pmStatus] : `status = ${jqlQuote(raw)}`);
     }
     if (filters.assignee) {
         const a = filters.assignee.trim();
@@ -736,7 +784,7 @@ async function runImport(options, pmRoot, opts = {}) {
     const statusMap = parseStatusMap(readStringOption(options, "status-map"));
     const fieldMap = parseFieldMap(readStringOption(options, "map"));
     const dryRun = opts.dryRun ?? readBooleanOption(options, "dry-run");
-    const statusFilter = opts.statusFilter ?? readStringOption(options, "status");
+    const statusFilter = resolveStatusFilter(opts.statusFilter ?? readStringOption(options, "status"));
     if (!project && !customJql) {
         throw new CommandError("Provide either --project <KEY> or --jql <query> to specify which issues to import.", EXIT_CODE.USAGE);
     }
@@ -762,7 +810,8 @@ async function runImport(options, pmRoot, opts = {}) {
             request,
             maxResults,
             project: projectLabel,
-            ...(statusFilter ? { statusFilter } : {}),
+            ...(statusFilter.raw ? { statusFilter: statusFilter.raw, statusFilterMode: statusFilter.mode } : {}),
+            ...(statusFilter.pmStatus ? { pmStatusFilter: statusFilter.pmStatus } : {}),
         };
     }
     // Live import: resolve creds now (throws a structured CommandError if any are
@@ -804,11 +853,19 @@ async function runImport(options, pmRoot, opts = {}) {
         issue,
         item: issueToItem(issue, creds.baseUrl, { statusMap, fieldMap }),
     }));
-    const filtered = statusFilter
-        ? mapped.filter(({ item }) => item.status === statusFilter)
+    if (statusFilter.mode === "pm" && statusFilter.raw && statusFilter.pmStatus) {
+        if (normalizeStatusAliasKey(statusFilter.raw) !== statusFilter.pmStatus) {
+            console.error(`Interpreting --status "${statusFilter.raw}" as pm status "${statusFilter.pmStatus}".`);
+        }
+    }
+    else if (statusFilter.mode === "jira" && statusFilter.raw) {
+        console.error(`Using Jira status "${statusFilter.raw}" as a server-side JQL filter (no pm-status post-filter).`);
+    }
+    const filtered = statusFilter.pmStatus
+        ? mapped.filter(({ item }) => item.status === statusFilter.pmStatus)
         : mapped;
-    if (statusFilter && filtered.length !== mapped.length) {
-        console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter}"`);
+    if (statusFilter.pmStatus && filtered.length !== mapped.length) {
+        console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter.pmStatus}"`);
     }
     let created = 0;
     for (const { issue, item } of filtered) {
@@ -990,7 +1047,11 @@ const PULL_FLAGS = [
     { long: "--jql", value_name: "query", description: "Custom JQL query (overrides --project default)" },
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
     { long: "--max-results", value_name: "n", description: "Max issues to fetch (default: 500)" },
-    { long: "--status", value_name: "filter", description: "Filter by status: pm status (open|in_progress|closed|blocked) or raw Jira status" },
+    {
+        long: "--status",
+        value_name: "filter",
+        description: "Filter by status: pm status (open|in_progress|closed|blocked, aliases: todo/wip/done) or raw Jira status",
+    },
     { long: "--assignee", value_name: "user", description: "Filter by assignee (accountId, name, or currentUser())" },
     { long: "--issue-type", value_name: "type", description: "Filter by Jira issue type (e.g. Bug)" },
     { long: "--label", value_name: "label", description: "Filter by Jira label" },
