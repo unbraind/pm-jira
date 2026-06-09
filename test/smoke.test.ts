@@ -10,6 +10,8 @@ import extension, {
   mapJiraStatus,
   mapJiraPriority,
   parseStatusMap,
+  normalizePmStatusInput,
+  resolveStatusFilter,
   adfToPlainText,
   plainTextToAdf,
   issueToItem,
@@ -187,6 +189,29 @@ test("mapJiraStatus maps common Jira states to pm statuses", () => {
   assert.strictEqual(mapJiraStatus("Blocked"), "blocked");
 });
 
+test("normalizePmStatusInput accepts common pm status aliases", () => {
+  assert.strictEqual(normalizePmStatusInput("todo"), "open");
+  assert.strictEqual(normalizePmStatusInput("to-do"), "open");
+  assert.strictEqual(normalizePmStatusInput("wip"), "in_progress");
+  assert.strictEqual(normalizePmStatusInput("in-progress"), "in_progress");
+  assert.strictEqual(normalizePmStatusInput("done"), "closed");
+  assert.strictEqual(normalizePmStatusInput("on hold"), "blocked");
+  assert.strictEqual(normalizePmStatusInput("Code Review"), undefined);
+});
+
+test("resolveStatusFilter separates pm aliases from raw Jira status names", () => {
+  assert.deepStrictEqual(resolveStatusFilter(undefined), { mode: "none" });
+  assert.deepStrictEqual(resolveStatusFilter("wip"), {
+    mode: "pm",
+    raw: "wip",
+    pmStatus: "in_progress",
+  });
+  assert.deepStrictEqual(resolveStatusFilter("Code Review"), {
+    mode: "jira",
+    raw: "Code Review",
+  });
+});
+
 test("mapJiraStatus honors a --status-map override", () => {
   const map = parseStatusMap("QA=blocked,Done=closed");
   assert.strictEqual(mapJiraStatus("QA", map), "blocked");
@@ -197,6 +222,10 @@ test("mapJiraStatus honors a --status-map override", () => {
 
 test("parseStatusMap rejects invalid targets and malformed entries", () => {
   assert.strictEqual(parseStatusMap(undefined), undefined);
+  assert.deepStrictEqual(parseStatusMap("QA=done,In Review=wip"), {
+    qa: "closed",
+    "in review": "in_progress",
+  });
   assert.throws(() => parseStatusMap("QA=nonsense"), (e: unknown) => {
     assert.strictEqual((e as CommandError).exitCode, EXIT_CODE.USAGE);
     return true;
@@ -422,6 +451,10 @@ test("buildJql maps pm status to statusCategory and does not re-add not-done", (
   assert.strictEqual(
     buildJql({ project: "PROJ", status: "closed" }),
     'project = PROJ AND statusCategory = Done ORDER BY priority ASC'
+  );
+  assert.strictEqual(
+    buildJql({ project: "PROJ", status: "wip" }),
+    'project = PROJ AND statusCategory = "In Progress" ORDER BY priority ASC'
   );
   // A raw Jira status name passes through as a status= clause.
   assert.strictEqual(
