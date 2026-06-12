@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Daily Release publish step runs prepublishOnly post-tag: align npm publish with --ignore-scripts ([pm-jira-elhd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-elhd.toon))
+
 ## 2026.06.08 - 2026-06-08
 
 ### Added
