@@ -370,8 +370,8 @@ npm run dev
 
 ## Requirements
 
-- Node.js 20+ (uses native `https` module and `Buffer`)
-- pm-cli `>=2026.5.31`
+- Node.js `>=22.18.0` (uses native `https` module and `Buffer`)
+- pm-cli `>=2026.7.5`
 - TypeScript 6.x (dev dependency)
 
 ## License
