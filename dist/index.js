@@ -303,7 +303,7 @@ export function buildJql(filters) {
 export function readJqlFilters(options) {
     return {
         jql: readStringOption(options, "jql"),
-        project: readStringOption(options, "project"),
+        project: readStringOptionAliased(options, "project", "project-key"),
         status: readStringOption(options, "status"),
         assignee: readStringOption(options, "assignee"),
         issueType: readStringOption(options, "issue-type"),
@@ -374,6 +374,18 @@ export function readStringOption(options, kebab) {
     const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
     const trimmed = value?.trim();
     return trimmed ? trimmed : undefined;
+}
+// Read a string option with one or more alias keys (kebab or camel). Returns the
+// first non-empty value. Used to surface user-friendly flag aliases like
+// --field-map (alias for --map) and --project-key (alias for --project) without
+// duplicating the read logic at every call site.
+export function readStringOptionAliased(options, ...kebabs) {
+    for (const kebab of kebabs) {
+        const value = readStringOption(options, kebab);
+        if (value !== undefined)
+            return value;
+    }
+    return undefined;
 }
 export function readNumberOption(options, kebab) {
     const v = readOptionValue(options, kebab);
@@ -522,6 +534,30 @@ export function jiraPreflightErrorMessage(command, diag) {
 // ---------------------------------------------------------------------------
 // HTTP helpers using Node.js native https module
 // ---------------------------------------------------------------------------
+// Classify a non-2xx Jira REST response into an actionable error message.
+// Auth failures (401/403) get a dedicated, prescriptive message that names the
+// likely root causes (expired/revoked token, wrong email, MFA/API-token
+// mismatch, missing scopes) and points at the token-management URL — so a
+// generic "Jira API error 401" never leaves a user guessing. Other status codes
+// fall through to the compact body preview. Pure + offline-testable.
+export function classifyHttpError(statusCode, body) {
+    const code = statusCode ?? 0;
+    const snippet = body.slice(0, 200);
+    if (code === 401) {
+        return (`Jira authentication failed (HTTP 401). The JIRA_EMAIL / JIRA_API_TOKEN pair was ` +
+            `rejected. Common causes: the API token was revoked or expired, the email is ` +
+            `wrong, or you are using a password instead of an API token ` +
+            `(Jira no longer accepts basic auth with account passwords). Regenerate a token ` +
+            `at https://id.atlassian.com/manage-profile/security/api-tokens and update ` +
+            `JIRA_API_TOKEN. Response: ${snippet}`);
+    }
+    if (code === 403) {
+        return (`Jira authorization failed (HTTP 403). The credentials are valid but the account ` +
+            `lacks permission for this resource (check project access, issue-level perms, ` +
+            `and that the token's product scope includes Jira). Response: ${snippet}`);
+    }
+    return `Jira API error ${code}: ${snippet}`;
+}
 function httpsGet(url, authHeader) {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
@@ -542,7 +578,7 @@ function httpsGet(url, authHeader) {
             });
             res.on("end", () => {
                 if (res.statusCode && res.statusCode >= 400) {
-                    reject(new Error(`Jira API error ${res.statusCode}: ${body.slice(0, 200)}`));
+                    reject(new Error(classifyHttpError(res.statusCode, body)));
                 }
                 else {
                     resolve(body);
@@ -578,7 +614,7 @@ function httpsPost(url, authHeader, payload) {
             });
             res.on("end", () => {
                 if (res.statusCode && res.statusCode >= 400) {
-                    reject(new Error(`Jira API error ${res.statusCode}: ${body.slice(0, 200)}`));
+                    reject(new Error(classifyHttpError(res.statusCode, body)));
                 }
                 else {
                     resolve(body);
@@ -618,7 +654,7 @@ function httpsPut(url, authHeader, payload) {
             });
             res.on("end", () => {
                 if (res.statusCode && res.statusCode >= 400) {
-                    reject(new Error(`Jira API error ${res.statusCode}: ${body.slice(0, 200)}`));
+                    reject(new Error(classifyHttpError(res.statusCode, body)));
                 }
                 else {
                     resolve(body);
@@ -778,11 +814,11 @@ export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
     return { method: "GET", url, fields: SEARCH_FIELDS };
 }
 async function runImport(options, pmRoot, opts = {}) {
-    const project = readStringOption(options, "project");
+    const project = readStringOptionAliased(options, "project", "project-key");
     const customJql = readStringOption(options, "jql");
     const maxResults = readNumberOption(options, "max-results") ?? 500;
     const statusMap = parseStatusMap(readStringOption(options, "status-map"));
-    const fieldMap = parseFieldMap(readStringOption(options, "map"));
+    const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
     const dryRun = opts.dryRun ?? readBooleanOption(options, "dry-run");
     const statusFilter = resolveStatusFilter(opts.statusFilter ?? readStringOption(options, "status"));
     if (!project && !customJql) {
@@ -828,7 +864,16 @@ async function runImport(options, pmRoot, opts = {}) {
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        const exitCode = /error 404/.test(msg) ? EXIT_CODE.NOT_FOUND : EXIT_CODE.GENERIC_FAILURE;
+        let exitCode;
+        if (/error 404/.test(msg)) {
+            exitCode = EXIT_CODE.NOT_FOUND;
+        }
+        else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/.test(msg)) {
+            exitCode = EXIT_CODE.USAGE;
+        }
+        else {
+            exitCode = EXIT_CODE.GENERIC_FAILURE;
+        }
         throw new CommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
     }
     console.error(`Fetched ${issues.length} issues from Jira`);
@@ -1043,7 +1088,8 @@ export function decidePushOnWrite(hookCtx, envLike = process.env) {
 // Extension
 // ---------------------------------------------------------------------------
 const PULL_FLAGS = [
-    { long: "--project", value_name: "KEY", description: "Jira project key (e.g. PROJ)" },
+    { long: "--project", value_name: "KEY", description: "Jira project key (e.g. PROJ). Alias: --project-key." },
+    { long: "--project-key", value_name: "KEY", description: "Alias for --project (Jira project key filter)." },
     { long: "--jql", value_name: "query", description: "Custom JQL query (overrides --project default)" },
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
     { long: "--max-results", value_name: "n", description: "Max issues to fetch (default: 500)" },
@@ -1057,13 +1103,16 @@ const PULL_FLAGS = [
     { long: "--label", value_name: "label", description: "Filter by Jira label" },
     { long: "--updated-since", value_name: "date", description: 'Filter by updated date (e.g. "-7d" or "2026-01-01")' },
     { long: "--status-map", value_name: "map", description: 'Override status mapping, e.g. "QA=blocked,Done=closed"' },
-    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Task,assignee=skip"' },
+    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Task,assignee=skip". Alias: --field-map.' },
+    { long: "--field-map", value_name: "pairs", description: 'Alias for --map (override field mapping, e.g. "issuetype=Task,assignee=skip").' },
     { long: "--dry-run", description: "Preview the JQL + request without any network call" },
 ];
 const EXPORT_FLAGS = [
-    { long: "--project", value_name: "KEY", description: "Target Jira project key for created issues" },
+    { long: "--project", value_name: "KEY", description: "Target Jira project key for created issues. Alias: --project-key." },
+    { long: "--project-key", value_name: "KEY", description: "Alias for --project (target Jira project key)." },
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
-    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Story"' },
+    { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Story". Alias: --field-map.' },
+    { long: "--field-map", value_name: "pairs", description: 'Alias for --map (override field mapping).' },
     { long: "--rich", description: "Derive Jira issuetype + priority from pm item type/priority" },
     { long: "--update-existing", description: "PUT changed fields to issues that already carry a Jira key (else they are skipped)" },
     { long: "--dry-run", description: "Print the Jira mutations that would be made, without any network call" },
@@ -1152,11 +1201,11 @@ export default defineExtension({
                 ...(typeof options["JIRA_EMAIL"] === "string" ? { JIRA_EMAIL: options["JIRA_EMAIL"] } : {}),
             };
             const creds = resolveCreds(options, envLike);
-            const project = readStringOption(options, "project");
+            const project = readStringOptionAliased(options, "project", "project-key");
             const customJql = readStringOption(options, "jql");
             const maxResults = readNumberOption(options, "max-results") ?? 500;
             const statusMap = parseStatusMap(readStringOption(options, "status-map"));
-            const fieldMap = parseFieldMap(readStringOption(options, "map"));
+            const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
             if (!project && !customJql) {
                 throw new CommandError("jira-sync importer requires either options.project or options.jql", EXIT_CODE.USAGE);
             }
@@ -1187,8 +1236,8 @@ export default defineExtension({
             const dryRun = readBooleanOption(options, "dry-run");
             const rich = readBooleanOption(options, "rich");
             const updateExistingFlag = readBooleanOption(options, "update-existing");
-            const project = readStringOption(options, "project");
-            const fieldMap = parseFieldMap(readStringOption(options, "map"));
+            const project = readStringOptionAliased(options, "project", "project-key");
+            const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
             const items = readPmItems(ctx.pm_root);
             // --dry-run: build and PRINT the exact Jira mutations that WOULD be made
             // from the current pm items, without resolving creds or hitting the
