@@ -100,7 +100,7 @@ pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--project` | string | — | Jira project key (e.g. `PROJ`). Composed into JQL. |
+| `--project` | string | — | Jira project key (e.g. `PROJ`). Composed into JQL. Alias: `--project-key`. |
 | `--jql` | string | — | Custom JQL query. Used verbatim; overrides all convenience filters below. |
 | `--status` | string | — | Filter by pm status (`open`/`in_progress`/`closed`/`blocked`, mapped to a `statusCategory` clause) or a raw Jira status name. Also filters imported items client-side. |
 | `--assignee` | string | — | Filter by assignee (accountId, name, or a function like `currentUser()`). |
@@ -108,7 +108,7 @@ pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
 | `--label` | string | — | Filter by Jira label. |
 | `--updated-since` | string | — | Filter by updated date, relative (`-7d`) or absolute (`2026-01-01`). |
 | `--status-map` | string | — | Override status mapping, e.g. `"In Review=in_progress,QA=blocked"`. |
-| `--map` | string | — | Override field mapping, e.g. `"issuetype=Task,assignee=skip"`. |
+| `--map` | string | — | Override field mapping, e.g. `"issuetype=Task,assignee=skip"`. Alias: `--field-map`. |
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--max-results` | number | `500` | Maximum number of issues to pull. |
 | `--dry-run` | boolean | `false` | Print the JQL + exact GET request that would run; **no network call**. |
@@ -176,8 +176,8 @@ pm jira export --project PROJ --update-existing --dry-run
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--project` | string | — | Target Jira project key for created issues (required for `--push`). |
-| `--map` | string | — | Override field mapping, e.g. `"issuetype=Story"`. |
+| `--project` | string | — | Target Jira project key for created issues (required for `--push`). Alias: `--project-key`. |
+| `--map` | string | — | Override field mapping, e.g. `"issuetype=Story"`. Alias: `--field-map`. |
 | `--rich` | boolean | `false` | Derive Jira `issuetype` + `priority` from the pm item type/priority. |
 | `--update-existing` | boolean | `false` | PUT changed fields to issues that already carry a Jira key. Without it, those items are skipped (no duplicate, no mutation). |
 | `--dry-run` | boolean | `false` | Print the Jira POST/PUT mutations that would run; **no network call**. |
