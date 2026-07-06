@@ -8,6 +8,7 @@
 
 ### Other
 
+- Align Node engine with pm CLI runtime ([pm-jira-1qmd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-1qmd.toon))
 - Regenerate CHANGELOG after pm close item ([pm-jira-0ygy](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-0ygy.toon))
 
 ## 2026.6.13 - 2026-06-13
