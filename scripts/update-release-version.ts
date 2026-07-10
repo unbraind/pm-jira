@@ -20,10 +20,10 @@ for (const file of ["manifest.json"]) {
 
 if (existsSync("index.ts")) {
   const source = readFileSync("index.ts", "utf8");
-  const versionPattern = /version:\s*["'][^"']+["']/;
+  const versionPattern = /(\bversion:\s*)["'][^"']+["']/;
   if (!versionPattern.test(source)) {
     throw new Error("index.ts does not contain an extension version field");
   }
-  writeFileSync("index.ts", source.replace(versionPattern, `version: "${version}"`), "utf8");
+  writeFileSync("index.ts", source.replace(versionPattern, `$1"${version}"`), "utf8");
 }
 
