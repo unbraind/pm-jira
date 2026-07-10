@@ -747,9 +747,9 @@ export function jiraPreflightErrorMessage(
 // mismatch, missing scopes) and points at the token-management URL — so a
 // generic "Jira API error 401" never leaves a user guessing. Other status codes
 // fall through to the compact body preview. Pure + offline-testable.
-export function classifyHttpError(statusCode: number | undefined, body: string): string {
+export function classifyHttpError(statusCode: number | undefined, body: unknown): string {
   const code = statusCode ?? 0;
-  const snippet = body.slice(0, 200);
+  const snippet = typeof body === "string" ? body.slice(0, 200) : "";
   if (code === 401) {
     return (
       `Jira authentication failed (HTTP 401). The JIRA_EMAIL / JIRA_API_TOKEN pair was ` +
@@ -1176,9 +1176,9 @@ async function runImport(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     let exitCode: number;
-    if (/error 404/.test(msg)) {
+    if (/error 404/i.test(msg)) {
       exitCode = EXIT_CODE.NOT_FOUND;
-    } else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/.test(msg)) {
+    } else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/i.test(msg)) {
       exitCode = EXIT_CODE.USAGE;
     } else {
       exitCode = EXIT_CODE.GENERIC_FAILURE;

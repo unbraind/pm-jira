@@ -2,11 +2,13 @@ id: pm-jira-58ev
 title: Export --push aborts the whole batch on the first failed item
 description: "The exporter create/update loops in registerExporter threw a CommandError inside the loop on the first failed item, so one bad item (invalid issuetype, a required custom field, a 4xx) aborted the entire batch, abandoning all remaining items with no record of what succeeded and risking duplicates on retry. The import path and the sibling pm-linear exporter already isolate per-item failures."
 type: Issue
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-06-05T14:48:10.656Z"
-updated_at: "2026-06-05T14:48:22.047Z"
+updated_at: "2026-07-10T19:02:12.609Z"
+closed_at: "2026-07-10T19:02:12.607Z"
 author: codex
 acceptance_criteria: per-item create/update failures are isolated and counted; the batch completes and reports a summary; successful items keep provenance; happy path + dry-run byte-identical; unit test proves continue-on-failure
+close_reason: "Fixed: per-item-isolated push runner continues on failure (line 1786); checks if all items failed and throws CommandError (line 1809). Verified in current code."
 body: ""

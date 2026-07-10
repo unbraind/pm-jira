@@ -1,0 +1,59 @@
+id: pm-jira-8r0w
+title: Ecosystem release readiness pass 2026-07-06
+description: "July 6, 2026 fleet readiness pass for the pm package ecosystem."
+type: Task
+status: in_progress
+priority: 1
+tags[4]: agent-audit,context-management,ecosystem,release-readiness
+created_at: "2026-07-06T15:33:33.398Z"
+updated_at: "2026-07-10T19:07:00.921Z"
+assignee: codex-importers
+author: codex
+acceptance_criteria: Package uses current pm CLI/SDK and pm-changelog; release/check scripts pass; pm items capture decisions; no tracked secrets/private data are introduced; GitHub PR/release state is reviewed.
+risk: high
+confidence: medium
+comments[2]{created_at,author,text}:
+  "2026-07-09T21:34:59.613Z",codex-importers,"2026-07-09 continuation: reusing this existing nonduplicate work item for dependency alignment, command-by-command production-like testing, agent-context UX evaluation, release/changelog verification, tracked/package/full-history privacy and secret audit, Greptile review, GitHub bot feedback, and green merge."
+  "2026-07-09T21:46:37.965Z",codex-importers,"Hardened non-string Jira error bodies, case-insensitive classification, and corrected alias dry-run coverage."
+notes[4]{created_at,author,text}:
+  "2026-07-09T21:34:59.947Z",codex-importers,"Safety: preserve unrelated checkout changes; do not alter telemetry/observability; use read-only live APIs plus local mocks for Jira/Linear or any unsafe write paths; never log secret values."
+  "2026-07-09T21:46:38.761Z",codex-importers,"Dependency baseline refreshed to @unbrained/pm-cli 2026.7.9, pm-changelog 2026.7.8, TypeScript 7.0.2, and Node types 26.1.1; npm install reported zero vulnerabilities."
+  "2026-07-10T18:59:29.174Z",codex,"2026-07-10 audit pass evidence:\n1. DEPENDENCY BUMP: @unbrained/pm-cli >=2026.7.9 -> >=2026.7.10; npm install updated lockfile; 0 vulnerabilities.\n2. TYPECHECK: tsc --noEmit exit 0.\n3. TESTS: 65/65 pass (node --test).\n4. BUILD: tsc exit 0; dist/ rebuilt.\n5. PACK: pm-jira-2026.7.6.tgz, 9 files.\n6. CHANGELOG: changelog:check PASS.\n7. AUDIT: 0 vulnerabilities.\n8. HEALTH: ok:true (missing epics/extensions dirs fixed).\n9. SECRETS: None in tracked files or git history.\n10. GITHUB: No open PRs/issues; Dependabot API EOF (transient); CI green.\n11. FUNCTIONAL: jira validate (offline) correctly reports not-ready; jira sync --dry-run builds JQL offline (no network).\n12. SCRIPTS: update-release-version.ts present; release.yml uses npm run release:update-version.\n13. CODE: classifyHttpError now accepts unknown body type (type-safe); regex matching now case-insensitive."
+  "2026-07-10T19:06:47.256Z",codex,"FINAL AUDIT SUMMARY 2026-07-10:\n- All typecheck/test/build/audit/changelog/pack gates PASS\n- @unbrained/pm-cli bumped to >=2026.7.10 (latest)\n- 0 npm vulnerabilities, 0 open Dependabot alerts, 0 security alerts\n- No secrets in tracked files or full git history\n- No open PRs or issues; CI green; npm latest=2026.7.10; git tag v2026.07.10\n- Functional tests verified with realistic temporary data\n- Stale in_progress items closed; changelog regenerated\n- .agents/pm/extensions/ added to .gitignore (local install artifacts)\n- Missing pm directories (epics, extensions) created for health\n- Release workflow verified: daily conditional, npm+bun+GitHub release, publish retry+provenance fallback\n- Branch feat/agent-enhancement-pass is behind main (PRs already merged); changes need rebase before merge\n- CONFIRMED UPSTREAM CLI ISSUE: registerImporter positional arg handling differs by importer name format (hyphen vs no hyphen)\n- LOCAL ENV ISSUE: npm 11.17.0 EALLOWSCRIPTS when global .npmrc has allow-scripts (CI unaffected)"
+files[9]{path,scope,note}:
+  .github/workflows/ci.yml,project,audited free CI gate
+  .github/workflows/release.yml,project,audited daily change-gated release
+  index.ts,project,implementation and SDK integration
+  manifest.json,project,extension metadata and compatibility
+  package-lock.json,project,reproducible dependency graph
+  package.json,project,current toolchain and release scripts
+  test/smoke.test.ts,project,review regression coverage
+  CHANGELOG.md,project,Generated from pm items via pm-changelog
+  .gitignore,project,Added .agents/pm/extensions/ to ignore local install artifacts
+tests[6]:
+  - command: npm audit --omit=dev
+    scope: project
+    timeout_seconds: 30
+  - command: "npm run changelog:check"
+    scope: project
+    timeout_seconds: 30
+  - command: npm run typecheck
+    scope: project
+    timeout_seconds: 60
+  - command: npm test
+    scope: project
+    timeout_seconds: 300
+  - command: "npm run release:check"
+    path: package.json
+    scope: project
+    timeout_seconds: 600
+    pm_context_mode: schema
+  - command: npm test
+    path: test
+    scope: project
+    timeout_seconds: 300
+    pm_context_mode: schema
+docs[2]{path,scope,note}:
+  CHANGELOG.md,project,Release history generated from pm items
+  README.md,project,user and agent command guidance
+body: "Track the July 6, 2026 fleet pass: align package metadata with latest pm CLI/SDK and pm-changelog, verify daily release automation, run build/test/audit/package checks with real workspace data where practical, inspect GitHub state, and record privacy/history findings without changing pm-cli itself."

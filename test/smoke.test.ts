@@ -954,7 +954,7 @@ test("parseFieldMap is reached via --field-map alias in runImport dry-run", asyn
     async () =>
       cmd.run({
         args: [],
-        options: { "project-key": "PROJ", "field-map": "bogus=x" },
+        options: { "project-key": "PROJ", "field-map": "bogus=x", "dry-run": true },
         pm_root: ".agents/pm",
       }),
     (err: unknown) => {
@@ -1010,4 +1010,5 @@ test("classifyHttpError falls back to compact message for other status codes", (
   assert.match(classifyHttpError(404, "nope"), /Jira API error 404: nope/);
   assert.match(classifyHttpError(500, "boom"), /Jira API error 500: boom/);
   assert.match(classifyHttpError(undefined, "x"), /Jira API error 0: x/);
+  assert.match(classifyHttpError(500, null), /Jira API error 500: $/);
 });
