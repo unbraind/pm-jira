@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Full pm ecosystem production pass for pm-jira ([pm-jira-1soq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-1soq.toon))
+
+### Fixed
+
+- Export --push aborts the whole batch on the first failed item ([pm-jira-58ev](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-58ev.toon))
+
+### Other
+
+- Adversarial review: clean pass, no defects found ([pm-jira-pz02](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-pz02.toon))
+- Full-cycle hardening wave: pm-jira ([pm-jira-122e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-122e.toon))
+- Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
+
 ## 2026.7.6 - 2026-07-06
 
 ### Fixed

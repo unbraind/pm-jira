@@ -542,7 +542,7 @@ export function jiraPreflightErrorMessage(command, diag) {
 // fall through to the compact body preview. Pure + offline-testable.
 export function classifyHttpError(statusCode, body) {
     const code = statusCode ?? 0;
-    const snippet = body.slice(0, 200);
+    const snippet = typeof body === "string" ? body.slice(0, 200) : "";
     if (code === 401) {
         return (`Jira authentication failed (HTTP 401). The JIRA_EMAIL / JIRA_API_TOKEN pair was ` +
             `rejected. Common causes: the API token was revoked or expired, the email is ` +
@@ -865,10 +865,10 @@ async function runImport(options, pmRoot, opts = {}) {
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         let exitCode;
-        if (/error 404/.test(msg)) {
+        if (/error 404/i.test(msg)) {
             exitCode = EXIT_CODE.NOT_FOUND;
         }
-        else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/.test(msg)) {
+        else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/i.test(msg)) {
             exitCode = EXIT_CODE.USAGE;
         }
         else {
