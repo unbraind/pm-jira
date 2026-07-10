@@ -37,6 +37,8 @@ import extension, {
   decidePushOnWrite,
   formatImportProgress,
   countIssueExtras,
+  readStringOptionAliased,
+  classifyHttpError,
 } from "../dist/index.js";
 
 // Mirror the real ExtensionApi surface so activate() can register every
@@ -917,4 +919,95 @@ test("runExportPush: never PUTs an existing item when updateExisting is off (cou
   assert.strictEqual(result.created, 1);
   assert.strictEqual(result.skipped, 1, "the provenance-matched item is skipped, not failed");
   assert.strictEqual(result.failed, 0);
+});
+
+// --- alias flags: --field-map / --project-key -----------------------------
+
+test("readStringOptionAliased returns the first non-empty value across alias keys", () => {
+  assert.strictEqual(readStringOptionAliased({ map: "a=b" }, "map", "field-map"), "a=b");
+  assert.strictEqual(readStringOptionAliased({ fieldMap: "x=y" }, "map", "field-map"), "x=y");
+  assert.strictEqual(readStringOptionAliased({ "field-map": "p=q" }, "map", "field-map"), "p=q");
+  assert.strictEqual(readStringOptionAliased({}, "map", "field-map"), undefined);
+  // project-key alias for project
+  assert.strictEqual(readStringOptionAliased({ projectKey: "PROJ" }, "project", "project-key"), "PROJ");
+  assert.strictEqual(readStringOptionAliased({ "project-key": "PROJ" }, "project", "project-key"), "PROJ");
+});
+
+test("readJqlFilters reads --project-key as an alias for --project", () => {
+  assert.strictEqual(readJqlFilters({ "project-key": "PROJ" }).project, "PROJ");
+  assert.strictEqual(readJqlFilters({ projectKey: "PK" }).project, "PK");
+  assert.strictEqual(readJqlFilters({ project: "P" }).project, "P");
+});
+
+test("buildJql uses the project-key alias via readJqlFilters", () => {
+  assert.strictEqual(
+    buildJql(readJqlFilters({ "project-key": "ALIAS" })),
+    "project = ALIAS AND statusCategory != Done ORDER BY priority ASC"
+  );
+});
+
+test("parseFieldMap is reached via --field-map alias in runImport dry-run", async () => {
+  // --field-map with an unknown source field must still surface a USAGE error
+  // through the alias path (proves the alias is wired into parseFieldMap).
+  const { cmd } = capture();
+  await assert.rejects(
+    async () =>
+      cmd.run({
+        args: [],
+        options: { "project-key": "PROJ", "field-map": "bogus=x" },
+        pm_root: ".agents/pm",
+      }),
+    (err: unknown) => {
+      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      return true;
+    }
+  );
+});
+
+test("--project-key alias drives the import dry-run (no creds needed)", async () => {
+  const prev = {
+    url: process.env.JIRA_BASE_URL, token: process.env.JIRA_API_TOKEN, email: process.env.JIRA_EMAIL,
+  };
+  try {
+    delete process.env.JIRA_BASE_URL;
+    delete process.env.JIRA_API_TOKEN;
+    delete process.env.JIRA_EMAIL;
+    const { cmd } = capture();
+    const res = await cmd.run({
+      args: [],
+      options: { "project-key": "ALIASPROJ", "dry-run": true },
+      pm_root: ".agents/pm",
+    }) as any;
+    assert.strictEqual(res.dryRun, true);
+    assert.strictEqual(res.project, "ALIASPROJ");
+    assert.match(res.jql, /^project = ALIASPROJ AND statusCategory != Done/);
+  } finally {
+    if (prev.url) process.env.JIRA_BASE_URL = prev.url; else delete process.env.JIRA_BASE_URL;
+    if (prev.token) process.env.JIRA_API_TOKEN = prev.token; else delete process.env.JIRA_API_TOKEN;
+    if (prev.email) process.env.JIRA_EMAIL = prev.email; else delete process.env.JIRA_EMAIL;
+  }
+});
+
+// --- improved auth-failure error messages -------------------------------
+
+test("classifyHttpError produces a prescriptive 401 auth message", () => {
+  const msg = classifyHttpError(401, "{\"message\":\"unauthorized\"}");
+  assert.match(msg, /authentication failed/);
+  assert.match(msg, /HTTP 401/);
+  assert.match(msg, /JIRA_API_TOKEN/);
+  assert.match(msg, /api-tokens/);
+  assert.match(msg, /unauthorized/); // body snippet preserved
+});
+
+test("classifyHttpError produces a prescriptive 403 authorization message", () => {
+  const msg = classifyHttpError(403, "forbidden");
+  assert.match(msg, /authorization failed/);
+  assert.match(msg, /HTTP 403/);
+  assert.match(msg, /permission/);
+});
+
+test("classifyHttpError falls back to compact message for other status codes", () => {
+  assert.match(classifyHttpError(404, "nope"), /Jira API error 404: nope/);
+  assert.match(classifyHttpError(500, "boom"), /Jira API error 500: boom/);
+  assert.match(classifyHttpError(undefined, "x"), /Jira API error 0: x/);
 });

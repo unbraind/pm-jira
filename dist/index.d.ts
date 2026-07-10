@@ -108,6 +108,7 @@ export declare function extractJiraKey(text: string | undefined): {
     url: string;
 } | undefined;
 export declare function readStringOption(options: Record<string, unknown>, kebab: string): string | undefined;
+export declare function readStringOptionAliased(options: Record<string, unknown>, ...kebabs: string[]): string | undefined;
 export declare function readNumberOption(options: Record<string, unknown>, kebab: string): number | undefined;
 export declare function readBooleanOption(options: Record<string, unknown>, kebab: string): boolean;
 export declare function optionString(options: Record<string, unknown>, ...keys: string[]): string | undefined;
@@ -133,6 +134,7 @@ export declare function diagnoseCreds(options: Record<string, unknown>, envLike?
 export declare function isMutatingJiraInvocation(command: string, options: Record<string, unknown>): boolean;
 export declare function jiraPreflightShouldFailFast(command: string, options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): boolean;
 export declare function jiraPreflightErrorMessage(command: string, diag: CredDiagnostics): string;
+export declare function classifyHttpError(statusCode: number | undefined, body: string): string;
 export declare function formatImportProgress(fetched: number, jiraTotal: number, maxResults: number): string;
 export interface IssueToItem {
     title: string;
