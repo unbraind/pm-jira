@@ -1123,7 +1123,7 @@ const VALIDATE_FLAGS = [
 ];
 export default defineExtension({
     name: "pm-jira",
-    version: "2026.7.10",
+    version: "2026.7.11",
     activate(api) {
         // -----------------------------------------------------------------------
         // schema — declare Jira provenance fields so the workspace knows them
