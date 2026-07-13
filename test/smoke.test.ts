@@ -1041,6 +1041,13 @@ function withTempTracker(items: { title: string; type?: string }[]): string {
     // Initialize a fresh tracker so `pm list --json` succeeds (returns []).
     const init = spawnSync(PM_BIN, ["--path", dir, "init"], { encoding: "utf-8" });
     assert.strictEqual(init.status, 0, `pm init failed: ${init.stderr}`);
+    // Assert the tracker starts empty — proves the precondition and catches
+    // future changes in tracker initialization that could skew the export.
+    const list = spawnSync(PM_BIN, ["--path", dir, "list", "--json"], { encoding: "utf-8" });
+    assert.strictEqual(list.status, 0, `pm list failed: ${list.stderr}`);
+    const listed = JSON.parse(list.stdout) as { items?: unknown[] } | unknown[];
+    const listedItems = Array.isArray(listed) ? listed : (listed.items ?? []);
+    assert.strictEqual(listedItems.length, 0, "expected a freshly initialized tracker to be empty");
     for (const it of items) {
       const args = ["--path", dir, "create", "task", it.title, "--priority", "3"];
       if (it.type) args.push("--type", it.type);
@@ -1083,12 +1090,12 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
         exported: number;
         pushed: boolean;
         dryRun: boolean;
-        plan: unknown[];
+        plan: { op: string; method: string; endpoint: string; payload: { fields: unknown } }[];
       };
 
       // 1) stdout MUST be clean: the extension must not console.log anything.
       assert.strictEqual(logCalls.length, 0, "exporter must not write to stdout (console.log)");
-      // 2) the preview payload now goes to stderr as a JSON array.
+      // 2) the human payload preview now goes to stderr as a JSON array.
       assert.ok(errorCalls.length > 0, "exporter should write the preview to stderr");
       const previewJson = errorCalls.find((c) => {
         const s = Array.isArray(c) ? String(c[0]) : String(c);
@@ -1101,16 +1108,24 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
       for (const p of preview) {
         assert.ok(p && typeof p === "object" && "fields" in p, "each preview entry is a Jira payload");
       }
-      // 3) the returned object is enriched so `--json` consumers get the data.
+      // 3) the returned object carries the full plan entries (op/method/
+      //    endpoint/payload) — the same array-of-entries shape as pm-github's
+      //    `plan` — so `--json` consumers get the complete, actionable plan.
       assert.strictEqual(result.exported, 2, "exported count matches item count");
       assert.strictEqual(result.pushed, false, "default export is a non-push preview");
       assert.strictEqual(result.dryRun, true, "default export is marked as a dry-run preview");
-      assert.ok(Array.isArray(result.plan), "return must include the plan/payloads array");
-      assert.strictEqual(result.plan.length, 2, "returned plan carries every payload");
+      assert.ok(Array.isArray(result.plan), "return must include the plan entries array");
+      assert.strictEqual(result.plan.length, 2, "returned plan carries every entry");
+      for (const entry of result.plan) {
+        assert.ok(entry && typeof entry === "object", "each plan entry is an object");
+        assert.ok(entry.op === "create" || entry.op === "update", "entry has a create/update op");
+        assert.ok(entry.payload && "fields" in entry.payload, "entry carries its Jira payload");
+      }
+      // The stderr preview is exactly the payloads of the returned plan entries.
       assert.deepStrictEqual(
-        result.plan,
+        result.plan.map((e) => e.payload),
         preview,
-        "returned plan matches the stderr preview payloads exactly"
+        "returned plan entries' payloads match the stderr preview exactly"
       );
     } finally {
       console.log = origLog;
