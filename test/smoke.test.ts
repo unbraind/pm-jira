@@ -1028,9 +1028,11 @@ test("classifyHttpError falls back to compact message for other status codes", (
 // ---------------------------------------------------------------------------
 
 // On Windows the runnable pm shim is `pm.cmd`; the extensionless `pm` name is
-// not directly spawnable (ENOENT/EINVAL). Use the platform-appropriate name so
-// the setup spawns work cross-platform.
+// not spawnable. Node also refuses to spawn `.cmd`/`.bat` directly since the
+// CVE-2024-27980 mitigation (EINVAL), so on win32 we must go through a shell.
+// Args here are static test values (never user input), so `shell:true` is safe.
 const PM_BIN = process.platform === "win32" ? "pm.cmd" : "pm";
+const PM_SPAWN_OPTS = { encoding: "utf-8" as const, shell: process.platform === "win32" };
 
 function withTempTracker(items: { title: string; type?: string }[]): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-jira-export-"));
@@ -1039,12 +1041,12 @@ function withTempTracker(items: { title: string; type?: string }[]): string {
   // try/finally only covers the dir once it has been returned).
   try {
     // Initialize a fresh tracker so `pm list --json` succeeds (returns []).
-    const init = spawnSync(PM_BIN, ["--path", dir, "init"], { encoding: "utf-8" });
-    assert.strictEqual(init.status, 0, `pm init failed: ${init.stderr}`);
+    const init = spawnSync(PM_BIN, ["--path", dir, "init"], PM_SPAWN_OPTS);
+    assert.strictEqual(init.status, 0, `pm init failed: ${init.error?.message ?? init.stderr}`);
     // Assert the tracker starts empty — proves the precondition and catches
     // future changes in tracker initialization that could skew the export.
-    const list = spawnSync(PM_BIN, ["--path", dir, "list", "--json"], { encoding: "utf-8" });
-    assert.strictEqual(list.status, 0, `pm list failed: ${list.stderr}`);
+    const list = spawnSync(PM_BIN, ["--path", dir, "list", "--json"], PM_SPAWN_OPTS);
+    assert.strictEqual(list.status, 0, `pm list failed: ${list.error?.message ?? list.stderr}`);
     const listed = JSON.parse(list.stdout) as { items?: unknown[] } | unknown[];
     const listedItems = Array.isArray(listed) ? listed : (listed.items ?? []);
     assert.strictEqual(listedItems.length, 0, "expected a freshly initialized tracker to be empty");
@@ -1052,10 +1054,10 @@ function withTempTracker(items: { title: string; type?: string }[]): string {
       const args = ["--path", dir, "create", "task", it.title, "--priority", "3"];
       if (it.type) args.push("--type", it.type);
       const created = spawnSync(PM_BIN, args, {
-        encoding: "utf-8",
+        ...PM_SPAWN_OPTS,
         env: { ...process.env, PM_AUTHOR: "pm-jira-test" },
       });
-      assert.strictEqual(created.status, 0, `pm create failed: ${created.stderr}`);
+      assert.strictEqual(created.status, 0, `pm create failed: ${created.error?.message ?? created.stderr}`);
     }
     return dir;
   } catch (err) {
