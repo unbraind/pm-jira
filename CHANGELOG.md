@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Route jira export dry-run preview to stderr + return payloads so stdout stays valid JSON ([pm-jira-rhyu](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-rhyu.toon))
+
 ## 2026.7.11 - 2026-07-11
 
 ### Added

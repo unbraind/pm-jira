@@ -1822,8 +1822,16 @@ export default defineExtension({
         richMapping: rich,
       });
       const payloads = plan.entries.map((e) => e.payload);
-      console.log(JSON.stringify(payloads, null, 2));
-      return { exported: payloads.length, pushed: false };
+      // Route the human preview to STDERR so stdout stays a single stream
+      // (the SDK host renders our return object to stdout). Writing the
+      // payloads to stdout here used to interleave JSON (this preview) with
+      // trailing YAML (the host-rendered return), corrupting `pm jira
+      // export --json`. The returned object now carries the full plan entries
+      // (op/method/endpoint/payload) — the same array-of-entries shape as
+      // `pm github export`'s `plan` field — so machine consumers get the
+      // complete, actionable export plan as clean parseable JSON.
+      console.error(JSON.stringify(payloads, null, 2));
+      return { exported: payloads.length, pushed: false, dryRun: true, plan: plan.entries };
     });
 
     // -----------------------------------------------------------------------

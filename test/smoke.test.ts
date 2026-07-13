@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import extension, {
   CommandError,
@@ -1011,4 +1015,136 @@ test("classifyHttpError falls back to compact message for other status codes", (
   assert.match(classifyHttpError(500, "boom"), /Jira API error 500: boom/);
   assert.match(classifyHttpError(undefined, "x"), /Jira API error 0: x/);
   assert.match(classifyHttpError(500, null), /Jira API error 500: $/);
+});
+
+// ---------------------------------------------------------------------------
+// Regression: `pm jira export` (dry-run / default, no --push) used to write
+// the payloads preview to STDOUT via console.log while the SDK host also
+// rendered the returned object to stdout — so stdout was JSON + trailing
+// YAML and not valid JSON. The fix routes the preview to STDERR and
+// enriches the returned object with the payloads so `--json` yields a single
+// clean, complete JSON object. This test is deterministic + offline (no real
+// Jira network): it spins up a throwaway pm tracker with two known items.
+// ---------------------------------------------------------------------------
+
+// On Windows the runnable pm shim is `pm.cmd`; the extensionless `pm` name is
+// not spawnable. Node also refuses to spawn `.cmd`/`.bat` directly since the
+// CVE-2024-27980 mitigation (EINVAL), so on win32 we must go through a shell.
+// Args here are static test values (never user input), so `shell:true` is safe.
+const PM_BIN = process.platform === "win32" ? "pm.cmd" : "pm";
+const PM_SPAWN_OPTS = { encoding: "utf-8" as const, shell: process.platform === "win32" };
+
+function withTempTracker(items: { title: string; type?: string }[]): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-jira-export-"));
+  // If any setup spawn fails, remove the freshly-created temp dir before
+  // rethrowing so a setup failure never leaks a workspace (the caller's
+  // try/finally only covers the dir once it has been returned).
+  try {
+    // Initialize a fresh tracker so `pm list --json` succeeds (returns []).
+    const init = spawnSync(PM_BIN, ["--path", dir, "init"], PM_SPAWN_OPTS);
+    assert.strictEqual(init.status, 0, `pm init failed: ${init.error?.message ?? init.stderr}`);
+    // Assert the tracker starts empty — proves the precondition and catches
+    // future changes in tracker initialization that could skew the export.
+    const list = spawnSync(PM_BIN, ["--path", dir, "list", "--json"], PM_SPAWN_OPTS);
+    assert.strictEqual(list.status, 0, `pm list failed: ${list.error?.message ?? list.stderr}`);
+    const listed = JSON.parse(list.stdout) as { items?: unknown[] } | unknown[];
+    const listedItems = Array.isArray(listed) ? listed : (listed.items ?? []);
+    assert.strictEqual(listedItems.length, 0, "expected a freshly initialized tracker to be empty");
+    for (const it of items) {
+      const args = ["--path", dir, "create", "task", it.title, "--priority", "3"];
+      if (it.type) args.push("--type", it.type);
+      const created = spawnSync(PM_BIN, args, {
+        ...PM_SPAWN_OPTS,
+        env: { ...process.env, PM_AUTHOR: "pm-jira-test" },
+      });
+      assert.strictEqual(created.status, 0, `pm create failed: ${created.error?.message ?? created.stderr}`);
+    }
+    return dir;
+  } catch (err) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
+}
+
+test("pm jira export (no --push) routes preview to stderr and returns payloads", async () => {
+  const dir = withTempTracker([
+    { title: "Export item alpha" },
+    { title: "Export item beta" },
+  ]);
+  try {
+    const { exporters } = capture();
+    const exporter = exporters["jira"]!;
+
+    // Spy on stdout/console.log and stderr/console.error to prove the preview
+    // is no longer written to stdout. Restore unconditionally via finally.
+    const logCalls: unknown[] = [];
+    const errorCalls: unknown[] = [];
+    const origLog = console.log;
+    const origError = console.error;
+    console.log = (...args: unknown[]) => logCalls.push(args);
+    console.error = (...args: unknown[]) => errorCalls.push(args);
+    try {
+      const result = (await exporter({
+        args: [],
+        options: { project: "PROJ" },
+        pm_root: dir,
+      })) as {
+        exported: number;
+        pushed: boolean;
+        dryRun: boolean;
+        plan: { op: string; method: string; endpoint: string; payload: { fields: unknown } }[];
+      };
+
+      // 1) stdout MUST be clean: the extension must not console.log anything.
+      assert.strictEqual(logCalls.length, 0, "exporter must not write to stdout (console.log)");
+      // 2) the human payload preview now goes to stderr as a JSON array.
+      assert.ok(errorCalls.length > 0, "exporter should write the preview to stderr");
+      // Robustly locate the JSON-array preview: parse each stderr line and keep
+      // the one that yields an array, rather than matching a leading "[" (which
+      // could false-match a "[dry-run] ..." note or "[object Object]").
+      let preview: unknown;
+      const previewJson = errorCalls.find((c) => {
+        try {
+          const parsed = JSON.parse(Array.isArray(c) ? String(c[0]) : String(c));
+          if (Array.isArray(parsed)) {
+            preview = parsed;
+            return true;
+          }
+        } catch {
+          /* not JSON — keep looking */
+        }
+        return false;
+      });
+      assert.ok(previewJson, "stderr should contain the JSON array preview");
+      assert.ok(Array.isArray(preview), "preview must be a JSON array");
+      assert.strictEqual(preview.length, 2, "preview should list both payloads");
+      for (const p of preview) {
+        assert.ok(p && typeof p === "object" && "fields" in p, "each preview entry is a Jira payload");
+      }
+      // 3) the returned object carries the full plan entries (op/method/
+      //    endpoint/payload) — the same array-of-entries shape as pm-github's
+      //    `plan` — so `--json` consumers get the complete, actionable plan.
+      assert.strictEqual(result.exported, 2, "exported count matches item count");
+      assert.strictEqual(result.pushed, false, "default export is a non-push preview");
+      assert.strictEqual(result.dryRun, true, "default export is marked as a dry-run preview");
+      assert.ok(Array.isArray(result.plan), "return must include the plan entries array");
+      assert.strictEqual(result.plan.length, 2, "returned plan carries every entry");
+      for (const entry of result.plan) {
+        assert.ok(entry && typeof entry === "object", "each plan entry is an object");
+        assert.ok(entry.op === "create" || entry.op === "update", "entry has a create/update op");
+        assert.ok(entry.payload && "fields" in entry.payload, "entry carries its Jira payload");
+      }
+      // The stderr preview is exactly the payloads of the returned plan entries.
+      assert.deepStrictEqual(
+        result.plan.map((e) => e.payload),
+        preview,
+        "returned plan entries' payloads match the stderr preview exactly"
+      );
+    } finally {
+      console.log = origLog;
+      console.error = origError;
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
