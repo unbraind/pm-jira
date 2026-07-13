@@ -1027,21 +1027,34 @@ test("classifyHttpError falls back to compact message for other status codes", (
 // Jira network): it spins up a throwaway pm tracker with two known items.
 // ---------------------------------------------------------------------------
 
+// On Windows the runnable pm shim is `pm.cmd`; the extensionless `pm` name is
+// not directly spawnable (ENOENT/EINVAL). Use the platform-appropriate name so
+// the setup spawns work cross-platform.
+const PM_BIN = process.platform === "win32" ? "pm.cmd" : "pm";
+
 function withTempTracker(items: { title: string; type?: string }[]): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-jira-export-"));
-  // Initialize a fresh tracker so `pm list --json` succeeds (returns []).
-  const init = spawnSync("pm", ["--path", dir, "init"], { encoding: "utf-8" });
-  assert.strictEqual(init.status, 0, `pm init failed: ${init.stderr}`);
-  for (const it of items) {
-    const args = ["--path", dir, "create", "task", it.title, "--priority", "3"];
-    if (it.type) args.push("--type", it.type);
-    const created = spawnSync("pm", args, {
-      encoding: "utf-8",
-      env: { ...process.env, PM_AUTHOR: "pm-jira-test" },
-    });
-    assert.strictEqual(created.status, 0, `pm create failed: ${created.stderr}`);
+  // If any setup spawn fails, remove the freshly-created temp dir before
+  // rethrowing so a setup failure never leaks a workspace (the caller's
+  // try/finally only covers the dir once it has been returned).
+  try {
+    // Initialize a fresh tracker so `pm list --json` succeeds (returns []).
+    const init = spawnSync(PM_BIN, ["--path", dir, "init"], { encoding: "utf-8" });
+    assert.strictEqual(init.status, 0, `pm init failed: ${init.stderr}`);
+    for (const it of items) {
+      const args = ["--path", dir, "create", "task", it.title, "--priority", "3"];
+      if (it.type) args.push("--type", it.type);
+      const created = spawnSync(PM_BIN, args, {
+        encoding: "utf-8",
+        env: { ...process.env, PM_AUTHOR: "pm-jira-test" },
+      });
+      assert.strictEqual(created.status, 0, `pm create failed: ${created.stderr}`);
+    }
+    return dir;
+  } catch (err) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
   }
-  return dir;
 }
 
 test("pm jira export (no --push) routes preview to stderr and returns payloads", async () => {
