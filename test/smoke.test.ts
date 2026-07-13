@@ -1097,12 +1097,23 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
       assert.strictEqual(logCalls.length, 0, "exporter must not write to stdout (console.log)");
       // 2) the human payload preview now goes to stderr as a JSON array.
       assert.ok(errorCalls.length > 0, "exporter should write the preview to stderr");
+      // Robustly locate the JSON-array preview: parse each stderr line and keep
+      // the one that yields an array, rather than matching a leading "[" (which
+      // could false-match a "[dry-run] ..." note or "[object Object]").
+      let preview: unknown;
       const previewJson = errorCalls.find((c) => {
-        const s = Array.isArray(c) ? String(c[0]) : String(c);
-        return s.startsWith("[");
+        try {
+          const parsed = JSON.parse(Array.isArray(c) ? String(c[0]) : String(c));
+          if (Array.isArray(parsed)) {
+            preview = parsed;
+            return true;
+          }
+        } catch {
+          /* not JSON — keep looking */
+        }
+        return false;
       });
       assert.ok(previewJson, "stderr should contain the JSON array preview");
-      const preview = JSON.parse(String((previewJson as unknown[])[0]));
       assert.ok(Array.isArray(preview), "preview must be a JSON array");
       assert.strictEqual(preview.length, 2, "preview should list both payloads");
       for (const p of preview) {
