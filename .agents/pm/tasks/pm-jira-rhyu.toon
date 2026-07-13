@@ -1,0 +1,16 @@
+id: pm-jira-rhyu
+title: Route jira export dry-run preview to stderr + return payloads so stdout stays valid JSON
+description: "pm jira export corrupted stdout: extension console.log'd the payloads to stdout while the SDK host also renders the return object, yielding JSON+trailing-YAML. Fix: route preview to stderr and include payloads in the returned object so --json is clean+complete. Mirror of companion item pm-cli-website-ex9n."
+type: Task
+status: closed
+priority: 1
+tags[3]: agent-ux,bug,export
+created_at: "2026-07-13T19:18:30.692Z"
+updated_at: "2026-07-13T20:15:09.520Z"
+closed_at: "2026-07-13T20:15:09.520Z"
+author: pi-jira-fix
+resolution: "Preview routed to stderr; return enriched with {dryRun,plan}"
+expected_result: pm jira export --json emits a single valid JSON object containing all payloads
+actual_result: "Before fix: stdout was a JSON array followed by trailing YAML (unparseable). After fix: stdout is only the host render; --json is clean+complete"
+close_reason: "Preview routed to stderr; return enriched with {dryRun,plan}"
+body: ""

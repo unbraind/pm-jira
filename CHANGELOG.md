@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Route jira export dry-run preview to stderr + return payloads so stdout stays valid JSON ([pm-jira-rhyu](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-rhyu.toon))
+
 ## 2026.7.11 - 2026-07-11
 
 ### Added
@@ -16,60 +22,45 @@
 - Full-cycle hardening wave: pm-jira ([pm-jira-122e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-122e.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
 
-## 2026.7.6 - 2026-07-06
-
-### Fixed
-
-- Fix release CI ordering (publish-before-tag) ([pm-jira-lts0](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-lts0.toon))
-
-### Other
-
-- Align Node engine with pm CLI runtime ([pm-jira-1qmd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-1qmd.toon))
-- Regenerate CHANGELOG after pm close item ([pm-jira-0ygy](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-0ygy.toon))
-
-## 2026.6.13 - 2026-06-13
-
-### Other
-
-- Daily Release publish step runs prepublishOnly post-tag: align npm publish with --ignore-scripts ([pm-jira-elhd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-elhd.toon))
-
-## 2026.6.8 - 2026-06-08
+## 2026.7.7 - 2026-07-07
 
 ### Added
 
 - Import Jira components and sprint context tags ([pm-jira-6r7i](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-6r7i.toon))
-
-### Other
-
-- Harden release readiness checks ([pm-jira-tsju](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-tsju.toon))
-- Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-jira-5y0r](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-5y0r.toon))
-
-## 2026.6.4-1 - 2026-06-04
-
-### Added
-
 - preflight: fail-fast Jira credential validation gate ([pm-jira-t867](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-t867.toon))
-
-## 2026.6.4 - 2026-06-04
-
-### Other
-
-- Export --update-existing PUT + import progress and attachment/comment transparency ([pm-jira-yhm3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-yhm3.toon))
-
-## 2026.6.3 - 2026-06-03
-
-### Added
-
 - pm-jira: deepen filters/dry-run/field-mapping/validate/hooks (enhancement brief 2026-06-03) ([pm-jira-i7fd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-i7fd.toon))
 - pm-jira: domain-max SDK enhancement (idempotent import, preflight, rate-limit backoff) ([pm-jira-4804](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-4804.toon))
 - export-on-write hook (opt-in) + add 'hooks' capability ([pm-jira-65ao](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-65ao.toon))
+- Adopt full SDK surface: jira import/export + schema fields + flags ([pm-jira-27sk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-27sk.toon))
+- Hands-on functional test pass 2026-05-29 (real data) ([pm-jira-xfd9](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-xfd9.toon))
+- Production-harden jira sync command ([pm-jira-rjp3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-rjp3.toon))
+- Add publish retry + provenance fallback to release workflow ([pm-jira-zm0z](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-zm0z.toon))
+- Add bun-install verification to release workflow ([pm-jira-iycb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-iycb.toon))
 
 ### Changed
 
 - Idempotent import: match on Jira key, update instead of duplicate; persist jira_key/jira_url ([pm-jira-3b0b](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-3b0b.toon))
 
+### Fixed
+
+- Fix release CI ordering (publish-before-tag) ([pm-jira-lts0](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-lts0.toon))
+- jira sync threw plain Error (no exitCode) → runtime double-invocation ([pm-jira-6cr5](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-6cr5.toon))
+- description (ADF) and priority fetched but never written to pm items ([pm-jira-1aqg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1aqg.toon))
+- sync failures return {success:false} instead of throwing -\> exit code 0 ([pm-jira-lk24](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-lk24.toon))
+- dry-run/max-results flags read kebab keys; --dry-run silently writes ([pm-jira-dhsn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-dhsn.toon))
+- --dry-run silently wrote items instead of previewing ([pm-jira-w6m3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-w6m3.toon))
+- --max-results ignored (always 500) ([pm-jira-y758](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-y758.toon))
+- Failures exited 0 (missing creds / no project / fetch error) ([pm-jira-rb98](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-rb98.toon))
+- ci: fix release workflow step ordering ([pm-jira-469v](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-469v.toon))
+
 ### Other
 
+- Align Node engine with pm CLI runtime ([pm-jira-1qmd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-1qmd.toon))
+- Regenerate CHANGELOG after pm close item ([pm-jira-0ygy](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-0ygy.toon))
+- Daily Release publish step runs prepublishOnly post-tag: align npm publish with --ignore-scripts ([pm-jira-elhd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-elhd.toon))
+- Harden release readiness checks ([pm-jira-tsju](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-tsju.toon))
+- Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-jira-5y0r](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-5y0r.toon))
+- Export --update-existing PUT + import progress and attachment/comment transparency ([pm-jira-yhm3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-yhm3.toon))
 - Production-readiness audit 2026-05-28 ([pm-jira-fc13](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-fc13.toon))
 - preflight capability: pm jira preflight command + registerPreflight guard ([pm-jira-vfb3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-vfb3.toon))
 - Robustness: 429/503 rate-limit backoff + Retry-After on GET/POST ([pm-jira-2up8](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-2up8.toon))
@@ -83,61 +74,4 @@
 - Field-mapping depth + --map override (both directions) ([pm-jira-7bmf](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-7bmf.toon))
 - --dry-run on import AND export (no-network), with strace proof ([pm-jira-4r5q](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-4r5q.toon))
 - JQL builder + convenience filters (--assignee/--issue-type/--label/--updated-since) ([pm-jira-ko1c](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-ko1c.toon))
-
-## 2026.6.2 - 2026-06-02
-
-### Added
-
-- Adopt full SDK surface: jira import/export + schema fields + flags ([pm-jira-27sk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-27sk.toon))
-
-## 2026.6.1 - 2026-06-01
-
-### Fixed
-
-- jira sync threw plain Error (no exitCode) → runtime double-invocation ([pm-jira-6cr5](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-6cr5.toon))
-
-## 2026.5.29-1 - 2026-05-29
-
-### Added
-
-- Hands-on functional test pass 2026-05-29 (real data) ([pm-jira-xfd9](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-xfd9.toon))
-
-### Fixed
-
-- description (ADF) and priority fetched but never written to pm items ([pm-jira-1aqg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1aqg.toon))
-- sync failures return {success:false} instead of throwing -\> exit code 0 ([pm-jira-lk24](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-lk24.toon))
-- dry-run/max-results flags read kebab keys; --dry-run silently writes ([pm-jira-dhsn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-dhsn.toon))
-
-## 2026.5.29 - 2026-05-29
-
-### Added
-
-- Production-harden jira sync command ([pm-jira-rjp3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-rjp3.toon))
-
-### Fixed
-
-- --dry-run silently wrote items instead of previewing ([pm-jira-w6m3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-w6m3.toon))
-- --max-results ignored (always 500) ([pm-jira-y758](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-y758.toon))
-- Failures exited 0 (missing creds / no project / fetch error) ([pm-jira-rb98](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-rb98.toon))
-
-## 2026.5.28 - 2026-05-28
-
-### Added
-
-- Add publish retry + provenance fallback to release workflow ([pm-jira-zm0z](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-zm0z.toon))
-
-## 2026.5.27 - 2026-05-27
-
-### Added
-
-- Add bun-install verification to release workflow ([pm-jira-iycb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-iycb.toon))
-
-## 2026.5.26 - 2026-05-26
-
-### Fixed
-
-- ci: fix release workflow step ordering ([pm-jira-469v](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-469v.toon))
-
-### Other
-
 - Release readiness hardening for pm-jira ([pm-jira-5d71](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-5d71.toon))
