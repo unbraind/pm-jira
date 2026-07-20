@@ -121,6 +121,14 @@ test("buildAtomicCreateMutation derives stable, unique, prefix-correct ids", () 
   // Deterministic: same inputs reproduce the same ids.
   const m0Again = buildAtomicCreateMutation(item, 0, txId, "test-", normalize);
   assert.strictEqual(m0.id, m0Again.id, "id is deterministic for (txId, index)");
+  // Structural (not probabilistic) in-batch uniqueness: a large batch under one
+  // transaction id must produce all-distinct ids — the raw index suffix
+  // guarantees this where an 8-hex digest of `txId:index` could still collide.
+  const ids = new Set<string>();
+  for (let i = 0; i < 5000; i++) {
+    ids.add(buildAtomicCreateMutation(item, i, txId, "test-", normalize).id);
+  }
+  assert.strictEqual(ids.size, 5000, "5000 creates in one tx yield 5000 unique ids");
 });
 
 test("buildAtomicCreateMutation maps IssueToItem fields to create options", () => {

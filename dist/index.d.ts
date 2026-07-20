@@ -177,13 +177,15 @@ export declare function deriveAtomicTransactionId(jql: string, issueKeys: readon
  *
  * Each create gets a STABLE, transaction-owned id derived deterministically
  * from `(transactionId, index)` so a retried transaction resumes instead of
- * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId:index).slice(0,8)>", prefix)`.
- * The index guarantees uniqueness within the batch; the content-derived
- * transactionId guarantees the same issues always map to the same ids.
+ * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId).slice(0,8)>-<index>", prefix)`.
+ * The literal `index` suffix makes in-batch uniqueness STRUCTURAL (never a
+ * probabilistic hash collision, which an 8-hex digest of `txId:index` could
+ * still hit on a large import); the content-derived transactionId prefix
+ * guarantees the same issues always map to the same ids across retries.
  * `normalizeItemId` lowercases the input and prepends the normalized prefix
- * when absent, so the hex tokens (already lowercase) round-trip
- * deterministically. The `options` bag mirrors the exact `pm create` flags the
- * non-atomic path uses (title/type/status/priority/description/body/deadline/tags).
+ * when absent, so the token (already lowercase) round-trips deterministically.
+ * The `options` bag mirrors the exact `pm create` flags the non-atomic path
+ * uses (title/type/status/priority/description/body/deadline/tags).
  */
 export declare function buildAtomicCreateMutation(item: IssueToItem, index: number, transactionId: string, idPrefix: string, normalizeItemId: (input: string, prefix: string) => string): BulkItemCreateMutation;
 /**
