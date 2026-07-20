@@ -2,13 +2,14 @@ id: pm-jira-c5vc
 title: adopt commitItemMutations for atomic import
 description: ""
 type: Feature
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-07-20T08:12:42.973Z"
-updated_at: "2026-07-20T08:27:19.811Z"
-assignee: pi-agent
+updated_at: "2026-07-20T08:27:48.160Z"
+closed_at: "2026-07-20T08:27:48.159Z"
 author: pi-agent
 notes[1]{created_at,author,text}:
   "2026-07-20T08:27:19.811Z",pi-agent,"Implemented --atomic on pm jira import using the official SDK commitItemMutations (>=2026.7.20). Stable per-create ids via normalizeItemId(jira-tx-<sha1(tx:i)>, prefix); transactionId = jira-import-<sha1(jql|issueKeys)>. createCompensation=delete. Added ImportRunOptions test seams (commitItemMutations/readSettings/normalizeItemId/issues). 9 new tests (happy/resume/rollback/dry-run/guard + pure id derivation); 75/75 green; build+typecheck+changelog:check clean. Bumped devDep @unbrained/pm-cli to ^2026.7.20 so the SDK primitive resolves."
+close_reason: "Implemented --atomic via commitItemMutations; build/test/typecheck/changelog:check all green; committed and pushed to feat/atomic-import-commititemmutations"
 body: ""
