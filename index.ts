@@ -1102,8 +1102,36 @@ let cachedCommitItemMutations: CommitItemMutations | null | undefined;
  * old to export it (requires >=2026.7.20). Mirrors pm-csv's
  * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
  * module scope so repeated --atomic calls don't re-import the SDK.
+ *
+ * `importSdk` is an injection seam for tests: when supplied, the module-level
+ * cache is bypassed and the SAME import-failure / not-a-function guards run
+ * against the injected module, so both error branches are unit-testable
+ * without an actual old SDK on disk. Production always uses the default
+ * (cached) dynamic import.
  */
-async function resolveCommitItemMutations(): Promise<CommitItemMutations> {
+export async function resolveCommitItemMutations(
+  importSdk?: () => Promise<Partial<typeof import("@unbrained/pm-cli/sdk")>>,
+): Promise<CommitItemMutations> {
+  if (importSdk) {
+    let mod: Partial<typeof import("@unbrained/pm-cli/sdk")>;
+    try {
+      mod = await importSdk();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new CommandError(
+        `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`,
+        EXIT_CODE.USAGE,
+      );
+    }
+    const injected = mod.commitItemMutations;
+    if (typeof injected !== "function") {
+      throw new CommandError(
+        "--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.",
+        EXIT_CODE.USAGE,
+      );
+    }
+    return injected;
+  }
   if (cachedCommitItemMutations === null) {
     throw new CommandError(
       "--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but it could not be resolved (a prior attempt in this process failed). Ensure @unbrained/pm-cli is installed and up to date.",
@@ -1149,10 +1177,16 @@ export function deriveAtomicTransactionId(
   jql: string,
   issueKeys: readonly string[],
 ): string {
+  // Sort the keys before hashing so the id is INDEPENDENT of Jira's result
+  // ordering — Jira does not guarantee a stable order without an explicit
+  // ORDER BY, so a crash + retry can re-fetch the same issues in a different
+  // sequence. Hashing sorted keys keeps "same issues => same transactionId =>
+  // resume" true regardless of fetch order (the crash-recovery contract).
+  const sortedKeys = [...issueKeys].sort();
   const hash = createHash("sha1")
     .update(jql)
     .update("\x1f") // unit-separator between scope and content
-    .update(JSON.stringify(issueKeys))
+    .update(JSON.stringify(sortedKeys))
     .digest("hex")
     .slice(0, 12);
   return `${ATOMIC_TX_PREFIX}${hash}`;
@@ -1162,31 +1196,38 @@ export function deriveAtomicTransactionId(
  * Build one {@link BulkItemCreateMutation} for an imported issue.
  *
  * Each create gets a STABLE, transaction-owned id derived deterministically
- * from `(transactionId, index)` so a retried transaction resumes instead of
- * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId).slice(0,8)>-<index>", prefix)`.
- * The literal `index` suffix makes in-batch uniqueness STRUCTURAL (never a
- * probabilistic hash collision, which an 8-hex digest of `txId:index` could
- * still hit on a large import); the content-derived transactionId prefix
- * guarantees the same issues always map to the same ids across retries.
- * `normalizeItemId` lowercases the input and prepends the normalized prefix
- * when absent, so the token (already lowercase) round-trips deterministically.
- * The `options` bag mirrors the exact `pm create` flags the non-atomic path
- * uses (title/type/status/priority/description/body/deadline/tags).
+ * from `(transactionId, jiraKey)` so a retried transaction resumes instead of
+ * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId)[:8]>-<sanitizedKey>", prefix)`.
+ * The id is keyed on the Jira issue KEY (globally unique + stable per issue),
+ * NOT the positional index — otherwise a crash + retry that re-fetches the
+ * same issues in a DIFFERENT order (Jira gives no stable order without
+ * ORDER BY) would map the same issue to a different index => a different id =>
+ * a duplicate create instead of a resume. Jira guarantees unique keys, so the
+ * sanitized key is structurally unique within a batch; the content-derived
+ * transactionId prefix scopes ids to this import. `normalizeItemId` lowercases
+ * the input and prepends the normalized prefix when absent, so the token
+ * (already lowercase) round-trips deterministically. The `options` bag mirrors
+ * the exact `pm create` flags the non-atomic path uses
+ * (title/type/status/priority/description/body/deadline/tags).
  */
 export function buildAtomicCreateMutation(
   item: IssueToItem,
-  index: number,
+  jiraKey: string,
   transactionId: string,
   idPrefix: string,
   normalizeItemId: (input: string, prefix: string) => string,
 ): BulkItemCreateMutation {
-  // Short, stable digest of the whole transaction id; the raw index suffix
-  // (appended below) is what guarantees distinct ids within one batch.
+  // Short, stable digest of the whole transaction id; the sanitized Jira key
+  // suffix (appended below) is what guarantees a stable, distinct id per issue
+  // regardless of the order Jira returns results in.
   const txToken = createHash("sha1")
     .update(transactionId)
     .digest("hex")
     .slice(0, 8);
-  const id = normalizeItemId(`jira-tx-${txToken}-${index}`, idPrefix);
+  // Jira keys are [A-Z][A-Z0-9]+-<n>; lowercase + collapse any stray
+  // non-alphanumerics so the token is a valid, stable id component.
+  const keyToken = jiraKey.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const id = normalizeItemId(`jira-tx-${txToken}-${keyToken}`, idPrefix);
   const options: BulkItemCreateMutation["options"] = {
     title: item.title,
     status: item.status,
@@ -1226,12 +1267,29 @@ export async function importJiraAtomic(
   const commit: CommitItemMutations = opts.commitItemMutations
     ? opts.commitItemMutations
     : await resolveCommitItemMutations();
+  // Resolve the SDK once through the SAME guarded path used for
+  // commitItemMutations, so a missing/old SDK surfaces the friendly
+  // "upgrade to >=2026.7.20" CommandError rather than a raw module-not-found
+  // rejection when normalizeItemId/readSettings are not injected (tests).
+  let sdkHelpers: typeof import("@unbrained/pm-cli/sdk") | undefined;
+  const getSdk = async (): Promise<typeof import("@unbrained/pm-cli/sdk")> => {
+    if (sdkHelpers) return sdkHelpers;
+    try {
+      sdkHelpers = await import("@unbrained/pm-cli/sdk");
+      return sdkHelpers;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new CommandError(
+        `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`,
+        EXIT_CODE.USAGE,
+      );
+    }
+  };
   const normalizeItemId: (input: string, prefix: string) => string =
-    opts.normalizeItemId ??
-    (await import("@unbrained/pm-cli/sdk")).normalizeItemId;
+    opts.normalizeItemId ?? (await getSdk()).normalizeItemId;
   const readSettings: (pmRoot: string) => Promise<{ id_prefix?: string }> =
     opts.readSettings ??
-    ((await import("@unbrained/pm-cli/sdk")).readSettings as (
+    ((await getSdk()).readSettings as (
       pmRoot: string,
     ) => Promise<{ id_prefix?: string }>);
 
@@ -1244,8 +1302,8 @@ export async function importJiraAtomic(
     // still works (the non-atomic path never reads settings either).
   }
 
-  const mutations: BulkItemMutation[] = filtered.map(({ item }, i) =>
-    buildAtomicCreateMutation(item, i, transactionId, idPrefix, normalizeItemId),
+  const mutations: BulkItemMutation[] = filtered.map(({ issue, item }) =>
+    buildAtomicCreateMutation(item, issue.key, transactionId, idPrefix, normalizeItemId),
   );
 
   let result: CommitItemMutationsResult;

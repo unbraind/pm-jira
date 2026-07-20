@@ -9,6 +9,7 @@ import {
   runImport,
   deriveAtomicTransactionId,
   buildAtomicCreateMutation,
+  resolveCommitItemMutations,
   CommandError,
   EXIT_CODE,
 } from "../dist/index.js";
@@ -102,33 +103,39 @@ test("deriveAtomicTransactionId is deterministic from jql + issue keys", () => {
   // Different JQL with same keys => different id.
   const idD = deriveAtomicTransactionId("project = Q", ["P-1", "P-2"]);
   assert.notStrictEqual(idA, idD, "different jql => different id");
+  // Order-INDEPENDENT: Jira gives no stable order without ORDER BY, so a crash
+  // + retry can re-fetch the same issues in a different sequence. The tx id
+  // must be identical regardless of key order (the crash-recovery contract).
+  const idE = deriveAtomicTransactionId("project = P", ["P-2", "P-1"]);
+  assert.strictEqual(idA, idE, "reordered same keys => same id (resume, not fresh import)");
 });
 
-test("buildAtomicCreateMutation derives stable, unique, prefix-correct ids", () => {
+test("buildAtomicCreateMutation derives stable, unique, prefix-correct, order-independent ids", () => {
   const txId = "jira-import-abcdef123456";
   const normalize = (input: string, prefix: string) => `${prefix}${input}`;
   const item: import("../dist/index.js").IssueToItem = {
     title: "T", status: "open", priority: 3, type: "Task", body: "", tags: [],
     description: "d", jiraKey: "X-1", jiraUrl: "https://x/X-1",
   };
-  const m0 = buildAtomicCreateMutation(item, 0, txId, "test-", normalize);
-  const m1 = buildAtomicCreateMutation(item, 1, txId, "test-", normalize);
+  const m0 = buildAtomicCreateMutation(item, "PROJ-1", txId, "test-", normalize);
+  const m1 = buildAtomicCreateMutation(item, "PROJ-2", txId, "test-", normalize);
   assert.strictEqual(m0.op, "create");
   assert.strictEqual(m1.op, "create");
   assert.ok(m0.id.startsWith("test-jira-tx-"), "prefix is applied");
   assert.ok(m1.id.startsWith("test-jira-tx-"));
-  assert.notStrictEqual(m0.id, m1.id, "ids are unique within the batch (by index)");
-  // Deterministic: same inputs reproduce the same ids.
-  const m0Again = buildAtomicCreateMutation(item, 0, txId, "test-", normalize);
-  assert.strictEqual(m0.id, m0Again.id, "id is deterministic for (txId, index)");
-  // Structural (not probabilistic) in-batch uniqueness: a large batch under one
-  // transaction id must produce all-distinct ids — the raw index suffix
-  // guarantees this where an 8-hex digest of `txId:index` could still collide.
+  assert.notStrictEqual(m0.id, m1.id, "distinct keys => distinct ids");
+  // Deterministic AND order-independent: the id depends on the Jira KEY, not the
+  // fetch position — the same issue re-fetched at any index reproduces the same
+  // id, so a reordered retry resumes instead of duplicating.
+  const m0Again = buildAtomicCreateMutation(item, "PROJ-1", txId, "test-", normalize);
+  assert.strictEqual(m0.id, m0Again.id, "id is deterministic for (txId, jiraKey), index-free");
+  // Structural (not probabilistic) in-batch uniqueness: Jira guarantees unique
+  // keys, so a large batch under one transaction id yields all-distinct ids.
   const ids = new Set<string>();
   for (let i = 0; i < 5000; i++) {
-    ids.add(buildAtomicCreateMutation(item, i, txId, "test-", normalize).id);
+    ids.add(buildAtomicCreateMutation(item, `PROJ-${i}`, txId, "test-", normalize).id);
   }
-  assert.strictEqual(ids.size, 5000, "5000 creates in one tx yield 5000 unique ids");
+  assert.strictEqual(ids.size, 5000, "5000 distinct keys in one tx yield 5000 unique ids");
 });
 
 test("buildAtomicCreateMutation maps IssueToItem fields to create options", () => {
@@ -144,7 +151,7 @@ test("buildAtomicCreateMutation maps IssueToItem fields to create options", () =
     jiraKey: "X-1",
     jiraUrl: "https://x/X-1",
   };
-  const m = buildAtomicCreateMutation(item, 0, "jira-import-abc", "pm-", (i, p) => `${p}${i}`);
+  const m = buildAtomicCreateMutation(item, "X-1", "jira-import-abc", "pm-", (i, p) => `${p}${i}`);
   assert.strictEqual(m.options.title, "[X-1] Thing");
   assert.strictEqual(m.options.status, "open");
   assert.strictEqual(m.options.type, "Bug");
@@ -301,11 +308,49 @@ test("atomic --atomic flag is surfaced on the dry-run return", async () => {
   }
 });
 
-test("atomic SDK guard: commitItemMutations not a function throws a clear USAGE error", async () => {
+test("resolveCommitItemMutations: missing export throws the USAGE upgrade guard", async () => {
+  // Exercise the REAL guard: an injected importer that returns an SDK module
+  // WITHOUT commitItemMutations (an old @unbrained/pm-cli) must produce the
+  // human-readable CommandError with EXIT_CODE.USAGE and the upgrade hint.
+  await assert.rejects(
+    async () => resolveCommitItemMutations(async () => ({}) as never),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandError);
+      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.match((err as Error).message, /does not export it as a function/);
+      assert.match((err as Error).message, />=2026\.7\.20/);
+      return true;
+    },
+  );
+});
+
+test("resolveCommitItemMutations: an import failure throws the USAGE could-not-import guard", async () => {
+  await assert.rejects(
+    async () =>
+      resolveCommitItemMutations(async () => {
+        throw new Error("Cannot find module '@unbrained/pm-cli/sdk'");
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandError);
+      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.match((err as Error).message, /could not be imported/);
+      return true;
+    },
+  );
+});
+
+test("resolveCommitItemMutations: a valid injected export is returned as-is", async () => {
+  const fake = (async () => ({})) as never;
+  const resolved = await resolveCommitItemMutations(async () => ({ commitItemMutations: fake }) as never);
+  assert.strictEqual(resolved, fake, "the exported function is returned unchanged");
+});
+
+test("atomic seam: an injected non-function commitItemMutations fails at call time", async () => {
+  // Distinct from the resolve guard above: when a caller injects a bad
+  // commitItemMutations via the TEST SEAM (bypassing resolveCommitItemMutations),
+  // the failure surfaces at call time rather than through the upgrade guard.
   const root = freshTracker();
   try {
-    // Inject a non-function to simulate an old SDK that does not export the
-    // primitive (the resolveCommitItemMutations guard would throw this message).
     await assert.rejects(
       async () =>
         runImport({ project: "PROJ" }, root, {

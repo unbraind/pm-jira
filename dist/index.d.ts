@@ -161,6 +161,20 @@ export declare function issueToItem(issue: JiraIssue, baseUrl: string, optionsOr
  */
 type CommitItemMutations = (options: CommitItemMutationsOptions) => Promise<CommitItemMutationsResult>;
 /**
+ * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
+ * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
+ * old to export it (requires >=2026.7.20). Mirrors pm-csv's
+ * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
+ * module scope so repeated --atomic calls don't re-import the SDK.
+ *
+ * `importSdk` is an injection seam for tests: when supplied, the module-level
+ * cache is bypassed and the SAME import-failure / not-a-function guards run
+ * against the injected module, so both error branches are unit-testable
+ * without an actual old SDK on disk. Production always uses the default
+ * (cached) dynamic import.
+ */
+export declare function resolveCommitItemMutations(importSdk?: () => Promise<Partial<typeof import("@unbrained/pm-cli/sdk")>>): Promise<CommitItemMutations>;
+/**
  * Derive a stable, resumable transaction id from the exact content being
  * imported: the ordered list of Jira issue keys plus the JQL/project that
  * scoped them. `jira-import-<sha1(jql \x1f sortedKeys)>` (12 hex chars).
@@ -176,18 +190,21 @@ export declare function deriveAtomicTransactionId(jql: string, issueKeys: readon
  * Build one {@link BulkItemCreateMutation} for an imported issue.
  *
  * Each create gets a STABLE, transaction-owned id derived deterministically
- * from `(transactionId, index)` so a retried transaction resumes instead of
- * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId).slice(0,8)>-<index>", prefix)`.
- * The literal `index` suffix makes in-batch uniqueness STRUCTURAL (never a
- * probabilistic hash collision, which an 8-hex digest of `txId:index` could
- * still hit on a large import); the content-derived transactionId prefix
- * guarantees the same issues always map to the same ids across retries.
- * `normalizeItemId` lowercases the input and prepends the normalized prefix
- * when absent, so the token (already lowercase) round-trips deterministically.
- * The `options` bag mirrors the exact `pm create` flags the non-atomic path
- * uses (title/type/status/priority/description/body/deadline/tags).
+ * from `(transactionId, jiraKey)` so a retried transaction resumes instead of
+ * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId)[:8]>-<sanitizedKey>", prefix)`.
+ * The id is keyed on the Jira issue KEY (globally unique + stable per issue),
+ * NOT the positional index — otherwise a crash + retry that re-fetches the
+ * same issues in a DIFFERENT order (Jira gives no stable order without
+ * ORDER BY) would map the same issue to a different index => a different id =>
+ * a duplicate create instead of a resume. Jira guarantees unique keys, so the
+ * sanitized key is structurally unique within a batch; the content-derived
+ * transactionId prefix scopes ids to this import. `normalizeItemId` lowercases
+ * the input and prepends the normalized prefix when absent, so the token
+ * (already lowercase) round-trips deterministically. The `options` bag mirrors
+ * the exact `pm create` flags the non-atomic path uses
+ * (title/type/status/priority/description/body/deadline/tags).
  */
-export declare function buildAtomicCreateMutation(item: IssueToItem, index: number, transactionId: string, idPrefix: string, normalizeItemId: (input: string, prefix: string) => string): BulkItemCreateMutation;
+export declare function buildAtomicCreateMutation(item: IssueToItem, jiraKey: string, transactionId: string, idPrefix: string, normalizeItemId: (input: string, prefix: string) => string): BulkItemCreateMutation;
 /**
  * Commit every imported create in one atomic, crash-recoverable transaction
  * via the official `commitItemMutations` SDK helper. On failure every applied
