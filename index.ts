@@ -1097,6 +1097,24 @@ type CommitItemMutations = (
 let cachedCommitItemMutations: CommitItemMutations | null | undefined;
 
 /**
+ * Assert a dynamically-resolved `@unbrained/pm-cli/sdk` export is callable,
+ * throwing the shared, friendly {@link CommandError} (USAGE) when the installed
+ * SDK is too old to provide it. Centralizing this guard keeps the check and the
+ * upgrade message identical across every --atomic SDK dependency
+ * (`commitItemMutations`, `normalizeItemId`, `readSettings`) so the copies can
+ * never drift, and stops missing exports falling through to a raw `TypeError`.
+ */
+function assertSdkFunction<F>(fn: unknown, exportName: string): F {
+  if (typeof fn !== "function") {
+    throw new CommandError(
+      `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export ${exportName} as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.`,
+      EXIT_CODE.USAGE,
+    );
+  }
+  return fn as F;
+}
+
+/**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
  * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
  * old to export it (requires >=2026.7.20). Mirrors pm-csv's
@@ -1123,14 +1141,10 @@ export async function resolveCommitItemMutations(
         EXIT_CODE.USAGE,
       );
     }
-    const injected = mod.commitItemMutations;
-    if (typeof injected !== "function") {
-      throw new CommandError(
-        "--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.",
-        EXIT_CODE.USAGE,
-      );
-    }
-    return injected;
+    return assertSdkFunction<CommitItemMutations>(
+      mod.commitItemMutations,
+      "commitItemMutations",
+    );
   }
   if (cachedCommitItemMutations === null) {
     throw new CommandError(
@@ -1150,13 +1164,17 @@ export async function resolveCommitItemMutations(
       EXIT_CODE.USAGE,
     );
   }
-  const commit = mod.commitItemMutations;
-  if (typeof commit !== "function") {
-    cachedCommitItemMutations = null;
-    throw new CommandError(
-      "--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.",
-      EXIT_CODE.USAGE,
+  let commit: CommitItemMutations;
+  try {
+    commit = assertSdkFunction<CommitItemMutations>(
+      mod.commitItemMutations,
+      "commitItemMutations",
     );
+  } catch (err: unknown) {
+    // Poison the cache so a later --atomic call in this process short-circuits
+    // to the "prior attempt failed" guard instead of re-importing the old SDK.
+    cachedCommitItemMutations = null;
+    throw err;
   }
   cachedCommitItemMutations = commit;
   return commit;
@@ -1286,12 +1304,17 @@ export async function importJiraAtomic(
     }
   };
   const normalizeItemId: (input: string, prefix: string) => string =
-    opts.normalizeItemId ?? (await getSdk()).normalizeItemId;
+    opts.normalizeItemId ??
+    assertSdkFunction<(input: string, prefix: string) => string>(
+      (await getSdk()).normalizeItemId,
+      "normalizeItemId",
+    );
   const readSettings: (pmRoot: string) => Promise<{ id_prefix?: string }> =
     opts.readSettings ??
-    ((await getSdk()).readSettings as (
-      pmRoot: string,
-    ) => Promise<{ id_prefix?: string }>);
+    assertSdkFunction<(pmRoot: string) => Promise<{ id_prefix?: string }>>(
+      (await getSdk()).readSettings,
+      "readSettings",
+    );
 
   let idPrefix = "pm-";
   try {

@@ -324,7 +324,7 @@ test("resolveCommitItemMutations: missing export throws the USAGE upgrade guard"
     (err: unknown) => {
       assert.ok(err instanceof CommandError);
       assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
-      assert.match((err as Error).message, /does not export it as a function/);
+      assert.match((err as Error).message, /does not export commitItemMutations as a function/);
       assert.match((err as Error).message, />=2026\.7\.20/);
       return true;
     },

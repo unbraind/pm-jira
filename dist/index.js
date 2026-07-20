@@ -817,6 +817,20 @@ const ATOMIC_TX_PREFIX = "jira-import-";
  */
 let cachedCommitItemMutations;
 /**
+ * Assert a dynamically-resolved `@unbrained/pm-cli/sdk` export is callable,
+ * throwing the shared, friendly {@link CommandError} (USAGE) when the installed
+ * SDK is too old to provide it. Centralizing this guard keeps the check and the
+ * upgrade message identical across every --atomic SDK dependency
+ * (`commitItemMutations`, `normalizeItemId`, `readSettings`) so the copies can
+ * never drift, and stops missing exports falling through to a raw `TypeError`.
+ */
+function assertSdkFunction(fn, exportName) {
+    if (typeof fn !== "function") {
+        throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export ${exportName} as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.`, EXIT_CODE.USAGE);
+    }
+    return fn;
+}
+/**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
  * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
  * old to export it (requires >=2026.7.20). Mirrors pm-csv's
@@ -839,11 +853,7 @@ export async function resolveCommitItemMutations(importSdk) {
             const msg = err instanceof Error ? err.message : String(err);
             throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`, EXIT_CODE.USAGE);
         }
-        const injected = mod.commitItemMutations;
-        if (typeof injected !== "function") {
-            throw new CommandError("--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.", EXIT_CODE.USAGE);
-        }
-        return injected;
+        return assertSdkFunction(mod.commitItemMutations, "commitItemMutations");
     }
     if (cachedCommitItemMutations === null) {
         throw new CommandError("--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but it could not be resolved (a prior attempt in this process failed). Ensure @unbrained/pm-cli is installed and up to date.", EXIT_CODE.USAGE);
@@ -859,10 +869,15 @@ export async function resolveCommitItemMutations(importSdk) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`, EXIT_CODE.USAGE);
     }
-    const commit = mod.commitItemMutations;
-    if (typeof commit !== "function") {
+    let commit;
+    try {
+        commit = assertSdkFunction(mod.commitItemMutations, "commitItemMutations");
+    }
+    catch (err) {
+        // Poison the cache so a later --atomic call in this process short-circuits
+        // to the "prior attempt failed" guard instead of re-importing the old SDK.
         cachedCommitItemMutations = null;
-        throw new CommandError("--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.", EXIT_CODE.USAGE);
+        throw err;
     }
     cachedCommitItemMutations = commit;
     return commit;
@@ -972,9 +987,10 @@ export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
             throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`, EXIT_CODE.USAGE);
         }
     };
-    const normalizeItemId = opts.normalizeItemId ?? (await getSdk()).normalizeItemId;
+    const normalizeItemId = opts.normalizeItemId ??
+        assertSdkFunction((await getSdk()).normalizeItemId, "normalizeItemId");
     const readSettings = opts.readSettings ??
-        (await getSdk()).readSettings;
+        assertSdkFunction((await getSdk()).readSettings, "readSettings");
     let idPrefix = "pm-";
     try {
         const settings = await readSettings(pmRoot);
