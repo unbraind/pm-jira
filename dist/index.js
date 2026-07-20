@@ -1002,8 +1002,10 @@ export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
         // committed items from this import remain in the tracker.
         throw new CommandError(`Atomic Jira import failed and was rolled back — every applied create was compensated (deleted); the tracker has no committed items from this import. Transaction id: ${transactionId}. Underlying error: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
     }
-    const created = Object.keys(result.results).length;
-    return { created, recovered: result.recovered, transactionId };
+    // Defensive: the SDK contract guarantees results/recovered on success, but a
+    // mock/test seam could return a partial shape — coalesce rather than throw.
+    const created = Object.keys(result?.results ?? {}).length;
+    return { created, recovered: Boolean(result?.recovered), transactionId };
 }
 const SEARCH_FIELDS = "summary,description,status,priority,labels,components,assignee,duedate,fixVersions,issuetype,customfield_10020,attachment,comment";
 export function countIssueExtras(issue) {

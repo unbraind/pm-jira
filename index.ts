@@ -1325,8 +1325,10 @@ export async function importJiraAtomic(
     );
   }
 
-  const created = Object.keys(result.results).length;
-  return { created, recovered: result.recovered, transactionId };
+  // Defensive: the SDK contract guarantees results/recovered on success, but a
+  // mock/test seam could return a partial shape — coalesce rather than throw.
+  const created = Object.keys(result?.results ?? {}).length;
+  return { created, recovered: Boolean(result?.recovered), transactionId };
 }
 
 // Shared import core for both `pm jira sync`, `pm jira import` and the

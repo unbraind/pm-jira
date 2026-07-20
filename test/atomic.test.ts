@@ -57,13 +57,20 @@ function freshTracker(): string {
   // so the tracker root IS the temp dir. Using <dir>/.agents/pm would point at
   // an uninitialized path and pm would walk up to the nearest real tracker.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pm-jira-atomic-"));
-  const init = spawnSync(PM_BIN, ["--path", root, "init", "test"], PM_SPAWN_OPTS);
-  assert.strictEqual(init.status, 0, `pm init failed: ${init.error?.message ?? init.stderr}`);
-  // Sanity: starts empty.
-  const list = spawnSync(PM_BIN, ["--path", root, "list", "--json"], PM_SPAWN_OPTS);
-  assert.strictEqual(list.status, 0, `pm list failed: ${list.error?.message ?? list.stderr}`);
-  assert.strictEqual(JSON.parse(list.stdout).items.length, 0, "fresh tracker must be empty");
-  return root;
+  // Clean up the temp dir if any setup step throws, so a setup failure never
+  // leaks a workspace directory.
+  try {
+    const init = spawnSync(PM_BIN, ["--path", root, "init", "test"], PM_SPAWN_OPTS);
+    assert.strictEqual(init.status, 0, `pm init failed: ${init.error?.message ?? init.stderr}`);
+    // Sanity: starts empty.
+    const list = spawnSync(PM_BIN, ["--path", root, "list", "--json"], PM_SPAWN_OPTS);
+    assert.strictEqual(list.status, 0, `pm list failed: ${list.error?.message ?? list.stderr}`);
+    assert.strictEqual(JSON.parse(list.stdout).items.length, 0, "fresh tracker must be empty");
+    return root;
+  } catch (err) {
+    fs.rmSync(root, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 function itemCount(root: string): number {
