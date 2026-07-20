@@ -24,6 +24,7 @@
 import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 const defineExtension = ((extension) => extension);
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
@@ -792,6 +793,166 @@ function createPmItem(pmRoot, item) {
     const result = spawnSync("pm", args, { encoding: "utf-8" });
     return result.status === 0;
 }
+// ---------------------------------------------------------------------------
+// Atomic import (pm-cli >= 2026.7.20 commitItemMutations)
+//
+// `pm jira import --atomic` commits ALL imported creates in ONE
+// all-or-nothing, crash-recoverable, workspace-writer-locked transaction via
+// the official high-level SDK helper `commitItemMutations`. On failure every
+// applied create is compensated (deleted) so the tracker keeps zero committed
+// items from the import. An interrupted run resumes on re-invocation because
+// the transaction id and per-create ids are derived deterministically from
+// the imported content (same issues => same ids => resume, never duplicate).
+// ---------------------------------------------------------------------------
+/**
+ * Stable transaction-id prefix for pm-jira atomic imports. Prefixed so a
+ * jira transaction id never collides with one derived by another importer
+ * (e.g. pm-csv's `csv-import-<hash>`).
+ */
+const ATOMIC_TX_PREFIX = "jira-import-";
+/**
+ * Cached resolved SDK `commitItemMutations`. `null` means a prior resolution
+ * attempt failed in this process and is not retried (each CLI invocation is a
+ * fresh process, so this is safe).
+ */
+let cachedCommitItemMutations;
+/**
+ * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
+ * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
+ * old to export it (requires >=2026.7.20). Mirrors pm-csv's
+ * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
+ * module scope so repeated --atomic calls don't re-import the SDK.
+ */
+async function resolveCommitItemMutations() {
+    if (cachedCommitItemMutations === null) {
+        throw new CommandError("--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but it could not be resolved (a prior attempt in this process failed). Ensure @unbrained/pm-cli is installed and up to date.", EXIT_CODE.USAGE);
+    }
+    if (cachedCommitItemMutations)
+        return cachedCommitItemMutations;
+    let mod;
+    try {
+        mod = await import("@unbrained/pm-cli/sdk");
+    }
+    catch (err) {
+        cachedCommitItemMutations = null;
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`, EXIT_CODE.USAGE);
+    }
+    const commit = mod.commitItemMutations;
+    if (typeof commit !== "function") {
+        cachedCommitItemMutations = null;
+        throw new CommandError("--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export it as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.", EXIT_CODE.USAGE);
+    }
+    cachedCommitItemMutations = commit;
+    return commit;
+}
+/**
+ * Derive a stable, resumable transaction id from the exact content being
+ * imported: the ordered list of Jira issue keys plus the JQL/project that
+ * scoped them. `jira-import-<sha1(jql \x1f sortedKeys)>` (12 hex chars).
+ *
+ * Folding the content (not just the project) into the id means: re-running
+ * the SAME import after a crash keeps the same id (resumes from the durable
+ * journal, no duplicates), while a DIFFERENT set of issues yields a fresh id
+ * (a new import, never a stale skip). Mirrors pm-csv's
+ * `deriveTransactionId`/`fingerprintContent` derivation.
+ */
+export function deriveAtomicTransactionId(jql, issueKeys) {
+    const hash = createHash("sha1")
+        .update(jql)
+        .update("\x1f") // unit-separator between scope and content
+        .update(JSON.stringify(issueKeys))
+        .digest("hex")
+        .slice(0, 12);
+    return `${ATOMIC_TX_PREFIX}${hash}`;
+}
+/**
+ * Build one {@link BulkItemCreateMutation} for an imported issue.
+ *
+ * Each create gets a STABLE, transaction-owned id derived deterministically
+ * from `(transactionId, index)` so a retried transaction resumes instead of
+ * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId:index).slice(0,8)>", prefix)`.
+ * The index guarantees uniqueness within the batch; the content-derived
+ * transactionId guarantees the same issues always map to the same ids.
+ * `normalizeItemId` lowercases the input and prepends the normalized prefix
+ * when absent, so the hex tokens (already lowercase) round-trip
+ * deterministically. The `options` bag mirrors the exact `pm create` flags the
+ * non-atomic path uses (title/type/status/priority/description/body/deadline/tags).
+ */
+export function buildAtomicCreateMutation(item, index, transactionId, idPrefix, normalizeItemId) {
+    const stableToken = createHash("sha1")
+        .update(transactionId)
+        .update(":")
+        .update(String(index))
+        .digest("hex")
+        .slice(0, 8);
+    const id = normalizeItemId(`jira-tx-${stableToken}`, idPrefix);
+    const options = {
+        title: item.title,
+        status: item.status,
+        type: item.type,
+        priority: item.priority,
+        description: item.description,
+        ...(item.body ? { body: item.body } : {}),
+        ...(item.deadline ? { deadline: item.deadline } : {}),
+        ...(item.tags.length > 0 ? { tags: item.tags.join(",") } : {}),
+    };
+    return { op: "create", id, options };
+}
+/**
+ * Commit every imported create in one atomic, crash-recoverable transaction
+ * via the official `commitItemMutations` SDK helper. On failure every applied
+ * create is compensated (deleted) so no committed items remain, and a clear
+ * {@link CommandError} is thrown. Returns the count of items committed by
+ * this attempt (already-applied steps from a prior interrupted run are
+ * resumed, not double-counted). Throws CommandError (USAGE) when the SDK
+ * cannot be resolved.
+ */
+export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
+    const issueKeys = filtered.map(({ issue }) => issue.key);
+    const transactionId = deriveAtomicTransactionId(jql, issueKeys);
+    const author = opts.atomicAuthor ?? "pm-jira";
+    // Resolve the SDK helpers once: commitItemMutations (guarded), plus the
+    // synchronous normalizeItemId and async readSettings used for stable id +
+    // prefix derivation. An injected commitItemMutations (tests) short-circuits
+    // the dynamic import; the id helpers are also injectable.
+    const commit = opts.commitItemMutations
+        ? opts.commitItemMutations
+        : await resolveCommitItemMutations();
+    const normalizeItemId = opts.normalizeItemId ??
+        (await import("@unbrained/pm-cli/sdk")).normalizeItemId;
+    const readSettings = opts.readSettings ??
+        (await import("@unbrained/pm-cli/sdk")).readSettings;
+    let idPrefix = "pm-";
+    try {
+        const settings = await readSettings(pmRoot);
+        if (settings?.id_prefix)
+            idPrefix = settings.id_prefix.toString();
+    }
+    catch {
+        // Settings unreadable: fall back to the default prefix so the atomic path
+        // still works (the non-atomic path never reads settings either).
+    }
+    const mutations = filtered.map(({ item }, i) => buildAtomicCreateMutation(item, i, transactionId, idPrefix, normalizeItemId));
+    let result;
+    try {
+        result = await commit({
+            pmRoot,
+            transactionId,
+            author,
+            mutations,
+            createCompensation: "delete",
+        });
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Every applied create has been compensated (deleted) by the helper; no
+        // committed items from this import remain in the tracker.
+        throw new CommandError(`Atomic Jira import failed and was rolled back — every applied create was compensated (deleted); the tracker has no committed items from this import. Transaction id: ${transactionId}. Underlying error: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+    }
+    const created = Object.keys(result.results).length;
+    return { created, recovered: result.recovered, transactionId };
+}
 const SEARCH_FIELDS = "summary,description,status,priority,labels,components,assignee,duedate,fixVersions,issuetype,customfield_10020,attachment,comment";
 export function countIssueExtras(issue) {
     const attachments = Array.isArray(issue.fields.attachment)
@@ -813,13 +974,14 @@ export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
         `&maxResults=${Math.min(maxResults, 100)}`;
     return { method: "GET", url, fields: SEARCH_FIELDS };
 }
-async function runImport(options, pmRoot, opts = {}) {
+export async function runImport(options, pmRoot, opts = {}) {
     const project = readStringOptionAliased(options, "project", "project-key");
     const customJql = readStringOption(options, "jql");
     const maxResults = readNumberOption(options, "max-results") ?? 500;
     const statusMap = parseStatusMap(readStringOption(options, "status-map"));
     const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
     const dryRun = opts.dryRun ?? readBooleanOption(options, "dry-run");
+    const atomic = opts.atomic ?? readBooleanOption(options, "atomic");
     const statusFilter = resolveStatusFilter(opts.statusFilter ?? readStringOption(options, "status"));
     if (!project && !customJql) {
         throw new CommandError("Provide either --project <KEY> or --jql <query> to specify which issues to import.", EXIT_CODE.USAGE);
@@ -846,6 +1008,7 @@ async function runImport(options, pmRoot, opts = {}) {
             request,
             maxResults,
             project: projectLabel,
+            atomic,
             ...(statusFilter.raw ? { statusFilter: statusFilter.raw, statusFilterMode: statusFilter.mode } : {}),
             ...(statusFilter.pmStatus ? { pmStatusFilter: statusFilter.pmStatus } : {}),
         };
@@ -853,28 +1016,41 @@ async function runImport(options, pmRoot, opts = {}) {
     // Live import: resolve creds now (throws a structured CommandError if any are
     // missing). The preflight gate normally aborts earlier with a clearer message,
     // but resolveCreds remains the authoritative guard for direct/importer entry.
-    const creds = resolveCreds(options);
-    console.error(`Fetching issues from Jira... (JQL: ${jql})`);
+    // When a pre-fetched issue set is injected (test seam), skip cred resolution
+    // and the live fetch entirely so the atomic path is exercisable offline.
+    let creds;
     let issues;
-    try {
-        issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults, 
-        // Per-page progress to STDERR for large paginated imports. Additive:
-        // does not touch the stdout/json contract.
-        (fetched, jiraTotal) => console.error(formatImportProgress(fetched, jiraTotal, maxResults)));
+    if (opts.issues) {
+        issues = opts.issues;
+        // A base URL is only needed to build the per-issue browse URL; use the
+        // configured host/env or a placeholder so issueToItem stays pure offline.
+        const seamBaseUrl = (readStringOption(options, "host") ??
+            (process.env["JIRA_BASE_URL"]?.trim() || "https://example.atlassian.net")).replace(/\/$/, "");
+        creds = { baseUrl: seamBaseUrl, email: "", token: "", authHeader: "" };
     }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        let exitCode;
-        if (/error 404/i.test(msg)) {
-            exitCode = EXIT_CODE.NOT_FOUND;
+    else {
+        creds = resolveCreds(options);
+        console.error(`Fetching issues from Jira... (JQL: ${jql})${atomic ? " (atomic)" : ""}`);
+        try {
+            issues = await fetchAllJiraIssues(creds.baseUrl, creds.authHeader, jql, maxResults, 
+            // Per-page progress to STDERR for large paginated imports. Additive:
+            // does not touch the stdout/json contract.
+            (fetched, jiraTotal) => console.error(formatImportProgress(fetched, jiraTotal, maxResults)));
         }
-        else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/i.test(msg)) {
-            exitCode = EXIT_CODE.USAGE;
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            let exitCode;
+            if (/error 404/i.test(msg)) {
+                exitCode = EXIT_CODE.NOT_FOUND;
+            }
+            else if (/HTTP 401|HTTP 403|authentication failed|authorization failed/i.test(msg)) {
+                exitCode = EXIT_CODE.USAGE;
+            }
+            else {
+                exitCode = EXIT_CODE.GENERIC_FAILURE;
+            }
+            throw new CommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
         }
-        else {
-            exitCode = EXIT_CODE.GENERIC_FAILURE;
-        }
-        throw new CommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
     }
     console.error(`Fetched ${issues.length} issues from Jira`);
     // Transparency: attachments + comments are NOT imported. Surface their
@@ -894,9 +1070,10 @@ async function runImport(options, pmRoot, opts = {}) {
         console.error(`Note: ${issuesWithExtras} issue(s) carry ${extraAttachments} attachment(s) and ` +
             `${extraComments} comment(s) that are NOT imported (pm-jira imports title/body/status/labels only).`);
     }
+    const baseUrl = creds.baseUrl; // creds is assigned in every branch above
     const mapped = issues.map((issue) => ({
         issue,
-        item: issueToItem(issue, creds.baseUrl, { statusMap, fieldMap }),
+        item: issueToItem(issue, baseUrl, { statusMap, fieldMap }),
     }));
     if (statusFilter.mode === "pm" && statusFilter.raw && statusFilter.pmStatus) {
         if (normalizeStatusAliasKey(statusFilter.raw) !== statusFilter.pmStatus) {
@@ -913,11 +1090,27 @@ async function runImport(options, pmRoot, opts = {}) {
         console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter.pmStatus}"`);
     }
     let created = 0;
-    for (const { issue, item } of filtered) {
-        if (createPmItem(pmRoot, item))
-            created++;
-        else
-            console.error(`Failed to create item for ${issue.key}`);
+    let atomicTransactionId;
+    if (atomic) {
+        // --atomic: commit ALL creates in one all-or-nothing, crash-recoverable
+        // transaction via the official commitItemMutations SDK helper. On
+        // failure every applied create is compensated (deleted); an interrupted
+        // run resumes on re-invocation. The dry-run path returns earlier above, so
+        // no transaction is committed for a dry-run + --atomic invocation.
+        const atomicResult = await importJiraAtomic(pmRoot, jql, filtered, opts);
+        created = atomicResult.created;
+        atomicTransactionId = atomicResult.transactionId;
+        if (atomicResult.recovered) {
+            console.error(`Atomic import resumed transaction ${atomicResult.transactionId} from a prior interrupted run (recovered ${created} item${created === 1 ? "" : "s"}).`);
+        }
+    }
+    else {
+        for (const { issue, item } of filtered) {
+            if (createPmItem(pmRoot, item))
+                created++;
+            else
+                console.error(`Failed to create item for ${issue.key}`);
+        }
     }
     console.error(`Imported ${created} issues from Jira ${projectLabel}`);
     return {
@@ -926,6 +1119,8 @@ async function runImport(options, pmRoot, opts = {}) {
         imported: created,
         total: filtered.length,
         project: projectLabel,
+        ...(atomic ? { atomic: true } : {}),
+        ...(atomicTransactionId ? { transactionId: atomicTransactionId } : {}),
         summary: `Imported ${created} issues from Jira ${projectLabel}`,
     };
 }
@@ -1106,6 +1301,7 @@ const PULL_FLAGS = [
     { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Task,assignee=skip". Alias: --field-map.' },
     { long: "--field-map", value_name: "pairs", description: 'Alias for --map (override field mapping, e.g. "issuetype=Task,assignee=skip").' },
     { long: "--dry-run", description: "Preview the JQL + request without any network call" },
+    { long: "--atomic", description: "Import all creates atomically under one workspace writer-locked, crash-recoverable transaction (pm-cli >=2026.7.20). On failure every applied create is compensated (deleted); interrupted runs resume" },
 ];
 const EXPORT_FLAGS = [
     { long: "--project", value_name: "KEY", description: "Target Jira project key for created issues. Alias: --project-key." },
@@ -1174,6 +1370,7 @@ export default defineExtension({
                 "pm jira sync --project PROJ --assignee currentUser() --updated-since -7d",
                 "pm jira sync --project PROJ --issue-type Bug --status-map 'QA=blocked,Done=closed'",
                 "pm jira sync --project PROJ --map 'issuetype=Task,assignee=skip'",
+                "pm jira sync --project PROJ --atomic # all-or-nothing import (pm-cli >=2026.7.20)",
             ],
             flags: PULL_FLAGS,
             async run(ctx) {
