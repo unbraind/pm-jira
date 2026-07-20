@@ -1,0 +1,19 @@
+id: pm-jira-c5vc
+title: adopt commitItemMutations for atomic import
+description: ""
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-20T08:12:42.973Z"
+updated_at: "2026-07-20T21:09:33.296Z"
+closed_at: "2026-07-20T08:27:48.159Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-07-20T21:09:33.296Z",pi-agent,"CodeRabbit r2 (post-rebase): extracted shared assertSdkFunction guard — dedups the commitItemMutations not-a-function check across injected+cached paths AND now guards normalizeItemId/readSettings so a missing SDK export raises the friendly USAGE CommandError instead of a raw TypeError in buildAtomicCreateMutation/readSettings. 78/78 tests green."
+notes[3]{created_at,author,text}:
+  "2026-07-20T08:27:19.811Z",pi-agent,"Implemented --atomic on pm jira import using the official SDK commitItemMutations (>=2026.7.20). Stable per-create ids via normalizeItemId(jira-tx-<sha1(tx:i)>, prefix); transactionId = jira-import-<sha1(jql|issueKeys)>. createCompensation=delete. Added ImportRunOptions test seams (commitItemMutations/readSettings/normalizeItemId/issues). 9 new tests (happy/resume/rollback/dry-run/guard + pure id derivation); 75/75 green; build+typecheck+changelog:check clean. Bumped devDep @unbrained/pm-cli to ^2026.7.20 so the SDK primitive resolves."
+  "2026-07-20T08:34:49.364Z",claude-orchestrator,"Post-implementation hardening (Claude review before PR): stable-id derivation changed from sha1(txId:index).slice(0,8) to jira-tx-<sha1(txId).slice(0,8)>-<index>. The literal index suffix makes in-batch uniqueness STRUCTURAL instead of a probabilistic 8-hex hash collision (real risk on large imports since --max-results is user-settable). Added a 5000-id uniqueness assertion. Build clean, 75/75 tests pass, changelog:check green."
+  "2026-07-20T08:44:30.831Z",claude-orchestrator,"Greptile round 1 (3 findings, all valid) addressed: (P1) deriveAtomicTransactionId now sorts keys before hashing AND per-create id keyed on the stable Jira issue KEY instead of positional index — the original index-based id ALSO broke resume under Jira result reordering, deeper than greptile flagged; added order-independence regression tests. (P2) unguarded SDK import wrapped in getSdk() so old/missing SDK surfaces the friendly upgrade CommandError. (P2) resolveCommitItemMutations made injectable; added 3 real guard tests (missing export, import failure, valid export) + renamed the seam test. 78/78 tests pass, build+changelog green."
+close_reason: "Implemented --atomic via commitItemMutations; build/test/typecheck/changelog:check all green; committed and pushed to feat/atomic-import-commititemmutations"
+body: ""

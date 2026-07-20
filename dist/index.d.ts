@@ -1,3 +1,4 @@
+import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 export declare const EXIT_CODE: {
     readonly GENERIC_FAILURE: 1;
     readonly USAGE: 2;
@@ -7,7 +8,7 @@ export declare class CommandError extends Error {
     exitCode: number;
     constructor(message: string, exitCode?: number);
 }
-interface JiraIssue {
+export interface JiraIssue {
     key: string;
     fields: {
         summary: string;
@@ -153,6 +154,74 @@ export interface IssueMapOptions {
     fieldMap?: FieldMap;
 }
 export declare function issueToItem(issue: JiraIssue, baseUrl: string, optionsOrStatusMap?: IssueMapOptions | Record<string, PmStatus>): IssueToItem;
+/**
+ * The bound `commitItemMutations` signature the atomic path calls. Resolved
+ * once per process via a dynamic `import("@unbrained/pm-cli/sdk")`; injectable
+ * through {@link ImportRunOptions.commitItemMutations} for tests.
+ */
+type CommitItemMutations = (options: CommitItemMutationsOptions) => Promise<CommitItemMutationsResult>;
+/**
+ * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
+ * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
+ * old to export it (requires >=2026.7.20). Mirrors pm-csv's
+ * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
+ * module scope so repeated --atomic calls don't re-import the SDK.
+ *
+ * `importSdk` is an injection seam for tests: when supplied, the module-level
+ * cache is bypassed and the SAME import-failure / not-a-function guards run
+ * against the injected module, so both error branches are unit-testable
+ * without an actual old SDK on disk. Production always uses the default
+ * (cached) dynamic import.
+ */
+export declare function resolveCommitItemMutations(importSdk?: () => Promise<Partial<typeof import("@unbrained/pm-cli/sdk")>>): Promise<CommitItemMutations>;
+/**
+ * Derive a stable, resumable transaction id from the exact content being
+ * imported: the ordered list of Jira issue keys plus the JQL/project that
+ * scoped them. `jira-import-<sha1(jql \x1f sortedKeys)>` (12 hex chars).
+ *
+ * Folding the content (not just the project) into the id means: re-running
+ * the SAME import after a crash keeps the same id (resumes from the durable
+ * journal, no duplicates), while a DIFFERENT set of issues yields a fresh id
+ * (a new import, never a stale skip). Mirrors pm-csv's
+ * `deriveTransactionId`/`fingerprintContent` derivation.
+ */
+export declare function deriveAtomicTransactionId(jql: string, issueKeys: readonly string[]): string;
+/**
+ * Build one {@link BulkItemCreateMutation} for an imported issue.
+ *
+ * Each create gets a STABLE, transaction-owned id derived deterministically
+ * from `(transactionId, jiraKey)` so a retried transaction resumes instead of
+ * duplicating: `normalizeItemId("jira-tx-<sha1(transactionId)[:8]>-<sanitizedKey>", prefix)`.
+ * The id is keyed on the Jira issue KEY (globally unique + stable per issue),
+ * NOT the positional index — otherwise a crash + retry that re-fetches the
+ * same issues in a DIFFERENT order (Jira gives no stable order without
+ * ORDER BY) would map the same issue to a different index => a different id =>
+ * a duplicate create instead of a resume. Jira guarantees unique keys, so the
+ * sanitized key is structurally unique within a batch; the content-derived
+ * transactionId prefix scopes ids to this import. `normalizeItemId` lowercases
+ * the input and prepends the normalized prefix when absent, so the token
+ * (already lowercase) round-trips deterministically. The `options` bag mirrors
+ * the exact `pm create` flags the non-atomic path uses
+ * (title/type/status/priority/description/body/deadline/tags).
+ */
+export declare function buildAtomicCreateMutation(item: IssueToItem, jiraKey: string, transactionId: string, idPrefix: string, normalizeItemId: (input: string, prefix: string) => string): BulkItemCreateMutation;
+/**
+ * Commit every imported create in one atomic, crash-recoverable transaction
+ * via the official `commitItemMutations` SDK helper. On failure every applied
+ * create is compensated (deleted) so no committed items remain, and a clear
+ * {@link CommandError} is thrown. Returns the count of items committed by
+ * this attempt (already-applied steps from a prior interrupted run are
+ * resumed, not double-counted). Throws CommandError (USAGE) when the SDK
+ * cannot be resolved.
+ */
+export declare function importJiraAtomic(pmRoot: string, jql: string, filtered: readonly {
+    issue: JiraIssue;
+    item: IssueToItem;
+}[], opts: ImportRunOptions): Promise<{
+    created: number;
+    recovered: boolean;
+    transactionId: string;
+}>;
 export interface JiraSearchRequest {
     method: "GET";
     url: string;
@@ -165,6 +234,56 @@ export interface IssueExtras {
 }
 export declare function countIssueExtras(issue: JiraIssue): IssueExtras;
 export declare function buildSearchRequest(baseUrl: string, jql: string, startAt: number, maxResults: number): JiraSearchRequest;
+/**
+ * Internal options for {@link runImport}. Extends the public dry-run/status
+ * knobs with opt-in atomic-import controls and test seams. The atomic seams
+ * (commitItemMutations / readSettings / normalizeItemId / issues) are NOT CLI
+ * flags: they let tests inject a fake commit coordinator or a pre-fetched
+ * issue set so the atomic path is exercised without the Jira network.
+ */
+export interface ImportRunOptions {
+    dryRun?: boolean;
+    statusFilter?: string;
+    /** Import all creates atomically via commitItemMutations (pm-cli >=2026.7.20). */
+    atomic?: boolean;
+    /** Author attributed to the atomic transaction journal (defaults to `pm-jira`). */
+    atomicAuthor?: string;
+    /** Test seam: inject the commit coordinator (skips SDK resolution). */
+    commitItemMutations?: CommitItemMutations;
+    /** Test seam: inject readSettings (skips SDK resolution). */
+    readSettings?: (pmRoot: string) => Promise<{
+        id_prefix?: string;
+    }>;
+    /** Test seam: inject normalizeItemId (skips SDK resolution). */
+    normalizeItemId?: (input: string, prefix: string) => string;
+    /**
+     * Test seam: a pre-fetched issue set. When set, the live Jira fetch (and
+     * credential resolution) is skipped entirely so the atomic path can be
+     * exercised offline against a real tracker.
+     */
+    issues?: JiraIssue[];
+}
+export declare function runImport(options: Record<string, unknown>, pmRoot: string, opts?: ImportRunOptions): Promise<{
+    success: boolean;
+    dryRun: boolean;
+    jql: string;
+    request: JiraSearchRequest;
+    maxResults: number;
+    project: string;
+    atomic: boolean;
+    statusFilter?: string | undefined;
+    statusFilterMode?: "jira" | "none" | "pm" | undefined;
+    pmStatusFilter?: PmStatus | undefined;
+} | {
+    success: boolean;
+    synced: number;
+    imported: number;
+    total: number;
+    project: string;
+    atomic?: boolean | undefined;
+    transactionId?: string | undefined;
+    summary: string;
+}>;
 interface PmItem {
     id?: string;
     title?: string;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.7.20-1 - 2026-07-20
+
+### Added
+
+- adopt commitItemMutations for atomic import ([pm-jira-c5vc](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-c5vc.toon))
+
 ## 2026.7.13-1 - 2026-07-13
 
 ### Fixed

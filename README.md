@@ -94,6 +94,10 @@ pm jira import --host https://company.atlassian.net --jql "project = PROJ AND as
 
 # Override status mapping
 pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
+
+# All-or-nothing atomic import (pm-cli >= 2026.7.20): one crash-recoverable
+# transaction; rolls back (deletes) every create on failure; resumes on re-run.
+pm jira import --project PROJ --atomic
 ```
 
 ### Pull flags (`pm jira sync` / `pm jira import`)
@@ -112,6 +116,7 @@ pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--max-results` | number | `500` | Maximum number of issues to pull. |
 | `--dry-run` | boolean | `false` | Print the JQL + exact GET request that would run; **no network call**. |
+| `--atomic` | boolean | `false` | Import all creates in ONE all-or-nothing, crash-recoverable, workspace-writer-locked transaction via the official `commitItemMutations` SDK helper (pm-cli >= 2026.7.20). On failure every applied create is compensated (deleted) so the tracker keeps zero committed items from the import; an interrupted run resumes on re-invocation. A `--dry-run` + `--atomic` invocation previews like a normal dry-run and commits no transaction. |
 
 When no `--jql` is given, the convenience filters are AND-combined; if you don't
 filter on status, a `statusCategory != Done` clause is appended so an unscoped
