@@ -11,6 +11,6 @@ closed_at: "2026-07-10T19:00:05.719Z"
 author: codex-5-3-sweep
 tests[2]{command,scope,timeout_seconds}:
   "npm run release:check",project,3600
-  rm -rf /tmp/pm-realdata-sync && mkdir -p /tmp/pm-realdata-sync && cd /tmp/pm-realdata-sync && pm init >/dev/null && pm install /home/steve/container/pm-sweep/pm-jira --project >/dev/null && pm jira validate --json > jira-validate.json,project,1200
+  rm -rf /tmp/pm-realdata-sync && mkdir -p /tmp/pm-realdata-sync && cd /tmp/pm-realdata-sync && pm init >/dev/null && pm install /workspace/pm-sweep/pm-jira --project >/dev/null && pm jira validate --json > jira-validate.json,project,1200
 close_reason: Superseded by 2026-07-10 ecosystem readiness pass.
 body: ""
