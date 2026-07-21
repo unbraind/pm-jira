@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
-    "prepare": "pm merge install || true",
+    "prepare": "pm merge install",
     "merge:install": "pm merge install",
     "test": "npm run build && npm run build:test && node --test dist-test/*.js",
     "dev": "tsc --watch",
