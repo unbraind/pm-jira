@@ -381,7 +381,7 @@ drivers, so concurrent-branch tracker edits merge cleanly instead of hard-confli
 
 The driver **definitions** live in per-clone Git config, so each clone must wire them
 once. `npm install` / `npm ci` does this automatically via the `prepare` script
-(guarded — it runs `pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly otherwise so production / `--omit=dev` installs are not broken); to (re)run it manually:
+(a portable Node guard, `scripts/prepare-merge-driver.mjs`: it runs `pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly otherwise so production / `--omit=dev` installs are not broken; being Node-based it behaves identically on POSIX shells and Windows `cmd.exe`); to (re)run it manually:
 
 ```bash
 npm run merge:install    # or: pm merge install

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.7.22 - 2026-07-22
+
+### Other
+
+- Adopt pm field-aware merge driver for multi-agent branch-merge safety ([pm-jira-pzau](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-pzau.toon))
+
 ## 2026.7.20-1 - 2026-07-20
 
 ### Added
