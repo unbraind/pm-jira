@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-jira-x4nd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x4nd.toon))
+
 ## 2026.7.23 - 2026-07-23
 
 ### Fixed
