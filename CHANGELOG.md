@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-jira-e4q3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-e4q3.toon))
+
 ## 2026.7.25 - 2026-07-25
 
 ### Fixed
