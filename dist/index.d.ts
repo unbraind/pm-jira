@@ -1,3 +1,4 @@
+import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 export declare const EXIT_CODE: {
     readonly GENERIC_FAILURE: 1;
@@ -373,7 +374,7 @@ export declare function decidePushOnWrite(hookCtx: {
 declare const _default: {
     name: string;
     version: string;
-    activate(api: import("@unbrained/pm-cli/sdk").ExtensionApi): void;
+    activate(api: ExtensionApi): void;
 };
 export default _default;
 //# sourceMappingURL=index.d.ts.map

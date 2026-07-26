@@ -25,7 +25,6 @@ import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-const defineExtension = ((extension) => extension);
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
 // (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
@@ -1419,6 +1418,15 @@ const EXPORT_FLAGS = [
 const VALIDATE_FLAGS = [
     { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
 ];
+/**
+ * Local stand-in for the SDK's `defineExtension` identity helper.
+ *
+ * Declared here rather than imported so this package keeps a type-only
+ * dependency on `@unbrained/pm-cli` and adds no runtime module edge. The
+ * generic constraint is the SDK's own, so the extension object is contract-
+ * checked against {@link ExtensionModule} exactly as the imported helper would.
+ */
+const defineExtension = (module) => module;
 export default defineExtension({
     name: "pm-jira",
     version: "2026.7.26",
