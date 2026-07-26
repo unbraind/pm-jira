@@ -22,12 +22,12 @@
 // a service override: per pm-cli issue #96 overriding a core service can
 // corrupt all command output.
 
+import type { ExtensionApi, ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
 import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
-import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
 import type {
   BulkItemCreateMutation,
   BulkItemMutation,
@@ -35,7 +35,6 @@ import type {
   CommitItemMutationsResult,
 } from "@unbrained/pm-cli/sdk";
 
-const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
@@ -1980,11 +1979,21 @@ const VALIDATE_FLAGS = [
   { long: "--host", value_name: "url", description: "Jira base URL override (else JIRA_BASE_URL)" },
 ];
 
+/**
+ * Local stand-in for the SDK's `defineExtension` identity helper.
+ *
+ * Declared here rather than imported so this package keeps a type-only
+ * dependency on `@unbrained/pm-cli` and adds no runtime module edge. The
+ * generic constraint is the SDK's own, so the extension object is contract-
+ * checked against {@link ExtensionModule} exactly as the imported helper would.
+ */
+const defineExtension = <TModule extends ExtensionModule>(module: TModule): TModule => module;
+
 export default defineExtension({
   name: "pm-jira",
   version: "2026.7.26",
 
-  activate(api) {
+  activate(api: ExtensionApi) {
     // -----------------------------------------------------------------------
     // schema — declare Jira provenance fields so the workspace knows them
     // -----------------------------------------------------------------------
