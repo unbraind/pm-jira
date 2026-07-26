@@ -1,0 +1,16 @@
+id: pm-jira-s11o
+title: Exclude generated dist output from DeepScan static analysis
+description: "DeepScan analyzes the committed dist build output alongside authored source. A finding there is unactionable by construction: the file is generated, is not where a defect would be fixed, and its churn per PR routinely exceeds the authored diff. Proven on pm-graph PR 38, where DeepScan was red against five green predecessors purely because of regenerated dist lines and went green once dist was excluded. Aligns this package with the config the upstream unbraind/pm-cli repository already ships."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-26T21:44:51.747Z"
+updated_at: "2026-07-26T21:44:52.233Z"
+closed_at: "2026-07-26T21:44:52.232Z"
+author: codex
+acceptance_criteria: A .deepscan.json at the repo root excludes dist; DeepScan remains green on the PR that adds it.
+resolution: "Added .deepscan.json excluding dist, dist-test, coverage, node_modules and .agents, matching the upstream pm-cli configuration."
+actual_result: Config file present at the repo root; no source or build change.
+close_reason: completed
+body: ""
