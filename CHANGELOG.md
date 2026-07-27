@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt pm-cli 2026.7.27 ([pm-jira-qmt4](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-qmt4.toon))
+
 ## 2026.7.27 - 2026-07-27
 
 ### Removed
