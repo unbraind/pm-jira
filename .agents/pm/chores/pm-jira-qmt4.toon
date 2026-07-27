@@ -1,12 +1,12 @@
 id: pm-jira-qmt4
 title: Adopt pm-cli 2026.7.27
-description: "Raises the pm-cli peerDependency to >=2026.7.27 and the devDependency to ^2026.7.27, refreshes the lockfile, and bumps all THREE version sites: package.json, manifest.json and the module's own self-reported version constant. Bumping only package.json leaves an installed extension reporting a stale version to the host and to pm extension --manage, which a reviewer caught on the sibling pm-starter change. An activation proof is mandatory rather than optional for this bump because 2026.7.27 hardened host-owned global flags: a collision aborts command registration AT the offending command, dropping it and every later sibling, while --help still exits 0 with a misleading Commander arity error (upstream pm-cli#772). Verified on the real CLI in a throwaway workspace: install ok with no warnings, pm jira --help exits 0, host commands stay intact (pm list --json still valid), and the flag-collision audit finds no host-owned global declared. "
+description: "Raises the pm-cli peerDependency to >=2026.7.27 and the devDependency to ^2026.7.27, refreshes the lockfile, and adds a real activation proof. The three extension version sites (package.json, manifest.json and the module's own self-reported version constant) were ALREADY at 2026.7.27 on entry and are unchanged by this PR; an earlier revision of this description wrongly claimed to bump them, copied from the sibling pm-starter chore where the bump was genuinely part of the change. An activation proof is mandatory rather than optional for this bump because 2026.7.27 hardened host-owned global flags: a collision aborts command registration AT the offending command, dropping it and every later sibling, while --help still exits 0 with a misleading Commander arity error (upstream pm-cli#772). Verified on the real CLI in a throwaway workspace: install ok with no warnings, pm jira --help exits 0, host commands stay intact (pm list --json still valid), and the flag-collision audit finds no host-owned global declared."
 type: Chore
 status: closed
 priority: 2
 tags: []
 created_at: "2026-07-27T16:33:51.840Z"
-updated_at: "2026-07-27T21:25:59.878Z"
+updated_at: "2026-07-27T21:36:57.486Z"
 closed_at: "2026-07-27T16:33:53.497Z"
 author: claude-code
 acceptance_criteria: "peerDependencies >=2026.7.27 and devDependencies ^2026.7.27 with a refreshed lockfile; package.json, manifest.json and the module version constant all read 2026.7.27; node_modules resolves 2026.7.27; pm jira --help exits 0 on the real CLI with the built extension installed; flag-collision audit clean; host pm list --json still valid; 78 tests pass."
