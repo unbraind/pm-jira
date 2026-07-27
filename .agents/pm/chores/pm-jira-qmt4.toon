@@ -6,12 +6,13 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-07-27T16:33:51.840Z"
-updated_at: "2026-07-27T16:46:27.643Z"
+updated_at: "2026-07-27T21:25:59.878Z"
 closed_at: "2026-07-27T16:33:53.497Z"
 author: claude-code
 acceptance_criteria: "peerDependencies >=2026.7.27 and devDependencies ^2026.7.27 with a refreshed lockfile; package.json, manifest.json and the module version constant all read 2026.7.27; node_modules resolves 2026.7.27; pm jira --help exits 0 on the real CLI with the built extension installed; flag-collision audit clean; host pm list --json still valid; 78 tests pass."
-notes[2]{created_at,author,text}:
+notes[3]{created_at,author,text}:
   "2026-07-27T16:33:52.564Z",claude-code,"Gates: build, typecheck, check, 78 tests passing, changelog:full and changelog:check after git fetch --tags --force."
   "2026-07-27T16:46:27.643Z",claude-code,"CORRECTION from Greptile review: this item's description claimed the change bumps all THREE version sites, but that is inaccurate for this package. manifest.json and the module's self-reported version constant were ALREADY 2026.7.27 on main, bumped by the daily release, so this PR changes only package.json (the pm-cli dependency ranges plus the package version) and the lockfile. The three-site rule itself still holds and is why the bump script rewrites all three when they differ; it simply had nothing to do here. The claim was carried over verbatim from the pm-starter change, where manifest.json and the module constant genuinely WERE stale and a reviewer caught the drift. Verified: git diff against origin/main touches neither manifest.json nor index.ts in this package."
+  "2026-07-27T21:25:59.878Z",claude-code,"CORRECTION to this item's own description, raised by Greptile on PR #42 and verified: this change did NOT bump the three version sites. git show origin/main:package.json already read 2026.7.27 before the branch, and manifest.json and the module version constant were likewise already aligned; nothing in the diff touches them. That claim was copied from the sibling pm-starter chore, where the bump was real, and it wrongly attributes an earlier release's change to this PR. What this PR actually does: raises the pm-cli peerDependency to >=2026.7.27 and the devDependency to ^2026.7.27, refreshes the lockfile, and adds the activation proof. The acceptance criterion reading 'package.json, manifest.json and the module version constant all read 2026.7.27' is still SATISFIED - it was simply already true on entry rather than achieved here. Recorded as an appended note rather than a description rewrite so both the original claim and the correction stay in the append-only history, which is the honest record for later release archaeology."
 close_reason: Shipped with the activation proof the hardened 2026.7.27 host requires.
 body: ""
