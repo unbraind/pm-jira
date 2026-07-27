@@ -22,7 +22,13 @@
 // a service override: per pm-cli issue #96 overriding a core service can
 // corrupt all command output.
 
-import type { ExtensionApi, ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
+import type {
+  ExtensionApi,
+  ExtensionModule,
+  ImportExportContext,
+  OnWriteHookContext,
+  PreflightOverrideContext,
+} from "@unbrained/pm-cli/sdk/authoring";
 import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -2018,7 +2024,11 @@ export default defineExtension({
     // body runs we print the actionable message and `process.exit()` directly —
     // process termination bypasses the runtime's catch. Verified functionally.
     // -----------------------------------------------------------------------
-    api.registerPreflight((ctx: any) => {
+    api.registerPreflight((ctx: PreflightOverrideContext) => {
+      // `PreflightOverrideContext` declares `command`/`options` as required, but
+      // the optional-chaining + `??` fallbacks are kept as defensive no-ops so
+      // a future runtime that omits a field cannot turn a typed read into a
+      // crash here (parity with the pre-typing behaviour).
       const command: string = ctx?.command ?? "";
       const options: Record<string, unknown> = ctx?.options ?? {};
       if (jiraPreflightShouldFailFast(command, options, process.env)) {
@@ -2056,7 +2066,7 @@ export default defineExtension({
     // -----------------------------------------------------------------------
     // importer — `pm jira import` (native import pipeline)
     // -----------------------------------------------------------------------
-    api.registerImporter("jira", async (ctx: any) => {
+    api.registerImporter("jira", async (ctx: ImportExportContext) => {
       return runImport(ctx.options || {}, ctx.pm_root);
     });
 
@@ -2064,7 +2074,7 @@ export default defineExtension({
     // importer — `jira-sync` (config-driven; kept for back-compat)
     // Credentials may arrive via options (importer config) or env.
     // -----------------------------------------------------------------------
-    api.registerImporter("jira-sync", async (ctx: any) => {
+    api.registerImporter("jira-sync", async (ctx: ImportExportContext) => {
       const options = ctx.options || {};
       // Merge importer-config creds into a virtual env so resolveCreds can read
       // them uniformly without leaking secrets into process.env.
@@ -2121,7 +2131,7 @@ export default defineExtension({
     // Default: print the JSON payloads. With --push AND creds AND --project,
     // POST each payload to Jira's create-issue API.
     // -----------------------------------------------------------------------
-    api.registerExporter("jira", async (ctx: any) => {
+    api.registerExporter("jira", async (ctx: ImportExportContext) => {
       const options = ctx.options || {};
       const push = readBooleanOption(options, "push");
       const dryRun = readBooleanOption(options, "dry-run");
@@ -2279,7 +2289,10 @@ export default defineExtension({
     // swallows any throw from a hook into a warning, so this can NEVER fail the
     // user's pm command; we additionally guard internally for clarity.
     // -----------------------------------------------------------------------
-    api.hooks.onWrite(async (hookCtx: any) => {
+    api.hooks.onWrite(async (hookCtx: OnWriteHookContext) => {
+      // `OnWriteHookContext` is structurally assignable to `decidePushOnWrite`'s
+      // loose `{ path?; scope?; op? }` param, so it flows through unchanged —
+      // no cast, and the runtime guard inside `decidePushOnWrite` stays.
       const decision = decidePushOnWrite(hookCtx, process.env);
       if (!decision.shouldPush) return;
       // Live mirror requires creds + network; in this build it is intentionally

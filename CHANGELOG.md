@@ -4,6 +4,7 @@
 
 ### Other
 
+- Eliminate the last source any with real SDK handler context types ([pm-jira-edv0](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-edv0.toon))
 - Adopt pm-cli 2026.7.27 ([pm-jira-qmt4](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-qmt4.toon))
 
 ## 2026.7.27 - 2026-07-27

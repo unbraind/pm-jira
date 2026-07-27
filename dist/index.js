@@ -1455,6 +1455,10 @@ export default defineExtension({
         // process termination bypasses the runtime's catch. Verified functionally.
         // -----------------------------------------------------------------------
         api.registerPreflight((ctx) => {
+            // `PreflightOverrideContext` declares `command`/`options` as required, but
+            // the optional-chaining + `??` fallbacks are kept as defensive no-ops so
+            // a future runtime that omits a field cannot turn a typed read into a
+            // crash here (parity with the pre-typing behaviour).
             const command = ctx?.command ?? "";
             const options = ctx?.options ?? {};
             if (jiraPreflightShouldFailFast(command, options, process.env)) {
@@ -1672,6 +1676,9 @@ export default defineExtension({
         // user's pm command; we additionally guard internally for clarity.
         // -----------------------------------------------------------------------
         api.hooks.onWrite(async (hookCtx) => {
+            // `OnWriteHookContext` is structurally assignable to `decidePushOnWrite`'s
+            // loose `{ path?; scope?; op? }` param, so it flows through unchanged —
+            // no cast, and the runtime guard inside `decidePushOnWrite` stays.
             const decision = decidePushOnWrite(hookCtx, process.env);
             if (!decision.shouldPush)
                 return;
