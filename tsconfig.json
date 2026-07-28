@@ -12,6 +12,8 @@
     "skipLibCheck": true,
     "noEmitOnError": false,
     "forceConsistentCasingInFileNames": true,
+    "rewriteRelativeImportExtensions": true,
+    "allowImportingTsExtensions": true,
     "types": [
       "node"
     ]

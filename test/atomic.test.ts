@@ -12,8 +12,8 @@ import {
   resolveCommitItemMutations,
   CommandError,
   EXIT_CODE,
-} from "../dist/index.js";
-import type { JiraIssue } from "../dist/index.js";
+} from "../index.ts";
+import type { JiraIssue } from "../index.ts";
 
 // On Windows the runnable pm shim is `pm.cmd`; the extensionless `pm` name is
 // not spawnable. Node also refuses to spawn `.cmd`/`.bat` directly since the
@@ -120,7 +120,7 @@ test("deriveAtomicTransactionId is deterministic from jql + issue keys", () => {
 test("buildAtomicCreateMutation derives stable, unique, prefix-correct, order-independent ids", () => {
   const txId = "jira-import-abcdef123456";
   const normalize = (input: string, prefix: string) => `${prefix}${input}`;
-  const item: import("../dist/index.js").IssueToItem = {
+  const item: import("../index.ts").IssueToItem = {
     title: "T", status: "open", priority: 3, type: "Task", body: "", tags: [],
     description: "d", jiraKey: "X-1", jiraUrl: "https://x/X-1",
   };
@@ -146,7 +146,7 @@ test("buildAtomicCreateMutation derives stable, unique, prefix-correct, order-in
 });
 
 test("buildAtomicCreateMutation maps IssueToItem fields to create options", () => {
-  const item: import("../dist/index.js").IssueToItem = {
+  const item: import("../index.ts").IssueToItem = {
     title: "[X-1] Thing",
     status: "open",
     priority: 2,

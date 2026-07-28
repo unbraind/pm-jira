@@ -45,7 +45,7 @@ import extension, {
   countIssueExtras,
   readStringOptionAliased,
   classifyHttpError,
-} from "../dist/index.js";
+} from "../index.ts";
 
 // ---------------------------------------------------------------------------
 // Activation proof: drive the extension through pm's REAL registration
