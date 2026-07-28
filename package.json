@@ -1,6 +1,6 @@
 {
   "name": "pm-jira",
-  "version": "2026.7.27",
+  "version": "2026.7.28",
   "description": "Jira issue sync for pm-cli",
   "repository": {
     "type": "git",
@@ -40,11 +40,11 @@
     "release:update-version": "node scripts/update-release-version.ts"
   },
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.7.27"
+    "@unbrained/pm-cli": ">=2026.7.28"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "@unbrained/pm-cli": "^2026.7.27",
+    "@unbrained/pm-cli": "^2026.7.28",
     "pm-changelog": "^2026.7.25",
     "typescript": "^7.0.2"
   },
