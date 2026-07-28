@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Publish/review loop for pm-jira feat/agent-enhancement-pass ([pm-jira-326a](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-326a.toon))
+
+### Other
+
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-jira-jwh2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-jwh2.toon))
+- Ecosystem release readiness pass 2026-07-06 ([pm-jira-8r0w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-8r0w.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
