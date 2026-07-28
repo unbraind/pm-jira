@@ -30,6 +30,10 @@
 
 - pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-jira-x4nd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x4nd.toon))
 
+### Other
+
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-jira-jwh2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-jwh2.toon))
+
 ## 2026.7.23 - 2026-07-23
 
 ### Fixed
@@ -56,6 +60,7 @@
 
 ### Added
 
+- Publish/review loop for pm-jira feat/agent-enhancement-pass ([pm-jira-326a](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-326a.toon))
 - Full pm ecosystem production pass for pm-jira ([pm-jira-1soq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-1soq.toon))
 
 ### Fixed
@@ -64,6 +69,7 @@
 
 ### Other
 
+- Ecosystem release readiness pass 2026-07-06 ([pm-jira-8r0w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-8r0w.toon))
 - Adversarial review: clean pass, no defects found ([pm-jira-pz02](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-pz02.toon))
 - Full-cycle hardening wave: pm-jira ([pm-jira-122e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-122e.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
