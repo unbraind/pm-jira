@@ -5,6 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { createExtensionTestHarness, type ExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
+
 import extension, {
   CommandError,
   EXIT_CODE,
@@ -45,34 +47,26 @@ import extension, {
   classifyHttpError,
 } from "../dist/index.js";
 
-// Mirror the real ExtensionApi surface so activate() can register every
-// capability the extension uses (commands, importers, exporters, schema
-// fields, hooks). A partial mock throws TypeError when activate touches a
-// missing method.
-function fullApi(sink: (name: string, def?: any) => void) {
-  const noop = (name: string) => () => sink(name);
-  return {
-    registerCommand: (def: any) => sink("command", def),
-    registerParser: noop("parser"),
-    registerPreflight: noop("preflight"),
-    registerService: noop("service"),
-    registerFlags: noop("flags"),
-    registerItemFields: noop("itemFields"),
-    registerItemTypes: noop("itemTypes"),
-    registerMigration: noop("migration"),
-    registerRenderer: noop("renderer"),
-    registerImporter: (name: string, fn: any) => sink("importer", { name, fn }),
-    registerExporter: (name: string, fn: any) => sink("exporter", { name, fn }),
-    registerSearchProvider: noop("search"),
-    registerVectorStoreAdapter: noop("vectorStore"),
-    hooks: {
-      beforeCommand: noop("hook:before"),
-      afterCommand: noop("hook:after"),
-      onWrite: noop("hook:onWrite"),
-      onRead: noop("hook:onRead"),
-      onIndex: noop("hook:onIndex"),
-    },
-  };
+// ---------------------------------------------------------------------------
+// Activation proof: drive the extension through pm's REAL registration
+// validation and activation engine via createExtensionTestHarness, so a host
+// rejection (e.g. a host-owned flag collision that aborts command registration)
+// fails this suite instead of staying green against a hand-rolled api double.
+// The single harness is activated once (first test) and reused by every
+// behavioural test below via runCommand / runImporter / runExporter.
+// ---------------------------------------------------------------------------
+
+let harness: ExtensionTestHarness | undefined;
+
+async function getHarness(): Promise<ExtensionTestHarness> {
+  if (!harness) {
+    harness = await createExtensionTestHarness(extension, {
+      name: "pm-jira",
+      capabilities: ["commands", "schema", "importers", "hooks", "preflight"],
+    });
+    assert.deepEqual(harness.activation.failed, [], "activation must not fail");
+  }
+  return harness;
 }
 
 test("extension has required shape", () => {
@@ -83,28 +77,21 @@ test("extension has required shape", () => {
   assert.strictEqual(typeof extension.activate, "function", "activate should be a function");
 });
 
-test("extension registers importer, exporter, schema fields, and the sync command", () => {
-  const registered: string[] = [];
-  const names: Record<string, string[]> = { importer: [], exporter: [] };
-  const api = fullApi((name, def) => {
-    registered.push(name);
-    if ((name === "importer" || name === "exporter") && def?.name) names[name].push(def.name);
-  });
-  extension.activate(api as any);
-  assert.ok(registered.includes("command"), "should register the sync command");
-  assert.ok(registered.includes("importer"), "should register importers");
-  assert.ok(registered.includes("exporter"), "should register the jira exporter");
-  assert.ok(registered.includes("itemFields"), "should register jira schema fields");
-  assert.ok(names.importer.includes("jira"), "should register the `jira` importer (pm jira import)");
-  assert.ok(names.importer.includes("jira-sync"), "should keep the legacy jira-sync importer");
-  assert.ok(names.exporter.includes("jira"), "should register the `jira` exporter (pm jira export)");
-});
-
-test("activate registers a preflight override (registerPreflight)", () => {
-  const registered: string[] = [];
-  const api = fullApi((name) => registered.push(name));
-  extension.activate(api as any);
-  assert.ok(registered.includes("preflight"), "should register a preflight override");
+test("extension activates cleanly and registers importer, exporter, schema fields, sync/validate commands, preflight, and the onWrite hook", async () => {
+  const ext = await getHarness();
+  // commands
+  ext.assertCommandContract({ command: "jira sync" });
+  ext.assertCommandContract({ command: "jira validate" });
+  // schema item fields
+  ext.assertItemField({ field: "jira_key", type: "string" });
+  ext.assertItemField({ field: "jira_url", type: "string" });
+  // importers (native + legacy) + exporter
+  ext.assertImporter({ importer: "jira" });
+  ext.assertImporter({ importer: "jira-sync" });
+  ext.assertExporter({ exporter: "jira" });
+  // preflight gate + onWrite hook
+  ext.assertPreflightOverride();
+  ext.assertHook({ kind: "on_write" });
 });
 
 test("preflight gate: fires only for network-mutating jira invocations", () => {
@@ -339,19 +326,9 @@ test("resolveCreds accepts --host as the base-URL source", () => {
 });
 
 // --- command / importer / exporter graceful no-creds ----------------------
-
-function capture() {
-  let cmd: { run: (ctx: any) => unknown } | undefined;
-  const importers: Record<string, (ctx: any) => unknown> = {};
-  const exporters: Record<string, (ctx: any) => unknown> = {};
-  const api = fullApi((name, def) => {
-    if (name === "command" && def?.name === "jira sync") cmd = def;
-    if (name === "importer" && def?.name) importers[def.name] = def.fn;
-    if (name === "exporter" && def?.name) exporters[def.name] = def.fn;
-  });
-  extension.activate(api as any);
-  return { cmd: cmd!, importers, exporters };
-}
+// Behavioural tests below exercise the registered sync command, jira importer,
+// and jira exporter through pm's REAL dispatch engine (runCommand / runImporter /
+// runExporter on the shared harness) rather than a hand-rolled api double.
 
 function withoutCreds<T>(fn: () => Promise<T>): Promise<T> {
   const prev = {
@@ -369,9 +346,9 @@ function withoutCreds<T>(fn: () => Promise<T>): Promise<T> {
 
 test("jira sync throws a USAGE CommandError when credentials are missing", async () => {
   await withoutCreds(async () => {
-    const { cmd } = capture();
+    const ext = await getHarness();
     await assert.rejects(
-      async () => cmd.run({ args: [], options: { project: "PROJ" }, pm_root: ".agents/pm" }),
+      async () => ext.runCommand({ command: "jira sync", options: { project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
         assert.match((err as Error).message, /JIRA_BASE_URL/);
         assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
@@ -383,9 +360,9 @@ test("jira sync throws a USAGE CommandError when credentials are missing", async
 
 test("pm jira import (importer) throws a USAGE CommandError when credentials are missing", async () => {
   await withoutCreds(async () => {
-    const { importers } = capture();
+    const ext = await getHarness();
     await assert.rejects(
-      async () => importers["jira"]!({ args: [], options: { project: "PROJ" }, pm_root: ".agents/pm" }),
+      async () => ext.runImporter({ importer: "jira", options: { project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
         assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
         return true;
@@ -396,9 +373,9 @@ test("pm jira import (importer) throws a USAGE CommandError when credentials are
 
 test("pm jira export --push throws a USAGE CommandError when credentials are missing", async () => {
   await withoutCreds(async () => {
-    const { exporters } = capture();
+    const ext = await getHarness();
     await assert.rejects(
-      async () => exporters["jira"]!({ args: [], options: { push: true, project: "PROJ" }, pm_root: ".agents/pm" }),
+      async () => ext.runExporter({ exporter: "jira", options: { push: true, project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
         assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
         return true;
@@ -415,9 +392,9 @@ test("jira sync throws when neither --project nor --jql is given", async () => {
     process.env.JIRA_BASE_URL = "https://example.atlassian.net";
     process.env.JIRA_API_TOKEN = "x";
     process.env.JIRA_EMAIL = "a@b.c";
-    const { cmd } = capture();
+    const ext = await getHarness();
     await assert.rejects(
-      async () => cmd.run({ args: [], options: {}, pm_root: ".agents/pm" }),
+      async () => ext.runCommand({ command: "jira sync", options: {}, pmRoot: ".agents/pm" }),
       /--project|--jql/
     );
   } finally {
@@ -796,30 +773,6 @@ test("decidePushOnWrite ignores history writes, deletes, and non-project scope",
   assert.strictEqual(decidePushOnWrite({ op: "update", scope: "project" }, env).shouldPush, true);
 });
 
-// --- activation: validate command + onWrite hook registered ---------------
-
-test("extension registers the jira validate command and an onWrite hook", () => {
-  const registered: string[] = [];
-  const commandNames: string[] = [];
-  const api = {
-    registerCommand: (def: any) => { registered.push("command"); commandNames.push(def.name); },
-    registerImporter: () => registered.push("importer"),
-    registerExporter: () => registered.push("exporter"),
-    registerItemFields: () => registered.push("itemFields"),
-    registerPreflight: () => registered.push("preflight"),
-    hooks: {
-      beforeCommand: () => registered.push("hook:before"),
-      afterCommand: () => registered.push("hook:after"),
-      onWrite: () => registered.push("hook:onWrite"),
-      onRead: () => registered.push("hook:onRead"),
-      onIndex: () => registered.push("hook:onIndex"),
-    },
-  };
-  extension.activate(api as any);
-  assert.ok(commandNames.includes("jira validate"), "should register jira validate");
-  assert.ok(registered.includes("hook:onWrite"), "should register an onWrite hook");
-});
-
 // ---------------------------------------------------------------------------
 // runExportPush — per-item failure isolation (regression: a single failed
 // create/update used to throw mid-batch and abandon every remaining item).
@@ -953,13 +906,13 @@ test("buildJql uses the project-key alias via readJqlFilters", () => {
 test("parseFieldMap is reached via --field-map alias in runImport dry-run", async () => {
   // --field-map with an unknown source field must still surface a USAGE error
   // through the alias path (proves the alias is wired into parseFieldMap).
-  const { cmd } = capture();
+  const ext = await getHarness();
   await assert.rejects(
     async () =>
-      cmd.run({
-        args: [],
+      ext.runCommand({
+        command: "jira sync",
         options: { "project-key": "PROJ", "field-map": "bogus=x", "dry-run": true },
-        pm_root: ".agents/pm",
+        pmRoot: ".agents/pm",
       }),
     (err: unknown) => {
       assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
@@ -976,12 +929,13 @@ test("--project-key alias drives the import dry-run (no creds needed)", async ()
     delete process.env.JIRA_BASE_URL;
     delete process.env.JIRA_API_TOKEN;
     delete process.env.JIRA_EMAIL;
-    const { cmd } = capture();
-    const res = await cmd.run({
-      args: [],
+    const ext = await getHarness();
+    const { result } = await ext.runCommand({
+      command: "jira sync",
       options: { "project-key": "ALIASPROJ", "dry-run": true },
-      pm_root: ".agents/pm",
-    }) as any;
+      pmRoot: ".agents/pm",
+    });
+    const res = result as { dryRun: boolean; project: string; jql: string };
     assert.strictEqual(res.dryRun, true);
     assert.strictEqual(res.project, "ALIASPROJ");
     assert.match(res.jql, /^project = ALIASPROJ AND statusCategory != Done/);
@@ -1072,8 +1026,7 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
     { title: "Export item beta" },
   ]);
   try {
-    const { exporters } = capture();
-    const exporter = exporters["jira"]!;
+    const ext = await getHarness();
 
     // Spy on stdout/console.log and stderr/console.error to prove the preview
     // is no longer written to stdout. Restore unconditionally via finally.
@@ -1084,11 +1037,12 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
     console.log = (...args: unknown[]) => logCalls.push(args);
     console.error = (...args: unknown[]) => errorCalls.push(args);
     try {
-      const result = (await exporter({
-        args: [],
+      const { result } = await ext.runExporter({
+        exporter: "jira",
         options: { project: "PROJ" },
-        pm_root: dir,
-      })) as {
+        pmRoot: dir,
+      });
+      const exportResult = result as {
         exported: number;
         pushed: boolean;
         dryRun: boolean;
@@ -1124,19 +1078,19 @@ test("pm jira export (no --push) routes preview to stderr and returns payloads",
       // 3) the returned object carries the full plan entries (op/method/
       //    endpoint/payload) — the same array-of-entries shape as pm-github's
       //    `plan` — so `--json` consumers get the complete, actionable plan.
-      assert.strictEqual(result.exported, 2, "exported count matches item count");
-      assert.strictEqual(result.pushed, false, "default export is a non-push preview");
-      assert.strictEqual(result.dryRun, true, "default export is marked as a dry-run preview");
-      assert.ok(Array.isArray(result.plan), "return must include the plan entries array");
-      assert.strictEqual(result.plan.length, 2, "returned plan carries every entry");
-      for (const entry of result.plan) {
+      assert.strictEqual(exportResult.exported, 2, "exported count matches item count");
+      assert.strictEqual(exportResult.pushed, false, "default export is a non-push preview");
+      assert.strictEqual(exportResult.dryRun, true, "default export is marked as a dry-run preview");
+      assert.ok(Array.isArray(exportResult.plan), "return must include the plan entries array");
+      assert.strictEqual(exportResult.plan.length, 2, "returned plan carries every entry");
+      for (const entry of exportResult.plan) {
         assert.ok(entry && typeof entry === "object", "each plan entry is an object");
         assert.ok(entry.op === "create" || entry.op === "update", "entry has a create/update op");
         assert.ok(entry.payload && "fields" in entry.payload, "entry carries its Jira payload");
       }
       // The stderr preview is exactly the payloads of the returned plan entries.
       assert.deepStrictEqual(
-        result.plan.map((e) => e.payload),
+        exportResult.plan.map((e) => e.payload),
         preview,
         "returned plan entries' payloads match the stderr preview exactly"
       );
