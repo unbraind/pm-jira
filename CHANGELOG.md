@@ -6,6 +6,10 @@
 
 - Enforce a real coverage gate by running tests against TypeScript sources ([pm-jira-yp5b](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-yp5b.toon))
 
+### Other
+
+- Adopt pm-cli 2026.7.29 ([pm-jira-fzdq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-fzdq.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
