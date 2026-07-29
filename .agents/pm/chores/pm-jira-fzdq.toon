@@ -6,11 +6,13 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-07-29T04:42:13.709Z"
-updated_at: "2026-07-29T04:43:14.558Z"
+updated_at: "2026-07-29T05:02:42.864Z"
 closed_at: "2026-07-29T04:43:14.546Z"
 completed_at: "2026-07-29T04:43:14.546Z"
 author: pi-agent
 comments[1]{created_at,author,text}:
   "2026-07-29T04:42:32.459Z",pi-agent,"Bumped @unbrained/pm-cli devDependency to 2026.7.29, set peerDependency to >=2026.7.29. Audited for 'list --all' and 'list -a': no hits found. Upstream workaround audit: GH-651 (signed activity window) - '-7d' references are Jira JQL date syntax, not pm activity windows. GH-672/676/785/792/794 - no hits. No workarounds to remove."
+notes[1]{created_at,author,text}:
+  "2026-07-29T05:02:42.863Z",claude-orchestrator,"Orchestrator follow-up from Greptile review on pm-jira#48, applied fleet-wide after checking all 18 READMEs. The Requirements section still advertised a pm-cli floor of 2026.7.5 while peerDependencies now demands >=2026.7.29, which misleads installers and invites strict-peer install failures for versions the docs present as supported. Updated the floor to >=2026.7.29. Only three packages carried a stale requirement floor (pm-gantt-chart, pm-jira, pm-linear); the other pm-cli version references across the fleet are feature-availability notes such as the 2026.7.19 atomic-import and 2026.7.22 merge-reconcile lines, which remain historically accurate and were deliberately left alone."
 close_reason: "Bumped @unbrained/pm-cli to 2026.7.29 (devDep + peerDep >=2026.7.29). No 'list --all' hits found. No upstream workarounds to remove. All quality gates pass: 76 tests, coverage lines 82.23% (threshold 82), branches 81.84% (threshold 81), functions 82.76% (threshold 82). Changelog check and audit:prod clean."
 body: ""

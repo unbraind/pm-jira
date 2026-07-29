@@ -399,7 +399,7 @@ older blunt `pm history-repair --all` remains available as a lower-level primiti
 ## Requirements
 
 - Node.js `>=22.18.0` (uses native `https` module and `Buffer`)
-- pm-cli `>=2026.7.5`
+- pm-cli `>=2026.7.29`
 - TypeScript 6.x (dev dependency)
 
 ## License
