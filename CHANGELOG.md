@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Release commits discard the rebuilt dist, so the git-install path serves the previous version ([pm-jira-1zhr](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1zhr.toon))
+
 ## 2026.7.29 - 2026-07-29
 
 ### Added
