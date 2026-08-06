@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Gate CI on strict tracked pm project health ([pm-jira-zyst](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-zyst.toon))
+
 ## 2026.8.4 - 2026-08-04
 
 ### Other
