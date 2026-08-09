@@ -33,12 +33,30 @@ import { createHash } from "node:crypto";
 // with a generic code instead of a semantic one. We mirror the SDK's EXIT_CODE
 // contract here rather than importing it: standalone-installed extensions load
 // only their own `dist/`, so `@unbrained/pm-cli` is not resolvable at runtime.
+/**
+ * Semantic exit codes pm's command runtime propagates to the shell.
+ *
+ * Mirrored here rather than imported because a standalone-installed extension
+ * loads only its own `dist/`, so `@unbrained/pm-cli` is not resolvable at
+ * runtime. {@link CommandError} carries one of these so a handled failure exits
+ * cleanly once instead of re-invoking the handler.
+ */
 export const EXIT_CODE = {
     GENERIC_FAILURE: 1,
     USAGE: 2,
     NOT_FOUND: 3,
 };
+/**
+ * Error that carries a semantic process exit code.
+ *
+ * pm's command runtime treats a thrown error as a cleanly handled non-zero exit
+ * only when it exposes a numeric `exitCode`; a plain `Error` instead falls
+ * through to the "unhandled" path, which re-invokes the handler (doubling side
+ * effects such as a second Jira fetch) and exits with a generic code. Throwing
+ * this routes a failure to a clean, single exit at the chosen code.
+ */
 export class CommandError extends Error {
+    /** Numeric exit code the runtime propagates to the shell (one of {@link EXIT_CODE}). */
     exitCode;
     constructor(message, exitCode = EXIT_CODE.GENERIC_FAILURE) {
         super(message);
@@ -46,6 +64,15 @@ export class CommandError extends Error {
         this.exitCode = exitCode;
     }
 }
+/**
+ * Map a Jira priority name onto pm's 1–4 priority scale.
+ *
+ * Unknown or missing priorities collapse to `3` (Medium) so an import never
+ * blocks on an unmapped workflow value.
+ *
+ * @param jiraPriority - The Jira priority name (e.g. "Highest", "Low").
+ * @returns The pm priority (1 highest – 4 lowest).
+ */
 export function mapJiraPriority(jiraPriority) {
     if (!jiraPriority)
         return 3;
@@ -60,6 +87,17 @@ export function mapJiraPriority(jiraPriority) {
         return 4;
     return 3;
 }
+/**
+ * Map a Jira status name onto a pm status.
+ *
+ * A caller-supplied `--status-map` override wins over the built-in keyword
+ * heuristic; unrecognized names default to `open` so an import never invents a
+ * state.
+ *
+ * @param jiraStatus - The Jira status name as returned by the API.
+ * @param statusMap - Optional override keyed by lowercased Jira status name.
+ * @returns The resolved pm status.
+ */
 export function mapJiraStatus(jiraStatus, statusMap) {
     const name = jiraStatus.toLowerCase();
     // A caller-supplied --status-map override wins over the built-in heuristics.
@@ -81,10 +119,16 @@ export function mapJiraStatus(jiraStatus, statusMap) {
     // Default: to do / open / backlog / any other
     return "open";
 }
-// Map a Jira statusCategory key (the workflow-agnostic bucket Jira assigns to
-// every status: "new" | "indeterminate" | "done") to a pm status. This is a
-// robust fallback that works across custom workflows where the status *name*
-// is unrecognized but the category is always one of three known values.
+/**
+ * Map a Jira `statusCategory` key onto a pm status.
+ *
+ * The category is the workflow-agnostic bucket Jira assigns to every status
+ * ("new" | "indeterminate" | "done"), so this is a robust fallback that works
+ * across custom workflows where the status *name* is unrecognized.
+ *
+ * @param categoryKey - The statusCategory key from the issue.
+ * @returns The resolved pm status.
+ */
 export function mapJiraStatusCategory(categoryKey) {
     switch ((categoryKey ?? "").toLowerCase()) {
         case "done":
@@ -96,8 +140,15 @@ export function mapJiraStatusCategory(categoryKey) {
             return "open";
     }
 }
-// Map a Jira issue type to a pm item type. Defaults follow pm's common type
-// vocabulary; a `--map issuetype=<pmType>` override can replace the result.
+/**
+ * Map a Jira issue type onto a pm item type.
+ *
+ * Defaults follow pm's common type vocabulary; a `--map issuetype=<pmType>`
+ * override can replace the result for a custom workflow.
+ *
+ * @param jiraType - The Jira issue-type name.
+ * @returns The pm item type.
+ */
 export function mapJiraIssueType(jiraType) {
     const name = (jiraType ?? "").toLowerCase();
     if (name === "bug" || name === "defect")
@@ -110,7 +161,12 @@ export function mapJiraIssueType(jiraType) {
         return "Task";
     return "Issue";
 }
-// Reverse priority map: pm priority (1..4) -> Jira priority name, for export.
+/**
+ * Reverse-map a pm priority to its Jira priority name (for export).
+ *
+ * @param priority - The pm priority (1–4) or numeric value.
+ * @returns The Jira priority name.
+ */
 export function mapPmPriorityToJira(priority) {
     switch (priority) {
         case 1:
@@ -154,6 +210,16 @@ const PM_STATUS_ALIASES = {
 function normalizeStatusAliasKey(value) {
     return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
+/**
+ * Normalize a user-supplied pm status string to its canonical value.
+ *
+ * Accepts canonical statuses and common aliases (todo, wip, done, on-hold, …),
+ * collapsing spacing/hyphens. Returns `undefined` for an unrecognized value so
+ * callers can treat it as raw Jira input rather than guessing.
+ *
+ * @param value - The raw status string from a CLI flag.
+ * @returns The canonical pm status, or `undefined` when unrecognized.
+ */
 export function normalizePmStatusInput(value) {
     if (!value || !value.trim())
         return undefined;
@@ -185,12 +251,31 @@ const KNOWN_MAP_KEYS = new Set([
     "duedate",
     "type",
 ]);
+/**
+ * Whether a `--map` marks any of the given fields as skipped ("skip"/"ignore").
+ *
+ * Lets the importer short-circuit reading a field the user chose to drop.
+ *
+ * @param fieldMap - The parsed field map (may be undefined).
+ * @param keys - The jira-side field keys to check.
+ * @returns True when at least one key is mapped to skip/ignore.
+ */
 function fieldMapSkips(fieldMap, ...keys) {
     return keys.some((key) => {
         const value = fieldMap?.[key]?.toLowerCase();
         return value === "skip" || value === "ignore";
     });
 }
+/**
+ * Parse a `--map` value into a jiraField→pmField lookup.
+ *
+ * Accepts comma-separated `jiraField=pmField` pairs. Throws {@link CommandError}
+ * (USAGE) on a malformed pair or an unknown jira-side source field. Returns
+ * `undefined` when no usable mapping was supplied so callers keep defaults.
+ *
+ * @param raw - The raw `--map` string.
+ * @returns The parsed map, or `undefined`.
+ */
 export function parseFieldMap(raw) {
     if (!raw)
         return undefined;
@@ -215,10 +300,16 @@ export function parseFieldMap(raw) {
     }
     return Object.keys(map).length > 0 ? map : undefined;
 }
-// Parse a --status-map value of the form
-//   "In Progress=in_progress,QA=blocked"
-// into a lower-cased lookup table. Target values accept canonical pm statuses
-// plus common aliases (e.g. done -> closed, wip -> in_progress).
+/**
+ * Parse a `--status-map` value into a lowercased Jira-status→pm-status table.
+ *
+ * Accepts comma-separated `JiraStatus=pm_status` pairs; targets accept canonical
+ * pm statuses plus common aliases (done → closed, wip → in_progress). Throws
+ * {@link CommandError} (USAGE) on a malformed entry or unrecognized target.
+ *
+ * @param raw - The raw `--status-map` string.
+ * @returns The parsed lookup, or `undefined`.
+ */
 export function parseStatusMap(raw) {
     if (!raw)
         return undefined;
@@ -254,14 +345,32 @@ const PM_STATUS_TO_JQL = {
     closed: "statusCategory = Done",
     blocked: "status = \"Blocked\"",
 };
-// Quote a JQL value: numbers/keys stay bare where Jira allows it, but anything
-// with whitespace or punctuation is wrapped in double quotes (escaping any
-// embedded quote) so user input can't break out of the clause.
+/**
+ * Quote a JQL value for safe interpolation into a clause.
+ *
+ * Bare identifiers, numbers, and dotted keys stay unquoted; anything with
+ * whitespace or punctuation is wrapped in double quotes (escaping embedded
+ * quotes) so user input cannot break out of the clause.
+ *
+ * @param value - The raw JQL value.
+ * @returns The quoted-or-bare value, safe for clause interpolation.
+ */
 export function jqlQuote(value) {
     if (/^[A-Za-z0-9_.-]+$/.test(value))
         return value;
     return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
+/**
+ * Compose convenience filters into a single JQL query string.
+ *
+ * Explicit `--jql` is authoritative and returned verbatim; otherwise the
+ * project/status/assignee/issue-type/label/updated-since filters are
+ * AND-combined. With no constraints the historical default ("not done, by
+ * priority") is returned so back-compat holds.
+ *
+ * @param filters - The convenience filters to compose.
+ * @returns The composed JQL query.
+ */
 export function buildJql(filters) {
     // Explicit --jql is authoritative; never rewrite a user's query.
     if (filters.jql && filters.jql.trim())
@@ -299,7 +408,15 @@ export function buildJql(filters) {
         clauses.push("statusCategory != Done");
     return `${clauses.join(" AND ")} ORDER BY priority ASC`;
 }
-// Read the convenience JQL filters off a loose options bag (kebab/camel safe).
+/**
+ * Read the convenience JQL filters off a loose options bag.
+ *
+ * Tolerates both kebab- and camel-case keys (the pm CLI normalizes flags to
+ * camelCase).
+ *
+ * @param options - The raw option object from the command handler.
+ * @returns The resolved JQL filters.
+ */
 export function readJqlFilters(options) {
     return {
         jql: readStringOption(options, "jql"),
@@ -314,6 +431,15 @@ export function readJqlFilters(options) {
 // ---------------------------------------------------------------------------
 // Jira description (Atlassian Document Format) → plain text
 // ---------------------------------------------------------------------------
+/**
+ * Flatten a Jira Atlassian Document Format (ADF) description to plain text.
+ *
+ * Recursively walks the `content`/`text` nodes; returns an empty string for a
+ * null/missing description.
+ *
+ * @param node - An ADF node, a leaf text node, or null/undefined.
+ * @returns The concatenated plain text.
+ */
 export function adfToPlainText(node) {
     if (!node)
         return "";
@@ -328,8 +454,15 @@ export function adfToPlainText(node) {
     }
     return "";
 }
-// Render a plain-text body as a minimal Atlassian Document Format doc so it can
-// be POSTed back to the Jira create API.
+/**
+ * Render a plain-text body as a minimal ADF document.
+ *
+ * Wraps the text in a single paragraph so it can be POSTed to the Jira create
+ * API. An empty body becomes a single space (Jira rejects an empty paragraph).
+ *
+ * @param text - The plain text to wrap.
+ * @returns A minimal ADF doc.
+ */
 export function plainTextToAdf(text) {
     const body = text && text.trim().length > 0 ? text : " ";
     return {
@@ -345,9 +478,25 @@ export function plainTextToAdf(text) {
 // powers `pm jira export`.
 // ---------------------------------------------------------------------------
 const JIRA_MARKER = /^Jira ([A-Z][A-Z0-9]+-\d+): (\S+)\s*$/m;
+/**
+ * Build the provenance marker line stored in a pm item's description.
+ *
+ * Embeds the Jira key and browse URL so {@link extractJiraKey} can recover them
+ * (pm `create` exposes no generic custom-field setter for an extension).
+ *
+ * @param key - The Jira issue key (`PROJECT-123`).
+ * @param browseUrl - The human-facing issue URL.
+ * @returns The marker line.
+ */
 export function jiraProvenance(key, browseUrl) {
     return `Jira ${key}: ${browseUrl}`;
 }
+/**
+ * Recover the Jira key and URL from a description's provenance marker.
+ *
+ * @param text - The text to scan (typically the item description).
+ * @returns The key and URL, or `undefined` when no marker is present.
+ */
 export function extractJiraKey(text) {
     if (!text)
         return undefined;
@@ -369,16 +518,33 @@ function camelKey(kebab) {
 function readOptionValue(options, kebab) {
     return options[kebab] ?? options[camelKey(kebab)];
 }
+/**
+ * Read a trimmed, non-empty string option under its kebab- or camel-case key.
+ *
+ * Returns `undefined` for a missing or blank value. The pm CLI normalizes loose
+ * flags to camelCase, so both spellings are checked (see the section note).
+ *
+ * @param options - The raw option object.
+ * @param kebab - The kebab-case key (its camelCase form is also checked).
+ * @returns The trimmed value, or `undefined`.
+ */
 export function readStringOption(options, kebab) {
     const v = readOptionValue(options, kebab);
     const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
     const trimmed = value?.trim();
     return trimmed ? trimmed : undefined;
 }
-// Read a string option with one or more alias keys (kebab or camel). Returns the
-// first non-empty value. Used to surface user-friendly flag aliases like
-// --field-map (alias for --map) and --project-key (alias for --project) without
-// duplicating the read logic at every call site.
+/**
+ * Read a string option under one or more alias keys (kebab or camel).
+ *
+ * Returns the first non-empty value. Surfaces user-friendly flag aliases (e.g.
+ * `--field-map` for `--map`, `--project-key` for `--project`) without
+ * duplicating read logic at every call site.
+ *
+ * @param options - The raw option object.
+ * @param kebabs - The kebab-case keys to try, in priority order.
+ * @returns The first non-empty value, or `undefined`.
+ */
 export function readStringOptionAliased(options, ...kebabs) {
     for (const kebab of kebabs) {
         const value = readStringOption(options, kebab);
@@ -387,6 +553,16 @@ export function readStringOptionAliased(options, ...kebabs) {
     }
     return undefined;
 }
+/**
+ * Read a numeric option under its kebab- or camel-case key.
+ *
+ * Coerces numeric strings; returns `undefined` for a missing or non-finite
+ * value.
+ *
+ * @param options - The raw option object.
+ * @param kebab - The kebab-case key (its camelCase form is also checked).
+ * @returns The parsed number, or `undefined`.
+ */
 export function readNumberOption(options, kebab) {
     const v = readOptionValue(options, kebab);
     if (v === undefined || v === null)
@@ -394,6 +570,16 @@ export function readNumberOption(options, kebab) {
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : undefined;
 }
+/**
+ * Read a boolean option under its kebab- or camel-case key.
+ *
+ * A bare flag (empty string) reads as true, as do the strings "true"/"1"/"yes";
+ * anything else falls back to JavaScript truthiness.
+ *
+ * @param options - The raw option object.
+ * @param kebab - The kebab-case key (its camelCase form is also checked).
+ * @returns The resolved boolean.
+ */
 export function readBooleanOption(options, kebab) {
     const v = readOptionValue(options, kebab);
     if (typeof v === "boolean")
@@ -404,6 +590,13 @@ export function readBooleanOption(options, kebab) {
     }
     return Boolean(v);
 }
+/**
+ * Read the first non-empty string value under any of the given keys.
+ *
+ * @param options - The raw option object.
+ * @param keys - The kebab-case keys to try, in priority order.
+ * @returns The first non-empty value, or `undefined`.
+ */
 export function optionString(options, ...keys) {
     for (const key of keys) {
         const value = readStringOption(options, key);
@@ -412,6 +605,14 @@ export function optionString(options, ...keys) {
     }
     return undefined;
 }
+/**
+ * Read the first finite numeric value under any of the given keys.
+ *
+ * @param options - The raw option object.
+ * @param defaultValue - Returned when none of the keys yield a number.
+ * @param keys - The kebab-case keys to try, in priority order.
+ * @returns The first parsed number, or the default.
+ */
 export function optionInt(options, defaultValue, ...keys) {
     for (const key of keys) {
         const value = readNumberOption(options, key);
@@ -420,6 +621,13 @@ export function optionInt(options, defaultValue, ...keys) {
     }
     return defaultValue;
 }
+/**
+ * Whether any of the given boolean keys reads as enabled.
+ *
+ * @param options - The raw option object.
+ * @param keys - The kebab-case keys to check.
+ * @returns True when at least one key is truthy.
+ */
 export function optionEnabled(options, ...keys) {
     return keys.some((key) => readBooleanOption(options, key));
 }
