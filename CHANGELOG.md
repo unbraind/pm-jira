@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt the canonical pm-ops docstring gate ([pm-jira-j6sr](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-j6sr.toon))
+
 ## 2026.8.7 - 2026-08-07
 
 ### Other

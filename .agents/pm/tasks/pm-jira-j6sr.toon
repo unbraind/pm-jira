@@ -1,0 +1,17 @@
+id: pm-jira-j6sr
+title: Adopt the canonical pm-ops docstring gate
+description: "Adopt the canonical pm-ops docstring coverage analyzer as the single fleet-wide docstring gate: add pm-ops as a devDependency, a thin scripts/docstring-gate.ts launcher that calls analyzeDocstringCoverage (no vendored analyzer), wire it into release:check and CI, and write real JSDoc for every flagged declaration until the gate reports zero violations."
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-09T06:31:43.563Z"
+updated_at: "2026-08-09T06:31:52.872Z"
+closed_at: "2026-08-09T06:31:52.858Z"
+completed_at: "2026-08-09T06:31:52.858Z"
+author: pi-agent
+acceptance_criteria: "scripts/docstring-gate.ts is a thin launcher over pm-ops/docstrings analyzeDocstringCoverage (no vendored/forked analyzer); npm run docstring reports zero violations (32 violations fixed in index.ts); release:check is fully green and committed dist/ matches a fresh build; CI runs a 'Verify complete docstring coverage' step immediately after the build step, before coverage (no existing step renamed); a behavioral test covers the gate runGate/main/isMainInvocation wiring"
+notes[1]{created_at,author,text}:
+  "2026-08-09T06:31:52.447Z",pi-agent,"Docstring gate initially reported 32 violations in index.ts; added a self-contained scripts/docstring-gate.ts launcher over pm-ops/docstrings analyzeDocstringCoverage (matching this repo's coverage-gate.ts style, no shared launcher module), a behavioral test, and real JSDoc for every flagged declaration. Gate now reports 0 violations (4 files, 40 declarations documented)."
+close_reason: "Docstring gate adopted: pm-ops 2026.8.8 devDependency, self-contained scripts/docstring-gate.ts launcher + test, release:check and CI wired, dist/ rebuilt, 32 violations fixed to 0. Full release:check green."
+body: ""
