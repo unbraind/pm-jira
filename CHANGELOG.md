@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Propagate the docstring gate entry guard fix ([pm-jira-tmj3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-tmj3.toon))
 - The mandatory docstring gate could skip its own scan and still exit zero ([pm-jira-5vse](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5vse.toon))
 
 ### Other
