@@ -105,7 +105,7 @@ test("preflight override is scoped to pm-jira's owned command paths", async () =
   const override = ext.assertPreflightOverride();
   assert.deepEqual(
     override.commands,
-    ["jira sync", "jira import", "jira export"],
+    ["jira sync", "jira import", "jira export", "jira-sync import"],
     "preflight override must be scoped to exactly pm-jira's owned mutating command paths",
   );
   assert.equal(
@@ -113,6 +113,17 @@ test("preflight override is scoped to pm-jira's owned command paths", async () =
     "function",
     "scoped preflight override must expose a run function",
   );
+  // Bind the scope to the classifier. Narrowing the override to a command list
+  // means an entry missing here is a command that silently loses its credential
+  // gate, so every path the classifier calls mutating must also be in scope.
+  for (const command of override.commands ?? []) {
+    if (command === "jira export") continue; // mutating only with --push
+    assert.strictEqual(
+      isMutatingJiraInvocation(command, {}),
+      true,
+      `${command} is in the preflight scope but the classifier does not treat it as mutating`,
+    );
+  }
 });
 
 test("preflight gate: fires only for network-mutating jira invocations", () => {
@@ -126,6 +137,12 @@ test("preflight gate: fires only for network-mutating jira invocations", () => {
   assert.strictEqual(isMutatingJiraInvocation("jira export", {}), false);
   assert.strictEqual(isMutatingJiraInvocation("jira export", { push: true, dryRun: true }), false);
   assert.strictEqual(isMutatingJiraInvocation("jira validate", {}), false);
+  // The deprecated `jira-sync import` alias reaches the same network pull as
+  // `jira import`. Scoping the preflight override to a command list made this
+  // load-bearing: the alias must be classified as mutating, or a narrower scope
+  // silently lets it run uncredentialed.
+  assert.strictEqual(isMutatingJiraInvocation("jira-sync import", {}), true);
+  assert.strictEqual(isMutatingJiraInvocation("jira-sync import", { dryRun: true }), false);
   // Unrelated commands never fire.
   assert.strictEqual(isMutatingJiraInvocation("list", {}), false);
   assert.strictEqual(isMutatingJiraInvocation("create", {}), false);

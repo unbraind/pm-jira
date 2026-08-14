@@ -714,6 +714,13 @@ export function isMutatingJiraInvocation(command, options) {
     switch (command) {
         case "jira sync":
         case "jira import":
+        // `jira-sync import` is the deprecated config-driven importer alias. It
+        // reaches the same network pull as `jira import`, so it is mutating on the
+        // same terms. Scoping the preflight override to a command list made this
+        // omission load-bearing: the previously global registration covered the
+        // alias by accident, and a narrower scope without a matching classifier
+        // entry would let it run uncredentialed.
+        case "jira-sync import":
             // Network pull unless previewing.
             return !dryRun;
         case "jira export":
@@ -1667,7 +1674,7 @@ export default defineExtension({
         // process termination bypasses the runtime's catch. Verified functionally.
         // -----------------------------------------------------------------------
         api.registerPreflight({
-            commands: ["jira sync", "jira import", "jira export"],
+            commands: ["jira sync", "jira import", "jira export", "jira-sync import"],
             run: (ctx) => {
                 // `PreflightOverrideContext` declares `command`/`options` as required, but
                 // the optional-chaining + `??` fallbacks are kept as defensive no-ops so
