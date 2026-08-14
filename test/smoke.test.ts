@@ -94,6 +94,27 @@ test("extension activates cleanly and registers importer, exporter, schema field
   ext.assertHook({ kind: "on_write" });
 });
 
+test("preflight override is scoped to pm-jira's owned command paths", async () => {
+  // The override MUST register as a scoped object (commands + run), not a bare
+  // function: a global (unscoped) override collides pairwise with every other
+  // installed package's preflight override (pm health reports
+  // extension_preflight_override_collision). The runtime matches a command
+  // against `commands` by exact normalized path, so the array lists the full
+  // mutating command paths isMutatingJiraInvocation recognizes.
+  const ext = await getHarness();
+  const override = ext.assertPreflightOverride();
+  assert.deepEqual(
+    override.commands,
+    ["jira sync", "jira import", "jira export"],
+    "preflight override must be scoped to exactly pm-jira's owned mutating command paths",
+  );
+  assert.equal(
+    typeof override.run,
+    "function",
+    "scoped preflight override must expose a run function",
+  );
+});
+
 test("preflight gate: fires only for network-mutating jira invocations", () => {
   // Mutating: sync/import without --dry-run, export with --push.
   assert.strictEqual(isMutatingJiraInvocation("jira sync", {}), true);

@@ -2269,13 +2269,17 @@ export default defineExtension({
     ]);
 
     // -----------------------------------------------------------------------
-    // preflight — fail-fast credential validation gate (registerPreflight).
+    // preflight — fail-fast credential validation gate (registerPreflight),
+    // scoped to pm-jira's network-mutating command paths so it cannot contend
+    // with another package's preflight override (an unscoped/global override
+    // collides pairwise with every other installed package's override; pm health
+    // reports extension_preflight_override_collision).
     //
-    // Fires ONLY for pm-jira's network-mutating command paths and ONLY when
-    // they are actually about to hit Jira (see isMutatingJiraInvocation). It
-    // validates that JIRA_BASE_URL (or --host), JIRA_EMAIL and JIRA_API_TOKEN
-    // are present and ABORTS the command with a clear, actionable error BEFORE
-    // any pm-store read or Jira REST call happens.
+    // Fires ONLY for the command paths isMutatingJiraInvocation recognizes and
+    // ONLY when they are actually about to hit Jira. It validates that
+    // JIRA_BASE_URL (or --host), JIRA_EMAIL and JIRA_API_TOKEN are present and
+    // ABORTS the command with a clear, actionable error BEFORE any pm-store read
+    // or Jira REST call happens.
     //
     // IMPORTANT runtime fact: the pm-cli preflight-override runtime wraps this
     // callback in a try/catch that SWALLOWS any throw into a non-fatal warning
@@ -2284,20 +2288,23 @@ export default defineExtension({
     // body runs we print the actionable message and `process.exit()` directly —
     // process termination bypasses the runtime's catch. Verified functionally.
     // -----------------------------------------------------------------------
-    api.registerPreflight((ctx: PreflightOverrideContext) => {
-      // `PreflightOverrideContext` declares `command`/`options` as required, but
-      // the optional-chaining + `??` fallbacks are kept as defensive no-ops so
-      // a future runtime that omits a field cannot turn a typed read into a
-      // crash here (parity with the pre-typing behaviour).
-      const command: string = ctx?.command ?? "";
-      const options: Record<string, unknown> = ctx?.options ?? {};
-      if (jiraPreflightShouldFailFast(command, options, process.env)) {
-        const diag = diagnoseCreds(options, process.env);
-        process.stderr.write(jiraPreflightErrorMessage(command, diag) + "\n");
-        process.exit(EXIT_CODE.USAGE);
-      }
-      // Success / not-applicable: silent pass-through (no decision delta).
-      return {};
+    api.registerPreflight({
+      commands: ["jira sync", "jira import", "jira export"],
+      run: (ctx: PreflightOverrideContext) => {
+        // `PreflightOverrideContext` declares `command`/`options` as required, but
+        // the optional-chaining + `??` fallbacks are kept as defensive no-ops so
+        // a future runtime that omits a field cannot turn a typed read into a
+        // crash here (parity with the pre-typing behaviour).
+        const command: string = ctx?.command ?? "";
+        const options: Record<string, unknown> = ctx?.options ?? {};
+        if (jiraPreflightShouldFailFast(command, options, process.env)) {
+          const diag = diagnoseCreds(options, process.env);
+          process.stderr.write(jiraPreflightErrorMessage(command, diag) + "\n");
+          process.exit(EXIT_CODE.USAGE);
+        }
+        // Success / not-applicable: silent pass-through (no decision delta).
+        return {};
+      },
     });
 
     // -----------------------------------------------------------------------

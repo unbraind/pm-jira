@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Scope preflight override to pm-jira's owned commands ([pm-jira-5mxw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5mxw.toon))
+
 ## 2026.8.10 - 2026-08-10
 
 ### Fixed
