@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Scope preflight override to pm-jira's owned commands ([pm-jira-5mxw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5mxw.toon))
+
+### Deprecated
+
+- The deprecated jira-sync importer alias loses its credential gate when the preflight override is scoped ([pm-jira-2m0s](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-2m0s.toon))
+
 ## 2026.8.10 - 2026-08-10
 
 ### Fixed

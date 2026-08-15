@@ -1,0 +1,20 @@
+id: pm-jira-2m0s
+title: The deprecated jira-sync importer alias loses its credential gate when the preflight override is scoped
+description: "Found by auditing the class after CodeRabbit reported the same defect in pm-linear. Scoping registerPreflight to a command list narrows which commands the override runs for. The scope listed jira sync, jira import and jira export, but registerImporter also exposes the deprecated config-driven jira-sync alias, which reaches the same network pull. The previously global registration covered it by accident. isMutatingJiraInvocation also returned false for the alias, so even a global registration would not have failed fast on it. Both are now fixed: the alias is in the scope list and the classifier treats it as mutating on the same dry-run terms as jira import. A loop test binds the scope list to the classifier so the two cannot drift apart."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-14T06:44:38.580Z"
+updated_at: "2026-08-14T06:44:40.220Z"
+closed_at: "2026-08-14T06:44:40.206Z"
+completed_at: "2026-08-14T06:44:40.206Z"
+author: claude
+resolution: jira-sync import added to the preflight scope and recognised as mutating by isMutatingJiraInvocation.
+expected_result: "A mutating legacy jira-sync import fails fast without credentials, exactly as jira import does."
+actual_result: Scope and classifier both cover the alias; a loop test asserts every scoped command is classified mutating so the lists cannot drift.
+files[2]{path,scope}:
+  index.ts,project
+  test/smoke.test.ts,project
+close_reason: completed
+body: ""

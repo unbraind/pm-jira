@@ -94,6 +94,38 @@ test("extension activates cleanly and registers importer, exporter, schema field
   ext.assertHook({ kind: "on_write" });
 });
 
+test("preflight override is scoped to pm-jira's owned command paths", async () => {
+  // The override MUST register as a scoped object (commands + run), not a bare
+  // function: a global (unscoped) override collides pairwise with every other
+  // installed package's preflight override (pm health reports
+  // extension_preflight_override_collision). The runtime matches a command
+  // against `commands` by exact normalized path, so the array lists the full
+  // mutating command paths isMutatingJiraInvocation recognizes.
+  const ext = await getHarness();
+  const override = ext.assertPreflightOverride();
+  assert.deepEqual(
+    override.commands,
+    ["jira sync", "jira import", "jira export", "jira-sync import"],
+    "preflight override must be scoped to exactly pm-jira's owned mutating command paths",
+  );
+  assert.equal(
+    typeof override.run,
+    "function",
+    "scoped preflight override must expose a run function",
+  );
+  // Bind the scope to the classifier. Narrowing the override to a command list
+  // means an entry missing here is a command that silently loses its credential
+  // gate, so every path the classifier calls mutating must also be in scope.
+  for (const command of override.commands ?? []) {
+    if (command === "jira export") continue; // mutating only with --push
+    assert.strictEqual(
+      isMutatingJiraInvocation(command, {}),
+      true,
+      `${command} is in the preflight scope but the classifier does not treat it as mutating`,
+    );
+  }
+});
+
 test("preflight gate: fires only for network-mutating jira invocations", () => {
   // Mutating: sync/import without --dry-run, export with --push.
   assert.strictEqual(isMutatingJiraInvocation("jira sync", {}), true);
@@ -105,6 +137,12 @@ test("preflight gate: fires only for network-mutating jira invocations", () => {
   assert.strictEqual(isMutatingJiraInvocation("jira export", {}), false);
   assert.strictEqual(isMutatingJiraInvocation("jira export", { push: true, dryRun: true }), false);
   assert.strictEqual(isMutatingJiraInvocation("jira validate", {}), false);
+  // The deprecated `jira-sync import` alias reaches the same network pull as
+  // `jira import`. Scoping the preflight override to a command list made this
+  // load-bearing: the alias must be classified as mutating, or a narrower scope
+  // silently lets it run uncredentialed.
+  assert.strictEqual(isMutatingJiraInvocation("jira-sync import", {}), true);
+  assert.strictEqual(isMutatingJiraInvocation("jira-sync import", { dryRun: true }), false);
   // Unrelated commands never fire.
   assert.strictEqual(isMutatingJiraInvocation("list", {}), false);
   assert.strictEqual(isMutatingJiraInvocation("create", {}), false);
