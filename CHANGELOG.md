@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The pm CLI compatibility floor was declared only in peerDependencies, which only npm enforces, and not in manifest.json pm_min_version, which is the field the CLI enforces ([pm-jira-2wbj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-2wbj.toon))
 - Scope preflight override to pm-jira's owned commands ([pm-jira-5mxw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5mxw.toon))
 
 ### Deprecated
