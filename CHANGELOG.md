@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The pm CLI compatibility floor was declared only where npm enforces it, and absent from the field the CLI actually reads ([pm-jira-2wbj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-2wbj.toon))
 - Scope preflight override to pm-jira's owned commands ([pm-jira-5mxw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5mxw.toon))
 
 ### Deprecated
