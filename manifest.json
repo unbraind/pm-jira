@@ -12,8 +12,5 @@
     "importers",
     "hooks",
     "preflight"
-  ],
-  "pm": {
-    "compatibility": "v2"
-  }
+  ]
 }
