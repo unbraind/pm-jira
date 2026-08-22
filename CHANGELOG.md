@@ -6,6 +6,10 @@
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
 
+### Other
+
+- Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-jira-qd15](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-qd15.toon))
+
 ## 2026.8.16 - 2026-08-16
 
 ### Fixed

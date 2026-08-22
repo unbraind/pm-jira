@@ -1,0 +1,23 @@
+id: pm-jira-qd15
+title: Drop inert pm manifest key and guard the closed manifest vocabulary
+description: "The pm CLI's extension-manifest vocabulary is a closed set of 18 keys; since pm-cli 2026.8.19 any other manifest.json key yields a manifest_unknown_key warning. This repo carried an inert top-level \"pm\": {\"compatibility\": \"v2\"} key that nothing reads (verified by grep over index.ts, scripts/, and test/), which makes downstream strict-assertion consumers such as unbraind/pm-linear PRs #75/#76 fail with ['manifest_unknown_key','pm_min_version_unmet'] instead of exactly ['pm_min_version_unmet']. This change deletes the inert key, bumps the pinned @unbrained/pm-cli dev dependency to 2026.8.22 (the previous pin predates unknown-key detection), and adds test/manifest-vocabulary.test.ts asserting the manifest produces no manifest_unknown_key findings; no changelog script changes were needed because the scripts already carry unbounded-read --pm-arg flags."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-22T17:54:33.023Z"
+updated_at: "2026-08-22T17:55:44.212Z"
+closed_at: "2026-08-22T17:55:44.194Z"
+completed_at: "2026-08-22T17:55:44.194Z"
+author: ox-alpha
+notes[1]{created_at,author,text}:
+  "2026-08-22T17:55:26.031Z",ox-alpha,"Verification evidence: regression test test/manifest-vocabulary.test.ts passes on the fixed manifest (1 pass / 0 fail) and FAILS with manifest_unknown_key path 'pm' when the inert key is programmatically re-added (0 pass / 1 fail), then passes again after restore. npm test: 89 tests, 89 pass, 0 fail. release:check exit code 0. ./node_modules/.bin/pm health --strict-exit exit code 0 (3 advisory provenance warnings only)."
+files[4]{path,scope}:
+  manifest.json,project
+  package-lock.json,project
+  package.json,project
+  test/manifest-vocabulary.test.ts,project
+tests[1]{command,path,scope}:
+  PM_PATH=/tmp/pm-mv-pm-jira PM_GLOBAL_PATH=/tmp/pm-mv-g-pm-jira node --test test/manifest-vocabulary.test.ts,test/manifest-vocabulary.test.ts,project
+close_reason: "Closed: deleted the inert top-level pm manifest key (verified unread by grep over index.ts, scripts/, test/); bumped @unbrained/pm-cli dev pin to 2026.8.22; added test/manifest-vocabulary.test.ts which fails with manifest_unknown_key when the key is re-added and passes without it; npm test 89/89 pass, release:check exit 0, pinned pm health --strict-exit exit 0."
+body: ""
