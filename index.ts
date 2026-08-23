@@ -2264,7 +2264,7 @@ const defineExtension = <TModule extends ExtensionModule>(module: TModule): TMod
 
 export default defineExtension({
   name: "pm-jira",
-  version: "2026.8.17",
+  version: "2026.8.23",
 
   activate(api: ExtensionApi) {
     // -----------------------------------------------------------------------
