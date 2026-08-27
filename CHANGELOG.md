@@ -1,12 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Security
-
-- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
-
-## 2026.8.26 - 2026-08-26
+## 2026.8.27 - 2026-08-27
 
 ### Fixed
 
