@@ -1,16 +1,14 @@
 # Changelog
 
-## Unreleased
-
-### Security
-
-- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
-
-## 2026.8.27 - 2026-08-27
+## 2026.8.28 - 2026-08-28
 
 ### Fixed
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
+
+### Security
+
+- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
 
 ### Other
 
