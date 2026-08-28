@@ -1,9 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Pilot pm-github issue sync for pm-jira ([pm-jira-jszx](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jszx.toon))
+
 ## 2026.8.28 - 2026-08-28
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-jira-j2zv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-j2zv.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
 
 ### Security
