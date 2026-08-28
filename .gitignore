@@ -11,7 +11,9 @@ dist-test/
 .env
 .env.*
 !.env.example
-.agents/pm/extensions/
+# The managed project extension registry is tracked; package artifacts are restored by the workflow.
+.agents/pm/extensions/*
+!.agents/pm/extensions/.managed-extensions.json
 
 coverage/
 

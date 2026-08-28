@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Pilot pm-github issue sync for pm-jira ([pm-jira-jszx](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jszx.toon))
+
 ## 2026.8.28 - 2026-08-28
 
 ### Fixed
