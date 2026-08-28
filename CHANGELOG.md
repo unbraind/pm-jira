@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-jira-f7lu](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-f7lu.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-jira-c6e2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c6e2.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-jira-j2zv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-j2zv.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
 
 ### Security
