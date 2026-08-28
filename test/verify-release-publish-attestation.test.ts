@@ -641,7 +641,7 @@ test("a command held in a scalar is expanded, so the assignment is where the pub
   const scalars = shellScalars('CMD="npm publish"\nOTHER=\'npm publish --provenance\'\nBARE=npm\n');
   assert.equal(scalars.get("CMD"), "npm publish");
   assert.equal(scalars.get("OTHER"), "npm publish --provenance");
-  assert.equal(scalars.get("BARE"), undefined, "an unquoted value cannot hold a command");
+  assert.equal(scalars.get("BARE"), "npm", "an unquoted single-word value can hold a command name");
   assert.equal(expandScalars("$CMD", scalars), "npm publish");
   assert.equal(expandScalars("${CMD}", scalars), "npm publish");
   assert.equal(expandScalars("$UNKNOWN", scalars), "$UNKNOWN", "an unknown name is left in place, not erased");
@@ -649,6 +649,15 @@ test("a command held in a scalar is expanded, so the assignment is where the pub
     auditPublishAttestation([{
       file: "release.yml",
       text: '          npm publish --provenance\n          CMD="npm publish"\n          $CMD\n',
+    }]).failures.length,
+    1,
+  );
+  // An unquoted scalar like BARE=npm routes a publish through $BARE; the
+  // scanner must detect it just as it detects $CMD.
+  assert.equal(
+    auditPublishAttestation([{
+      file: "release.yml",
+      text: '          BARE=npm\n          $BARE publish --provenance=false\n',
     }]).failures.length,
     1,
   );

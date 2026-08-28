@@ -557,20 +557,23 @@ export function bashArrays(text: string): Map<string, string> {
  * invocation line can see, because the invocation line contains no publish. The
  * assignment is where the command actually is.
  *
- * Only literal single- or double-quoted values are indexed. An unquoted value
- * cannot hold a space and so cannot hold a command, and a value built from
- * other variables is not resolvable without evaluating the script, which this
- * module deliberately does not do.
+ * Literal single-quoted, double-quoted, and unquoted single-word values are
+ * indexed. A quoted value can hold a multi-word command ("npm publish"), while
+ * an unquoted value cannot hold a space but can still hold a single-word
+ * command name (NPM=npm), so both forms must be resolved to catch publishes
+ * that route through a variable. A value built from other variables is not
+ * resolvable without evaluating the script, which this module deliberately
+ * does not do.
  *
  * @param text - File contents with continuations already joined.
  * @returns Variable name mapped to the literal text it holds.
  */
 export function shellScalars(text: string): Map<string, string> {
   const scalars = new Map<string, string>();
-  for (const match of text.matchAll(/(?:^|[\s;&|])([A-Za-z_][A-Za-z0-9_]*)=(?:"([^"\n]*)"|'([^'\n]*)')/g)) {
-    // The alternation guarantees exactly one of the two value groups matched,
-    // so there is no third case to fall back to.
-    const value = match[2] ?? match[3]!;
+  for (const match of text.matchAll(/(?:^|[\s;&|])([A-Za-z_][A-Za-z0-9_]*)=(?:"([^"\n]*)"|'([^'\n]*)'|([^\s;&|"'`$()]+))/g)) {
+    // The alternation guarantees exactly one of the three value groups matched,
+    // so there is no fourth case to fall back to.
+    const value = match[2] ?? match[3] ?? match[4]!;
     // Only a plain literal is inlined. A value carrying a substitution, a
     // backtick, or a quote of its own changes how the line it lands in parses:
     // inlining `pkg_name="$(node -p …)"` injects an unbalanced parenthesis into

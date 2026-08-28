@@ -13,7 +13,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
-import { bashArrays, expandArrays, joinContinuations } from "../scripts/shell-command-scan.ts";
+import { bashArrays, expandArrays, expandScalars, joinContinuations, shellScalars } from "../scripts/shell-command-scan.ts";
 import { isMainInvocation } from "../scripts/main-invocation.ts";
 
 test("an unknown array reference is left in place rather than erased", () => {
@@ -52,4 +52,28 @@ test("an array reference is replaced by the declaration's contents, quoted or ba
   const arrays = bashArrays('common=( --access public --provenance )\n');
   assert.equal(expandArrays('npm publish "${common[@]}"', arrays), "npm publish --access public --provenance");
   assert.equal(expandArrays("npm publish ${common[@]}", arrays), "npm publish --access public --provenance");
+});
+
+test("an unquoted scalar assignment is indexed so a variable-routed publish is caught", () => {
+  // NPM=npm; "$NPM" publish --provenance=false must resolve $NPM to npm so
+  // the scanner detects the unattested publish. Without unquoted scalar
+  // support the assignment is skipped and the publish escapes.
+  const scalars = shellScalars("NPM=npm; \"$NPM\" publish --provenance=false\n");
+  assert.equal(scalars.get("NPM"), "npm");
+  // expandScalars replaces $NPM with npm; the surrounding quotes remain
+  // but the tokenizer strips them, so the scanner sees program=npm.
+  assert.equal(expandScalars('"$NPM" publish --provenance=false', scalars), '"npm" publish --provenance=false');
+});
+
+test("a quoted scalar assignment is still indexed", () => {
+  const scalars = shellScalars('CMD="npm publish"\n');
+  assert.equal(scalars.get("CMD"), "npm publish");
+  assert.equal(expandScalars("$CMD --provenance", scalars), "npm publish --provenance");
+});
+
+test("a scalar assignment with a substitution is not indexed", () => {
+  // A value built from other variables is not resolvable without evaluating
+  // the script, so it must not be indexed.
+  const scalars = shellScalars('CMD="$other_cmd publish"\n');
+  assert.equal(scalars.has("CMD"), false);
 });
