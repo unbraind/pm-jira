@@ -556,11 +556,27 @@ export function bashArrays(text: string): Map<string, string> {
 
 /** A command made only of literal assignments, optionally used as a shell condition. */
 const ASSIGNMENT_COMMAND =
-  /^[ \t]*(?:(?:if|while|until)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)(?:;|&&|\|\||[ \t]+#|\r?$)/;
+  /(?:^|;)[ \t]*(?:(?:if|while|until|then|do)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)(?:;|&&|\|\||[ \t]+#|\r?$)/g;
 
 /** One literal assignment inside an assignment-only command. */
 const LITERAL_ASSIGNMENT =
   /(?:^|[ \t]+)(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(?:"((?:\\.|[^"\\$`])*)"|'([^']*)'|((?:\\.|[^\s;&|"'`$()\\])+))/g;
+
+/** Remove shell comment text while preserving hashes inside quotes or words. */
+function withoutShellComment(line: string): string {
+  let single = false;
+  let double = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (character === "\\" && !single) { index += 1; continue; }
+    if (character === "'" && !double) single = !single;
+    else if (character === '"' && !single) double = !double;
+    else if (character === "#" && !single && !double && (index === 0 || /\s/.test(line[index - 1]!))) {
+      return line.slice(0, index);
+    }
+  }
+  return line;
+}
 
 /**
  * Index scalar assignments so a command held in a variable can be audited.
@@ -611,17 +627,17 @@ const LITERAL_ASSIGNMENT =
 export function shellScalars(text: string): Map<string, string> {
   const scalars = new Map<string, string>();
   for (const line of text.split("\n")) {
-    const command = ASSIGNMENT_COMMAND.exec(line);
-    if (command === null) continue;
-    for (const assignment of command[1]!.matchAll(LITERAL_ASSIGNMENT)) {
-      // Exactly one value alternative matches, so the last is the only case
-      // left rather than a fallback that could be undefined.
-      const raw = assignment[2] ?? assignment[3] ?? assignment[4]!;
-      // Single quotes make a backslash literal, so only the other two forms are
-      // unescaped. Values that would change when tokenized again are refused.
-      const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
-      if (/[$`"'()\\;&|<>]/.test(value)) continue;
-      scalars.set(assignment[1]!, value);
+    for (const command of withoutShellComment(line).matchAll(ASSIGNMENT_COMMAND)) {
+      for (const assignment of command[1]!.matchAll(LITERAL_ASSIGNMENT)) {
+        // Exactly one value alternative matches, so the last is the only case
+        // left rather than a fallback that could be undefined.
+        const raw = assignment[2] ?? assignment[3] ?? assignment[4]!;
+        // Single quotes make a backslash literal, so only the other two forms are
+        // unescaped. Values that would change when tokenized again are refused.
+        const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
+        if (/[$`"'()\\;&|<>]/.test(value)) continue;
+        scalars.set(assignment[1]!, value);
+      }
     }
   }
   return scalars;
