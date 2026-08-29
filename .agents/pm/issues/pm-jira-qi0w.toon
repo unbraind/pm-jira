@@ -6,12 +6,13 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-08-29T05:26:06.330Z"
-updated_at: "2026-08-29T05:26:09.316Z"
+updated_at: "2026-08-29T05:33:01.677Z"
 closed_at: "2026-08-29T05:26:08.815Z"
 completed_at: "2026-08-29T05:26:08.815Z"
 author: pi-agent
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-08-29T05:26:08.328Z",pi-agent,"Rejected scalar values containing parser-active control characters after unescaping and added end-to-end regressions for escaped semicolon, ampersand, and pipe."
+  "2026-08-29T05:33:01.677Z",pi-agent,"Follow-up Greptile round: assignment-only commands ending at && or || now remain persistent scalar bindings; added direct and end-to-end regressions for both list operators."
 files[2]{path,scope}:
   scripts/shell-command-scan.ts,project
   test/verify-release-publish-attestation.test.ts,project

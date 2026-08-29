@@ -821,6 +821,8 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     "an escape is honoured, so one word can still hold a command");
   assert.equal(shellScalars('NPM=npm; "$NPM" publish\n').get("NPM"), "npm",
     "a semicolon ends the assignment, and the shell keeps the binding after it");
+  assert.equal(shellScalars("NPM=npm && $NPM publish\n").get("NPM"), "npm");
+  assert.equal(shellScalars("NPM=npm || $NPM publish\n").get("NPM"), "npm");
   assert.equal(shellScalars("export NPM=npm\n").get("NPM"), "npm",
     "export still declares a persistent binding");
   assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",
@@ -854,6 +856,16 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     assert.match(result.failures[0]!, /does not enable --provenance/);
   }
 });
+test("assignment-only list commands remain visible to a following publish", () => {
+  for (const operator of ["&&", "||"]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `NPM=npm ${operator} $NPM publish\nnpm publish --provenance`,
+    }]);
+    assert.equal(result.failures.length, 1, operator);
+  }
+});
+
 test("escaped shell control characters cannot be re-tokenized into an attestation", () => {
   for (const escaped of ["\\;", "\\&", "\\|"]) {
     const result = auditPublishAttestation([{
