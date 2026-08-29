@@ -796,6 +796,10 @@ test("an assignment the shell never makes is not indexed", () => {
     "quoting it in a comment does not make it an assignment either");
   assert.equal(shellScalars('echo "config NPM=npm"\n').get("NPM"), undefined,
     "a name inside a quoted argument is not an assignment");
+  assert.equal(shellScalars('echo "a; FLAG=--provenance; b"\n').get("FLAG"), undefined,
+    "a semicolon inside quotes is not an outer command boundary");
+  assert.equal(shellScalars('$(echo a; FLAG=--provenance)\n').get("FLAG"), undefined,
+    "an assignment inside a substitution does not escape its scope");
   assert.equal(shellScalars("NPM=npm$SUFFIX\n").get("NPM"), undefined,
     "a value continuing into an expansion is not a literal, and must not be indexed by its prefix");
   assert.equal(shellScalars('"NPM=npm" publish\n').get("NPM"), undefined,
@@ -859,6 +863,19 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     assert.match(result.failures[0]!, /does not enable --provenance/);
   }
 });
+test("nested assignment text cannot escape into a later publish", () => {
+  for (const nested of [
+    'echo "a; FLAG=--provenance; b"',
+    '$(echo a; FLAG=--provenance)',
+  ]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${nested}\nnpm publish $FLAG\nnpm publish --provenance`,
+    }]);
+    assert.equal(result.failures.length, 1, nested);
+  }
+});
+
 test("assignment-only list commands remain visible to a following publish", () => {
   for (const text of [
     "NPM=npm && $NPM publish",

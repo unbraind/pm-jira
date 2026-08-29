@@ -556,7 +556,7 @@ export function bashArrays(text: string): Map<string, string> {
 
 /** A command made only of literal assignments, optionally used as a shell condition. */
 const ASSIGNMENT_COMMAND =
-  /(?:^|;)[ \t]*(?:(?:if|while|until|then|do)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)(?:;|&&|\|\||[ \t]+#|\r?$)/g;
+  /^[ \t]*(?:(?:if|while|until|then|do)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)\r?$/;
 
 /** One literal assignment inside an assignment-only command. */
 const LITERAL_ASSIGNMENT =
@@ -576,6 +576,35 @@ function withoutShellComment(line: string): string {
     }
   }
   return line;
+}
+
+/** Split top-level shell lists without treating quoted or nested separators as boundaries. */
+function topLevelCommandSegments(line: string): string[] {
+  const segments: string[] = [];
+  let start = 0;
+  let single = false;
+  let double = false;
+  let backtick = false;
+  let depth = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (character === "\\" && !single) { index += 1; continue; }
+    if (!backtick && character === "'" && !double) { single = !single; continue; }
+    if (!backtick && character === '"' && !single) { double = !double; continue; }
+    if (!single && character === "`") { backtick = !backtick; continue; }
+    if (single || backtick) continue;
+    if (character === "(") { depth += 1; continue; }
+    if (character === ")" && depth > 0) { depth -= 1; continue; }
+    if (depth > 0 || double) continue;
+    const width = character === ";" ? 1 :
+      ((character === "&" && line[index + 1] === "&") || (character === "|" && line[index + 1] === "|")) ? 2 : 0;
+    if (width === 0) continue;
+    segments.push(line.slice(start, index));
+    start = index + width;
+    index += width - 1;
+  }
+  segments.push(line.slice(start));
+  return segments;
 }
 
 /**
@@ -627,7 +656,9 @@ function withoutShellComment(line: string): string {
 export function shellScalars(text: string): Map<string, string> {
   const scalars = new Map<string, string>();
   for (const line of text.split("\n")) {
-    for (const command of withoutShellComment(line).matchAll(ASSIGNMENT_COMMAND)) {
+    for (const segment of topLevelCommandSegments(withoutShellComment(line))) {
+      const command = ASSIGNMENT_COMMAND.exec(segment);
+      if (command === null) continue;
       for (const assignment of command[1]!.matchAll(LITERAL_ASSIGNMENT)) {
         // Exactly one value alternative matches, so the last is the only case
         // left rather than a fallback that could be undefined.
