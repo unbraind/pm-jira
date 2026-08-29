@@ -823,6 +823,8 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     "a semicolon ends the assignment, and the shell keeps the binding after it");
   assert.equal(shellScalars("NPM=npm && $NPM publish\n").get("NPM"), "npm");
   assert.equal(shellScalars("NPM=npm || $NPM publish\n").get("NPM"), "npm");
+  assert.equal(shellScalars("NPM=npm FLAG=x; $NPM publish\n").get("NPM"), "npm");
+  assert.equal(shellScalars("if NPM=npm; then $NPM publish; fi\n").get("NPM"), "npm");
   assert.equal(shellScalars("export NPM=npm\n").get("NPM"), "npm",
     "export still declares a persistent binding");
   assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",
@@ -857,12 +859,17 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
   }
 });
 test("assignment-only list commands remain visible to a following publish", () => {
-  for (const operator of ["&&", "||"]) {
+  for (const text of [
+    "NPM=npm && $NPM publish",
+    "NPM=npm || $NPM publish",
+    "NPM=npm FLAG=x; $NPM publish",
+    "if NPM=npm; then $NPM publish; fi",
+  ]) {
     const result = auditPublishAttestation([{
       file: "release.yml",
-      text: `NPM=npm ${operator} $NPM publish\nnpm publish --provenance`,
+      text: `${text}\nnpm publish --provenance`,
     }]);
-    assert.equal(result.failures.length, 1, operator);
+    assert.equal(result.failures.length, 1, text);
   }
 });
 
