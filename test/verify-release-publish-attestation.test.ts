@@ -827,11 +827,10 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     "a trailing comment does not stop the line being an assignment");
   assert.equal(shellScalars("NPM=npm\r\n").get("NPM"), "npm",
     "a CRLF line ending does not hide the assignment");
-  // Refusing these left `$NPM` unresolved, and an attested publish elsewhere in
-  // the file then satisfied the non-vacuity guard -- so being too strict passes
-  // an unattested publish exactly as being too loose does.
-  assert.equal(shellScalars("CMD='npm publish \\--provenance'\n").get("CMD"), "npm publish \\--provenance",
-    "single quotes make a backslash literal, so the value is not unescaped");
+  // A surviving backslash cannot be inlined safely: the tokenizer would parse
+  // it a second time and could manufacture a standalone provenance flag.
+  assert.equal(shellScalars("CMD='npm publish \\--provenance'\n").get("CMD"), undefined,
+    "a single-quoted backslash is literal and unsafe to re-tokenize");
   assert.equal(shellScalars("# a; FLAG=--provenance\n").get("FLAG"), undefined,
     "a semicolon inside a comment does not expose an assignment");
 
@@ -855,6 +854,20 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     assert.match(result.failures[0]!, /does not enable --provenance/);
   }
 });
+test("escaped shell control characters cannot be re-tokenized into an attestation", () => {
+  for (const escaped of ["\\;", "\\&", "\\|"]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: [
+        `FLAG=--provenance${escaped}ignored`,
+        "npm publish $FLAG",
+        "npm publish --provenance",
+      ].join("\n"),
+    }]);
+    assert.equal(result.failures.length, 1, escaped);
+  }
+});
+
 test("a read-write redirection does not turn its target into the command", () => {
   // `<>` is one operator, not `<` followed by `>`. Unnamed, it was read as a
   // joined redirection that consumes no target, so `/dev/null` became the

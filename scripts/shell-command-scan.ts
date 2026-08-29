@@ -616,7 +616,7 @@ export function shellScalars(text: string): Map<string, string> {
     // unescaped. Unescaping a single-quoted value turned `'npm publish
     // \\--provenance'` into an attested-looking command the shell never runs.
     const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
-    if (/[$`"'()]/.test(value)) continue;
+    if (/[$`"'()\\;&|<>]/.test(value)) continue;
     scalars.set(assignment[1]!, value);
   }
   return scalars;

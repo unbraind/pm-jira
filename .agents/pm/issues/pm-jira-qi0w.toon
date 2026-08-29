@@ -1,0 +1,19 @@
+id: pm-jira-qi0w
+title: Close PR 82 escaped-control review finding
+description: Prevent escaped shell separators in scalar values from being unescaped and re-tokenized into a false provenance flag.
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-29T05:26:06.330Z"
+updated_at: "2026-08-29T05:26:09.316Z"
+closed_at: "2026-08-29T05:26:08.815Z"
+completed_at: "2026-08-29T05:26:08.815Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-08-29T05:26:08.328Z",pi-agent,"Rejected scalar values containing parser-active control characters after unescaping and added end-to-end regressions for escaped semicolon, ampersand, and pipe."
+files[2]{path,scope}:
+  scripts/shell-command-scan.ts,project
+  test/verify-release-publish-attestation.test.ts,project
+close_reason: Escaped controls can no longer manufacture an attestation
+body: ""
