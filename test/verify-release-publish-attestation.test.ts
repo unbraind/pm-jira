@@ -828,10 +828,12 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
   assert.equal(shellScalars("NPM=npm && $NPM publish\n").get("NPM"), "npm");
   assert.equal(shellScalars("NPM=npm || $NPM publish\n").get("NPM"), "npm");
   assert.equal(shellScalars("NPM=npm FLAG=x; $NPM publish\n").get("NPM"), "npm");
-  assert.equal(shellScalars("if NPM=npm; then $NPM publish; fi\n").get("NPM"), "npm");
-  assert.equal(shellScalars("if true; then NPM=npm; fi\n").get("NPM"), "npm");
-  assert.equal(shellScalars("if false; then :; else NPM=npm; fi\n").get("NPM"), "npm");
-  assert.equal(shellScalars("if false; then :; elif NPM=npm; then :; fi\n").get("NPM"), "npm");
+  // Static analysis cannot know which control-flow branch executes. Refuse to
+  // invent a file-wide value; unresolved publisher variables fail closed.
+  assert.equal(shellScalars("if NPM=npm; then $NPM publish; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if true; then NPM=npm; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if false; then :; else NPM=npm; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if false; then :; elif NPM=npm; then :; fi\n").get("NPM"), undefined);
   assert.equal(shellScalars("export NPM=npm\n").get("NPM"), "npm",
     "export still declares a persistent binding");
   assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",

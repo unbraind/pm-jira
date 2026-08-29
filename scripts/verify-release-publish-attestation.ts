@@ -220,7 +220,8 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
     for (const candidate of commandCandidates(command)) {
       const program = commandName(candidate);
       if (program === undefined) continue;
-      if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program)) continue;
+      const unresolvedProgram = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(program);
+      if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program) && !unresolvedProgram) continue;
       if (!isPublishCommand(candidate)) continue;
       // Not de-duplicated: two identical publish lines are two invocations, and
       // collapsing them would report one of them as if the other did not exist.
