@@ -830,6 +830,8 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
   assert.equal(shellScalars("NPM=npm FLAG=x; $NPM publish\n").get("NPM"), "npm");
   assert.equal(shellScalars("if NPM=npm; then $NPM publish; fi\n").get("NPM"), "npm");
   assert.equal(shellScalars("if true; then NPM=npm; fi\n").get("NPM"), "npm");
+  assert.equal(shellScalars("if false; then :; else NPM=npm; fi\n").get("NPM"), "npm");
+  assert.equal(shellScalars("if false; then :; elif NPM=npm; then :; fi\n").get("NPM"), "npm");
   assert.equal(shellScalars("export NPM=npm\n").get("NPM"), "npm",
     "export still declares a persistent binding");
   assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",
@@ -883,6 +885,8 @@ test("assignment-only list commands remain visible to a following publish", () =
     "NPM=npm FLAG=x; $NPM publish",
     "if NPM=npm; then $NPM publish; fi",
     "if true; then NPM=npm; fi; $NPM publish",
+    "if false; then :; else NPM=npm; fi; $NPM publish",
+    "if false; then :; elif NPM=npm; then :; fi; $NPM publish",
   ]) {
     const result = auditPublishAttestation([{
       file: "release.yml",

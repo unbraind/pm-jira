@@ -6,16 +6,17 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-08-29T05:26:06.330Z"
-updated_at: "2026-08-29T05:52:58.495Z"
+updated_at: "2026-08-29T05:58:53.158Z"
 closed_at: "2026-08-29T05:26:08.815Z"
 completed_at: "2026-08-29T05:26:08.815Z"
 author: pi-agent
-comments[5]{created_at,author,text}:
+comments[6]{created_at,author,text}:
   "2026-08-29T05:26:08.328Z",pi-agent,"Rejected scalar values containing parser-active control characters after unescaping and added end-to-end regressions for escaped semicolon, ampersand, and pipe."
   "2026-08-29T05:33:01.677Z",pi-agent,"Follow-up Greptile round: assignment-only commands ending at && or || now remain persistent scalar bindings; added direct and end-to-end regressions for both list operators."
   "2026-08-29T05:39:55.818Z",pi-agent,"Second Greptile follow-up: parse assignment-only command sequences with multiple bindings and optional if/while/until condition prefixes; regressions cover multi-binding and if-condition publishes."
   "2026-08-29T05:46:26.918Z",pi-agent,"Third Greptile follow-up: discover assignment-only commands after then/do control-body boundaries while stripping shell comments quote-safely; added direct and end-to-end control-body regressions."
   "2026-08-29T05:52:58.495Z",pi-agent,"Fourth Greptile follow-up: split only top-level shell list operators while tracking quote, backtick, and parenthesis scope; nested quoted/substitution assignments no longer leak into the outer scalar map."
+  "2026-08-29T05:58:53.158Z",pi-agent,"Fifth Greptile follow-up: include else and elif control prefixes in assignment-only segment recognition; direct and end-to-end regressions cover both."
 files[2]{path,scope}:
   scripts/shell-command-scan.ts,project
   test/verify-release-publish-attestation.test.ts,project

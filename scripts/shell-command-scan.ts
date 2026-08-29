@@ -556,7 +556,7 @@ export function bashArrays(text: string): Map<string, string> {
 
 /** A command made only of literal assignments, optionally used as a shell condition. */
 const ASSIGNMENT_COMMAND =
-  /^[ \t]*(?:(?:if|while|until|then|do)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)\r?$/;
+  /^[ \t]*(?:(?:if|while|until|then|do|else|elif)[ \t]+)?((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)\r?$/;
 
 /** One literal assignment inside an assignment-only command. */
 const LITERAL_ASSIGNMENT =
