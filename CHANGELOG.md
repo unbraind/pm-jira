@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Pin pm-changelog 2026.8.30 before the next release ([pm-jira-5whg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5whg.toon))
+
 ## 2026.8.29 - 2026-08-29
 
 ### Other
