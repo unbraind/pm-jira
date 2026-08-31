@@ -217,6 +217,24 @@ export interface JqlFilters {
  */
 export declare function jqlQuote(value: string): string;
 /**
+ * Quote a JQL value unconditionally, escaping backslashes before quotes.
+ *
+ * Some operands must be quoted even when they look like bare identifiers — a
+ * relative date such as `-7d` is parsed by Jira as arithmetic unless it is a
+ * quoted string — so those callers cannot use {@link jqlQuote}, which returns
+ * simple values bare.
+ *
+ * Backslashes are escaped *first*, and that order is the whole point: escaping
+ * only the quotes leaves a trailing backslash free to consume the escape of the
+ * quote that follows it, so `a\` closes the literal and everything after it is
+ * parsed as JQL. This is the single escaping implementation for both quoting
+ * policies, so the two cannot drift apart again.
+ *
+ * @param value - The raw JQL value.
+ * @returns The value wrapped in double quotes with backslashes and quotes escaped.
+ */
+export declare function jqlQuoteAlways(value: string): string;
+/**
  * Compose convenience filters into a single JQL query string.
  *
  * Explicit `--jql` is authoritative and returned verbatim; otherwise the
