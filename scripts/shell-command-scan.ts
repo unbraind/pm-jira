@@ -631,7 +631,9 @@ interface OpenHeredoc {
  *   `cat "$(cat <<A)" <<B` opens two, and both bodies are data.
  *
  * Quoting the delimiter with `'` or `"` makes it literal; an unquoted one is
- * the word as written. `<<-` strips leading tabs from the closing line.
+ * the word as written with backslash escapes stripped, because a backslash
+ * quotes a single character the way the quotes quote the whole word. `<<-`
+ * strips leading tabs from the closing line.
  *
  * @param line - One already-continuation-joined source line.
  * @returns Each heredoc the line opens, in the order the shell reads them.
@@ -688,7 +690,14 @@ function heredocTerminators(line: string): OpenHeredoc[] {
     if (quote !== undefined) while (cursor < line.length && line[cursor] !== quote) cursor += 1;
     else while (cursor < line.length && /[^\s;&|<>()]/.test(line[cursor]!)) cursor += 1;
     if (cursor > start && (quote === undefined || line[cursor] === quote)) {
-      found.push({ delimiter: line.slice(start, cursor), stripTabs });
+      // A backslash quotes the delimiter the way quotes do, and the shell
+      // strips it before matching the terminator. Keeping it would leave the
+      // delimiter backslash-prefixed, which the terminator line never matches,
+      // so the heredoc would stay open for the rest of the file and every
+      // later assignment would be discarded as body text -- leaving a
+      // scalar-routed publish unresolved and never judged.
+      const word = line.slice(start, cursor);
+      found.push({ delimiter: quote === undefined ? word.replace(/\\(.)/gu, "$1") : word, stripTabs });
       index = cursor;
     }
   }

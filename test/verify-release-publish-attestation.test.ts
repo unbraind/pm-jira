@@ -998,3 +998,23 @@ test("an assignment earlier on the publish's own line still resolves it", () => 
   assert.equal(result.failures.length, 1, "a binding made earlier on the same line resolves it");
   assert.match(result.failures[0]!, /does not enable --provenance/);
 });
+
+test("a backslash-quoted heredoc delimiter closes on its unquoted terminator", () => {
+  // A backslash quotes a heredoc delimiter exactly as single quotes do, and the
+  // shell strips it before matching the terminator line. Keeping it left the
+  // delimiter as a backslash-prefixed word, which the real 'EOF' line never
+  // matches, so the heredoc stayed open for the rest of the file, 'CMD=npm'
+  // was swallowed as body text, and '$CMD publish' was never recognised as the
+  // publish it is. The message pins that the command was resolved and judged:
+  // without the strip the audit fails closed on an unresolved program instead,
+  // which passes the count while the scan is blind.
+  for (const opener of ["cat <<\\EOF", "cat <<-\\EOF"]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${opener}\ninside\nEOF\nCMD=npm\n$CMD publish\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(result.failures.length, 1,
+      `a backslash-quoted delimiter (${opener}) must close on its unquoted terminator`);
+    assert.match(result.failures[0]!, /does not enable --provenance/);
+  }
+});
