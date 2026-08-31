@@ -770,6 +770,56 @@ export interface ScalarAssignment {
   readonly value: string;
   /** Zero-based index of the line that makes the assignment. */
   readonly line: number;
+  /**
+   * Shell block nesting the assignment sits inside; 0 is the file's own scope.
+   *
+   * An assignment inside `if`/`for`/`while`/`case`, a function body, or a
+   * subshell may never run. Crediting it to a command in an outer scope lets
+   * an untaken branch supply `--provenance` to a publish the shell runs
+   * without it, so a caller auditing a command may use only bindings made at
+   * its own depth or an enclosing one.
+   */
+  readonly depth: number;
+}
+
+/** Block openers and closers, matched as words outside quotes. */
+const BLOCK_OPENERS = /(?:^|[\s;&|(])(?:if|for|while|until|case|select)(?=[\s;&|]|$)/gu;
+const BLOCK_CLOSERS = /(?:^|[\s;&|])(?:fi|done|esac)(?=[\s;&|)]|$)/gu;
+
+/**
+ * Net change in shell block nesting contributed by one line.
+ *
+ * Counts the control-flow keywords and the brace and parenthesis groups
+ * outside quotes and comments. This is a nesting count, not a parse: it
+ * exists to tell "this assignment is inside something conditional" from
+ * "this assignment is the file's own scope", which is the distinction
+ * attestation depends on. A keyword inside quotes or a comment is prose, not
+ * structure, so it is not counted.
+ *
+ * @param line - One already-continuation-joined source line.
+ * @returns Positive when the line opens more blocks than it closes.
+ */
+export function blockDepthChange(line: string): number {
+  let bare = "";
+  let single = false;
+  let double = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (character === "\\" && !single) { index += 1; continue; }
+    if (character === "'" && !double) { single = !single; continue; }
+    if (character === '"' && !single) { double = !double; continue; }
+    if (single || double) continue;
+    if (character === "#" && (index === 0 || /\s/u.test(line[index - 1]!))) break;
+    bare += character;
+  }
+  let depth = 0;
+  for (const character of bare) {
+    if (character === "{" || character === "(") depth += 1;
+    else if (character === "}" || character === ")") depth -= 1;
+  }
+  depth += (bare.match(BLOCK_OPENERS) ?? []).length;
+  depth -= (bare.match(BLOCK_CLOSERS) ?? []).length;
+  return depth;
 }
 
 /**
@@ -783,12 +833,19 @@ export interface ScalarAssignment {
  * `NPM=npm; "$NPM" publish` assigns and then runs on one line and the shell
  * binds before running it.
  *
+ * Each assignment also carries the block depth it was made at. A binding
+ * inside `if`/`for`/`while`/`case`, a function body or a subshell may never
+ * run, so crediting it to a command at an outer depth would let an untaken
+ * branch attest a publish the shell runs unattested. A line that closes a
+ * block returns to the outer scope before its own commands, and a line that
+ * opens one takes effect after them, which is the order the shell runs in.
+ *
  * Heredoc bodies are skipped here as well: their lines are data the shell
  * never evaluates, so an assignment-shaped line inside one establishes no
  * binding. Every rule about which lines make bindings at all -- the
  * assignment-only shape, the literal value, the refusal of decoded shell
  * syntax -- is {@link shellScalars}'s; this is the same walk with position
- * recorded.
+ * and scope recorded.
  *
  * @param text - File contents with continuations already joined.
  * @returns Every assignment the shell would make, in file order.
@@ -799,6 +856,7 @@ export function scalarAssignments(text: string): ScalarAssignment[] {
   // `cat <<A <<B` opens two, and A's terminator line returns to B's body.
   const heredocs: OpenHeredoc[] = [];
   let lineNumber = -1;
+  let depth = 0;
   for (const line of text.split("\n")) {
     lineNumber += 1;
     const heredoc = heredocs[0];
@@ -808,6 +866,12 @@ export function scalarAssignments(text: string): ScalarAssignment[] {
       continue;
     }
     heredocs.push(...heredocTerminators(line));
+    // A closer returns to the outer scope on its own line, so apply it before
+    // recording; an opener takes effect after, so an assignment written on the
+    // same line as an opener is recorded inside the block it opens. Heredoc
+    // body lines never reach here, so data cannot move the depth.
+    const change = blockDepthChange(line);
+    if (change < 0) depth = Math.max(0, depth + change);
     for (const segment of topLevelCommandSegments(withoutShellComment(line))) {
       const command = ASSIGNMENT_COMMAND.exec(segment);
       if (command === null) continue;
@@ -819,9 +883,10 @@ export function scalarAssignments(text: string): ScalarAssignment[] {
         // unescaped. Values that would change when tokenized again are refused.
         const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
         if (/[$`"'()\\;&|<>]/.test(value)) continue;
-        assignments.push({ name: assignment[1]!, value, line: lineNumber });
+        assignments.push({ name: assignment[1]!, value, line: lineNumber, depth });
       }
     }
+    if (change > 0) depth += change;
   }
   return assignments;
 }

@@ -23,6 +23,7 @@ import { resolve } from "node:path";
 
 import {
   bashArrays,
+  blockDepthChange,
   commandArguments,
   commandCandidates,
   commandName,
@@ -213,18 +214,36 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
   // assigns and then runs on one line, and the shell binds before running it,
   // so excluding the line's own assignment would leave `$NPM` unexpanded and
   // miss the publish entirely.
+  //
+  // Each binding is held with the block depth it was made at, because scope
+  // decides whether a command may be credited with it. `if false; then
+  // FLAG=--provenance; fi` above `npm publish $FLAG` runs that publish with
+  // `$FLAG` unset, so crediting the binding reports an unattested publish as
+  // attested -- and the same holds for an uncalled function body or a
+  // subshell. A line sees only its own scope or an enclosing one.
   const assignments = scalarAssignments(text);
-  const bound = new Map<string, string>();
+  const bound = new Map<string, { value: string; depth: number }>();
   let next = 0;
+  let lineDepth = 0;
   const expanded = text
     .split("\n")
     .map((line, index) => {
       while (next < assignments.length && assignments[next]!.line <= index) {
         const assignment = assignments[next]!;
-        bound.set(assignment.name, assignment.value);
+        bound.set(assignment.name, { value: assignment.value, depth: assignment.depth });
         next += 1;
       }
-      return expandScalars(expandArrays(line, arrays), bound);
+      // A closer returns to the outer scope on its own line, and an opener
+      // takes effect after it, which is the order the shell runs in.
+      const change = blockDepthChange(line);
+      if (change < 0) lineDepth = Math.max(0, lineDepth + change);
+      const visible = new Map<string, string>();
+      for (const [name, binding] of bound) {
+        if (binding.depth <= lineDepth) visible.set(name, binding.value);
+      }
+      const resolved = expandScalars(expandArrays(line, arrays), visible);
+      if (change > 0) lineDepth += change;
+      return resolved;
     })
     .join("\n");
   const found: PublishInvocation[] = [];

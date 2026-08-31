@@ -30,7 +30,7 @@ import {
   trackedPublishSources,
   verify,
 } from "../scripts/verify-release-publish-attestation.ts";
-import { commandArguments, commandCandidates, commandName, expandScalars, shellScalars, tokenizeCommands } from "../scripts/shell-command-scan.ts";
+import { blockDepthChange, commandArguments, commandCandidates, commandName, expandScalars, shellScalars, tokenizeCommands } from "../scripts/shell-command-scan.ts";
 
 /** Tokenises one command and returns it, asserting the text held exactly one. */
 function onlyCommand(text: string): ReturnType<typeof tokenizeCommands>[number] {
@@ -1017,4 +1017,74 @@ test("a backslash-quoted heredoc delimiter closes on its unquoted terminator", (
       `a backslash-quoted delimiter (${opener}) must close on its unquoted terminator`);
     assert.match(result.failures[0]!, /does not enable --provenance/);
   }
+});
+
+test("a binding confined to a block cannot attest a publish outside it", () => {
+  // A binding made inside a block the shell may never enter -- an untaken if
+  // branch, an else branch, an uncalled function body, a subshell -- cannot
+  // attest a publish outside it. 'if false; then FLAG=--provenance; fi' runs
+  // the publish below with $FLAG unset, and a line-aware but scope-blind map
+  // still credited the binding, so the audit returned zero failures while the
+  // attested sibling kept the scan non-vacuous.
+  const outOfScope: ReadonlyArray<readonly [string, string]> = [
+    ["an untaken if branch", "if false; then\nFLAG=--provenance\nfi\n"],
+    ["an uncalled function body", "deploy() {\nFLAG=--provenance\n}\n"],
+    ["a subshell", "(\nFLAG=--provenance\n)\n"],
+    ["an else branch", "if true; then\n:\nelse\nFLAG=--provenance\nfi\n"],
+  ];
+  for (const [label, prelude] of outOfScope) {
+    const scoped = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${prelude}npm publish $FLAG\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(scoped.failures.length, 1,
+      `a binding confined to ${label} cannot attest a publish outside it`);
+    assert.match(scoped.failures[0]!, /does not enable --provenance/);
+  }
+});
+
+test("a binding in its own or an enclosing scope still resolves the command", () => {
+  // The mirror direction: narrowing scope must not stop the scan finding
+  // publishes it could see before. A binding shares scope with a command on
+  // its own line, and an enclosing binding still attests a publish nested
+  // below it. The same-block case asserts the message as well, because a
+  // scope-blind refusal would fail closed on an unresolved program instead of
+  // resolving and judging the publish -- the count would pass while the scan
+  // stopped understanding the command.
+  const sameBlock = auditPublishAttestation([{
+    file: "release.yml",
+    text: "if true; then\nCMD=npm\n$CMD publish\nfi\nnpm publish --provenance\n",
+  }]);
+  assert.equal(sameBlock.failures.length, 1, "a binding in the same block still resolves the command");
+  assert.match(sameBlock.failures[0]!, /does not enable --provenance/);
+  for (const [label, text, expected] of [
+    ["an outer binding attests a publish nested below it",
+      "FLAG=--provenance\nif true; then\nnpm publish $FLAG\nfi\n", 0],
+    ["a binding two blocks up still attests",
+      "if true; then\nFLAG=--provenance\nif true; then\nnpm publish $FLAG\nfi\nfi\n", 0],
+  ] as ReadonlyArray<readonly [string, string, number]>) {
+    const resolved = auditPublishAttestation([{ file: "release.yml", text }]);
+    assert.equal(resolved.failures.length, expected, label);
+  }
+});
+
+test("block nesting is counted outside quotes, comments and escapes only", () => {
+  // Scope is decided by structure, not prose: a keyword inside quotes or a
+  // comment does not open anything, and an escaped brace is a literal. Each
+  // arm of the counting is pinned so a later edit cannot remove one quietly.
+  assert.equal(blockDepthChange("if true; then"), 1, "if opens");
+  assert.equal(blockDepthChange("fi"), -1, "fi closes");
+  assert.equal(blockDepthChange("done"), -1, "done closes a loop");
+  assert.equal(blockDepthChange("esac"), -1, "esac closes a case");
+  assert.equal(blockDepthChange("deploy() {"), 1, "a function body opens");
+  assert.equal(blockDepthChange("}"), -1, "a brace group closes");
+  assert.equal(blockDepthChange("("), 1, "a subshell opens");
+  assert.equal(blockDepthChange(")"), -1, "a subshell closes");
+  assert.equal(blockDepthChange("x=$(echo hi)"), 0, "a completed substitution is neutral");
+  assert.equal(blockDepthChange("echo 'if fi done'"), 0, "keywords in single quotes are prose");
+  assert.equal(blockDepthChange('echo "if then fi"'), 0, "keywords in double quotes are prose");
+  assert.equal(blockDepthChange("echo a\\;b"), 0, "an escaped separator is a literal");
+  assert.equal(blockDepthChange("echo hi # if fi done"), 0, "a comment ends the counted text");
+  assert.equal(blockDepthChange("if true; then :; fi"), 0, "a one-line block is neutral");
+  assert.equal(blockDepthChange("for x in a; do :; done"), 0, "a one-line loop is neutral");
 });
