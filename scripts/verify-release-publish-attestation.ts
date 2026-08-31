@@ -24,6 +24,7 @@ import { resolve } from "node:path";
 import {
   bashArrays,
   blockDepthChange,
+  caseDepthChange,
   commandArguments,
   commandCandidates,
   commandName,
@@ -225,6 +226,7 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
   const bound = new Map<string, { value: string; depth: number }>();
   let next = 0;
   let lineDepth = 0;
+  let caseDepth = 0;
   const expanded = text
     .split("\n")
     .map((line, index) => {
@@ -235,7 +237,8 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
       }
       // A closer returns to the outer scope on its own line, and an opener
       // takes effect after it, which is the order the shell runs in.
-      const change = blockDepthChange(line);
+      const change = blockDepthChange(line, caseDepth > 0);
+      caseDepth = Math.max(0, caseDepth + caseDepthChange(line));
       if (change < 0) lineDepth = Math.max(0, lineDepth + change);
       const visible = new Map<string, string>();
       for (const [name, binding] of bound) {

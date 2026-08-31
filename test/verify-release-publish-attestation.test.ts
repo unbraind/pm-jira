@@ -1041,6 +1041,26 @@ test("a binding confined to a block cannot attest a publish outside it", () => {
       `a binding confined to ${label} cannot attest a publish outside it`);
     assert.match(scoped.failures[0]!, /does not enable --provenance/);
   }
+
+  // A `case` arm label ends in a bare `)`. Counted as a group close it drops the
+  // block depth, so an assignment inside an untaken arm was tagged file-scoped
+  // and attested a publish after `esac` -- the same fail-open as the cases above,
+  // reached through the one shell construct a generic paren count misreads.
+  const caseArm = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'case "$x" in\n  a)\n    FLAG=--provenance\n    ;;\nesac\nnpm publish $FLAG\nnpm publish --provenance\n',
+  }]);
+  assert.equal(caseArm.failures.length, 1,
+    "a binding inside a case arm cannot attest a publish after esac");
+
+  // The mirror: narrowing must not blind the scan. A publish inside the arm that
+  // set the flag is genuinely attested and must stay so.
+  const caseArmSameScope = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'case "$x" in\n  a)\n    FLAG=--provenance\n    npm publish $FLAG\n    ;;\nesac\n',
+  }]);
+  assert.equal(caseArmSameScope.failures.length, 0,
+    "a publish in the same case arm still sees that arm's binding");
 });
 
 test("a binding in its own or an enclosing scope still resolves the command", () => {

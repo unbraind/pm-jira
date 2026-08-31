@@ -787,6 +787,22 @@ const BLOCK_OPENERS = /(?:^|[\s;&|(])(?:if|for|while|until|case|select)(?=[\s;&|
 const BLOCK_CLOSERS = /(?:^|[\s;&|])(?:fi|done|esac)(?=[\s;&|)]|$)/gu;
 
 /**
+ * Net change in `case` nesting contributed by one line.
+ *
+ * Tracked separately from block depth because a `case` arm label ends in a bare
+ * `)` that is not a parenthesis close. Without knowing a `case` is open, that
+ * `)` decrements the depth counter and tags an assignment inside an untaken arm
+ * as file-scoped, which then attests a publish after `esac`.
+ *
+ * @param line - One already-continuation-joined source line.
+ * @returns +1 for each `case` opened, -1 for each `esac` closed.
+ */
+export function caseDepthChange(line: string): number {
+  return (line.match(/(?:^|[\s;&|(])case(?=[\s;&|]|$)/gu) ?? []).length
+    - (line.match(/(?:^|[\s;&|])esac(?=[\s;&|)]|$)/gu) ?? []).length;
+}
+
+/**
  * Net change in shell block nesting contributed by one line.
  *
  * Counts the control-flow keywords and the brace and parenthesis groups
@@ -797,9 +813,11 @@ const BLOCK_CLOSERS = /(?:^|[\s;&|])(?:fi|done|esac)(?=[\s;&|)]|$)/gu;
  * structure, so it is not counted.
  *
  * @param line - One already-continuation-joined source line.
+ * @param insideCase - Whether a `case` is open, so a bare `)` is an arm label
+ *   rather than a group close.
  * @returns Positive when the line opens more blocks than it closes.
  */
-export function blockDepthChange(line: string): number {
+export function blockDepthChange(line: string, insideCase = false): number {
   let bare = "";
   let single = false;
   let double = false;
@@ -813,9 +831,16 @@ export function blockDepthChange(line: string): number {
     bare += character;
   }
   let depth = 0;
+  let open = 0;
   for (const character of bare) {
-    if (character === "{" || character === "(") depth += 1;
-    else if (character === "}" || character === ")") depth -= 1;
+    if (character === "{" || character === "(") { depth += 1; open += 1; continue; }
+    if (character !== "}" && character !== ")") continue;
+    // Inside a `case`, a `)` with nothing open on this line is an arm label, not
+    // a group close. Counting it would tag an assignment in an untaken arm as
+    // file-scoped and let it attest a publish after `esac`.
+    if (insideCase && open === 0) continue;
+    depth -= 1;
+    open -= 1;
   }
   depth += (bare.match(BLOCK_OPENERS) ?? []).length;
   depth -= (bare.match(BLOCK_CLOSERS) ?? []).length;
@@ -857,6 +882,7 @@ export function scalarAssignments(text: string): ScalarAssignment[] {
   const heredocs: OpenHeredoc[] = [];
   let lineNumber = -1;
   let depth = 0;
+  let caseDepth = 0;
   for (const line of text.split("\n")) {
     lineNumber += 1;
     const heredoc = heredocs[0];
@@ -870,7 +896,8 @@ export function scalarAssignments(text: string): ScalarAssignment[] {
     // recording; an opener takes effect after, so an assignment written on the
     // same line as an opener is recorded inside the block it opens. Heredoc
     // body lines never reach here, so data cannot move the depth.
-    const change = blockDepthChange(line);
+    const change = blockDepthChange(line, caseDepth > 0);
+    caseDepth = Math.max(0, caseDepth + caseDepthChange(line));
     if (change < 0) depth = Math.max(0, depth + change);
     for (const segment of topLevelCommandSegments(withoutShellComment(line))) {
       const command = ASSIGNMENT_COMMAND.exec(segment);
