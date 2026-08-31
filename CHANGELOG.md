@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The JQL date literal escaped quotes but not backslashes, so a trailing backslash breaks out of the clause ([pm-jira-x1jq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x1jq.toon))
 - This repository has never produced a static analysis, because it runs no CodeQL workflow ([pm-jira-z97p](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-z97p.toon))
 - Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-jira-8euj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-8euj.toon))
 

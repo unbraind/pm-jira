@@ -1,0 +1,20 @@
+id: pm-jira-x1jq
+title: "The JQL date literal escaped quotes but not backslashes, so a trailing backslash breaks out of the clause"
+description: "CodeQL flagged js/incomplete-sanitization at index.ts line 552 on the first scan this repository has ever had: the relative-date clause escaped embedded double quotes but not backslashes. Escaping only the quotes leaves a trailing backslash free to consume the escape of the quote that follows it, so an updatedSince value ending in a backslash closes the JQL string literal and everything after it is parsed as JQL rather than as data. The correct escaping already existed six lines away in jqlQuote, which escapes backslashes first and then quotes; the date clause could not reuse it because a relative date such as minus seven d must always be quoted and jqlQuote returns simple values bare. So the repository carried two escaping implementations for the same language and only one of them was right. Resolved by extracting the escaping into jqlQuoteAlways, making jqlQuote delegate to it, and pointing the date clause at it, so there is now one implementation and two quoting policies rather than two implementations."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-31T12:04:23.047Z"
+updated_at: "2026-08-31T12:04:24.709Z"
+closed_at: "2026-08-31T12:04:24.696Z"
+completed_at: "2026-08-31T12:04:24.696Z"
+author: claude-orchestrator
+resolution: "One escaping implementation, jqlQuoteAlways, now serves both quoting policies, so the always-quoted date operand and the conditionally-quoted general operand cannot diverge again."
+expected_result: A relative date supplied by a caller is interpolated as data inside a quoted JQL literal.
+actual_result: "A value ending in a backslash escaped the closing quote and the remainder was parsed as JQL, because only double quotes were escaped and backslashes were not."
+files[2]{path,scope}:
+  index.ts,project
+  test/smoke.test.ts,project
+close_reason: "Extracted jqlQuoteAlways as the single escaping implementation and pointed the date clause at it; verified revert-proof, with the reverted clause failing the hostile-date assertion (181 pass, 1 fail) and the restored clause returning 182 of 182."
+body: ""

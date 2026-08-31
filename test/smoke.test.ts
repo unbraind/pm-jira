@@ -28,6 +28,7 @@ import extension, {
   buildJql,
   readJqlFilters,
   jqlQuote,
+  jqlQuoteAlways,
   parseFieldMap,
   mapJiraStatusCategory,
   mapJiraIssueType,
@@ -488,6 +489,23 @@ test("buildJql escapes / quotes values to prevent clause break-out", () => {
   assert.strictEqual(buildJql({ label: "back end" }).startsWith('labels = "back end"'), true);
   assert.strictEqual(jqlQuote('a"b'), '"a\\"b"');
   assert.strictEqual(jqlQuote("PROJ-1"), "PROJ-1");
+
+  // A trailing backslash must not be able to consume the escape of the quote
+  // that follows it. Escaping only the quotes leaves `a\\` closing the literal,
+  // after which the rest of the input is parsed as JQL rather than as data.
+  assert.strictEqual(jqlQuoteAlways("a\\"), '"a\\\\"', "a trailing backslash is escaped, not left to escape the closing quote");
+  assert.strictEqual(
+    jqlQuoteAlways('-7d" OR project = EVIL'),
+    '"-7d\\" OR project = EVIL"',
+    "an embedded quote stays data",
+  );
+  // The relative-date operand is always quoted, and its escaping is the same
+  // implementation jqlQuote uses, so the two policies cannot drift apart.
+  assert.strictEqual(
+    buildJql({ updatedSince: '-7d\\' }),
+    'updated >= "-7d\\\\" AND statusCategory != Done ORDER BY priority ASC',
+    "a hostile relative date cannot break out of the date literal",
+  );
 });
 
 test("readJqlFilters reads kebab + camel keys", () => {
