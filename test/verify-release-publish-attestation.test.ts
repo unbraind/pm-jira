@@ -928,3 +928,44 @@ test("a read-write redirection does not turn its target into the command", () =>
   assert.equal(result.failures.length, 1, "the redirected publish must still be audited");
   assert.match(result.failures[0]!, /does not enable --provenance/);
 });
+
+test("an assignment-shaped line inside a heredoc body establishes no binding", () => {
+  // A heredoc's body is data the shell never evaluates, so `FLAG=--provenance`
+  // written between `cat <<EOF` and its terminator binds nothing. Indexing it
+  // let the unattested `npm publish $FLAG` below borrow the flag and pass the
+  // gate, while the attested sibling satisfied the non-vacuity guard.
+  for (const opener of ["cat <<EOF", "cat <<-EOF", "cat <<'EOF'", 'cat <<"EOF"']) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${opener}\nFLAG=--provenance\nEOF\nnpm publish $FLAG\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(result.failures.length, 1, `heredoc data from ${opener} is not a binding`);
+    assert.match(result.failures[0]!, /does not enable --provenance/);
+  }
+  // `<<-` strips leading tabs from the terminator line, as the shell does.
+  const tabIndented = auditPublishAttestation([{
+    file: "release.yml",
+    text: "cat <<-EOF\nFLAG=--provenance\n\tEOF\nnpm publish $FLAG\nnpm publish --provenance\n",
+  }]);
+  assert.equal(tabIndented.failures.length, 1, "a tab-indented terminator closes a <<- heredoc");
+  // A heredoc opened inside a command substitution is still an open heredoc:
+  // its body lines are data for the substituted command, not assignments for
+  // the file. Missing the opener indexed those lines as real bindings.
+  const inSubstitution = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'cat "$(cat <<A)" <<B\nFLAG=--provenance\nA\nOTHER=--provenance\nB\nnpm publish $FLAG $OTHER\nnpm publish --provenance\n',
+  }]);
+  assert.equal(inSubstitution.failures.length, 1,
+    "a heredoc opened inside a substitution swallows its body lines too");
+  // A heredoc opened after a completed substitution on the same line is queued
+  // exactly once. Queued twice, the first `EOF` clears only one entry, the
+  // `CMD=npm` line is misread as the second heredoc's body, and `$CMD publish`
+  // is never resolved -- the attested sibling then carried the audit to green.
+  const queuedOnce = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'cat "$(echo hi)" <<EOF\ninside\nEOF\nCMD=npm\n$CMD publish\nnpm publish --provenance\n',
+  }]);
+  assert.equal(queuedOnce.failures.length, 1,
+    "a heredoc opened after a substitution is queued once, so later assignments still bind");
+  assert.match(queuedOnce.failures[0]!, /does not enable --provenance/);
+});

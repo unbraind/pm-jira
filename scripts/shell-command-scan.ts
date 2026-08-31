@@ -607,6 +607,94 @@ function topLevelCommandSegments(line: string): string[] {
   return segments;
 }
 
+/** A heredoc opened on a line, awaiting the line that closes it. */
+interface OpenHeredoc {
+  /** The delimiter word the closing line must equal, quoting already resolved. */
+  readonly delimiter: string;
+  /** True when `<<-` was written, so the closing line may carry leading tabs. */
+  readonly stripTabs: boolean;
+}
+
+/**
+ * Return every heredoc a line opens, with the delimiter the shell will match.
+ *
+ * A heredoc's body is data: the shell hands those lines to the command's stdin
+ * and never evaluates them, so an assignment-shaped body line binds nothing.
+ * The scan needs the opener's delimiter to know where the data ends, and it
+ * must find the opener the way the shell does -- quote-aware, and past the
+ * constructs that merely look like one:
+ *
+ * - `$((1<<2))` is arithmetic. `<<` is a left shift inside it, not a heredoc,
+ *   and reading it as one would swallow every following line as body text.
+ * - A `#` comment can mention `<<EOF` without opening anything.
+ * - A heredoc opened inside a command substitution is still an open heredoc:
+ *   `cat "$(cat <<A)" <<B` opens two, and both bodies are data.
+ *
+ * Quoting the delimiter with `'` or `"` makes it literal; an unquoted one is
+ * the word as written. `<<-` strips leading tabs from the closing line.
+ *
+ * @param line - One already-continuation-joined source line.
+ * @returns Each heredoc the line opens, in the order the shell reads them.
+ */
+function heredocTerminators(line: string): OpenHeredoc[] {
+  const found: OpenHeredoc[] = [];
+  let single = false;
+  let double = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (character === "\\" && !single) { index += 1; continue; }
+    if (character === "'" && !double) { single = !single; continue; }
+    // Arithmetic is not a heredoc: `<<` inside it is a left shift, so skip to
+    // the closing `))` rather than reading the shift as an opener.
+    if (!single && ((character === "$" && line[index + 1] === "(" && line[index + 2] === "(") ||
+      (!double && character === "(" && line[index + 1] === "("))) {
+      const close = line.indexOf("))", index + (character === "$" ? 3 : 2));
+      if (close !== -1) index = close + 1;
+      continue;
+    }
+    if (double && character === "$" && line[index + 1] === "(") {
+      // A substitution inside double quotes carries its own text, and a heredoc
+      // opened inside it is still open. Scan the substitution's own text and
+      // resume after its close. Reading past the closing parenthesis would
+      // record a heredoc opened later on the line both here and in the outer
+      // scan, queueing one delimiter twice; the real terminator line then
+      // clears only one entry, and every following line stays misread as body.
+      let depth = 1;
+      let cursor = index + 2;
+      let quoted = false;
+      while (cursor < line.length && depth > 0) {
+        const inner = line[cursor]!;
+        if (inner === "\\") { cursor += 2; continue; }
+        if (inner === "'") quoted = !quoted;
+        else if (!quoted && inner === "(") depth += 1;
+        else if (!quoted && inner === ")") depth -= 1;
+        cursor += 1;
+      }
+      const closed = depth === 0;
+      found.push(...heredocTerminators(line.slice(index + 2, closed ? cursor - 1 : line.length)));
+      index = closed ? cursor - 1 : line.length;
+      continue;
+    }
+    if (character === '"' && !single) { double = !double; continue; }
+    if (single || double) continue;
+    if (character === "#" && (index === 0 || /\s/.test(line[index - 1]!))) return found;
+    if (character !== "<" || line[index + 1] !== "<" || line[index + 2] === "<") continue;
+    let cursor = index + 2;
+    const stripTabs = line[cursor] === "-";
+    if (stripTabs) cursor += 1;
+    while (line[cursor] === " " || line[cursor] === "\t") cursor += 1;
+    const quote = line[cursor] === "'" || line[cursor] === '"' ? line[cursor++] : undefined;
+    const start = cursor;
+    if (quote !== undefined) while (cursor < line.length && line[cursor] !== quote) cursor += 1;
+    else while (cursor < line.length && /[^\s;&|<>()]/.test(line[cursor]!)) cursor += 1;
+    if (cursor > start && (quote === undefined || line[cursor] === quote)) {
+      found.push({ delimiter: line.slice(start, cursor), stripTabs });
+      index = cursor;
+    }
+  }
+  return found;
+}
+
 /**
  * Index scalar assignments so a command held in a variable can be audited.
  *
@@ -650,12 +738,28 @@ function topLevelCommandSegments(line: string): string[] {
  * invocations that are not there while losing the one that is -- a false
  * verdict in both directions, which is worse than not resolving the variable.
  *
+ * Heredoc bodies are skipped: their lines are data the shell hands to a
+ * command's stdin and never evaluates, so an assignment-shaped line inside one
+ * establishes no binding. Without this, `cat <<EOF` followed by a body line
+ * `FLAG=--provenance` lent the flag to an unattested `npm publish $FLAG` below
+ * and the gate reported a pass it had not earned.
+ *
  * @param text - File contents with continuations already joined.
  * @returns Variable name mapped to the literal text it holds.
  */
 export function shellScalars(text: string): Map<string, string> {
   const scalars = new Map<string, string>();
+  // One heredoc body is consumed at a time, in the order the shell reads them;
+  // `cat <<A <<B` opens two, and A's terminator line returns to B's body.
+  const heredocs: OpenHeredoc[] = [];
   for (const line of text.split("\n")) {
+    const heredoc = heredocs[0];
+    if (heredoc !== undefined) {
+      const candidate = heredoc.stripTabs ? line.replace(/^\t+/, "") : line;
+      if (candidate.replace(/\r$/, "") === heredoc.delimiter) heredocs.shift();
+      continue;
+    }
+    heredocs.push(...heredocTerminators(line));
     for (const segment of topLevelCommandSegments(withoutShellComment(line))) {
       const command = ASSIGNMENT_COMMAND.exec(segment);
       if (command === null) continue;
