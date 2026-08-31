@@ -510,6 +510,27 @@ const PM_STATUS_TO_JQL: Record<PmStatus, string> = {
  */
 export function jqlQuote(value: string): string {
   if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+  return jqlQuoteAlways(value);
+}
+
+/**
+ * Quote a JQL value unconditionally, escaping backslashes before quotes.
+ *
+ * Some operands must be quoted even when they look like bare identifiers — a
+ * relative date such as `-7d` is parsed by Jira as arithmetic unless it is a
+ * quoted string — so those callers cannot use {@link jqlQuote}, which returns
+ * simple values bare.
+ *
+ * Backslashes are escaped *first*, and that order is the whole point: escaping
+ * only the quotes leaves a trailing backslash free to consume the escape of the
+ * quote that follows it, so `a\` closes the literal and everything after it is
+ * parsed as JQL. This is the single escaping implementation for both quoting
+ * policies, so the two cannot drift apart again.
+ *
+ * @param value - The raw JQL value.
+ * @returns The value wrapped in double quotes with backslashes and quotes escaped.
+ */
+export function jqlQuoteAlways(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
@@ -549,7 +570,7 @@ export function buildJql(filters: JqlFilters): string {
     // Always quote the date expression: Jira parses a bare "-7d" as arithmetic,
     // so the relative form must be a quoted string ("-7d") to be valid JQL.
     const d = filters.updatedSince.trim();
-    clauses.push(`updated >= "${d.replace(/"/g, '\\"')}"`);
+    clauses.push(`updated >= ${jqlQuoteAlways(d)}`);
   }
 
   // With no constraints at all, preserve the historical default. Otherwise, if
