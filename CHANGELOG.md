@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-jira-8euj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-8euj.toon))
+
 ## 2026.8.31 - 2026-08-31
 
 ### Fixed
