@@ -749,10 +749,49 @@ function heredocTerminators(line: string): OpenHeredoc[] {
  */
 export function shellScalars(text: string): Map<string, string> {
   const scalars = new Map<string, string>();
+  for (const assignment of scalarAssignments(text)) scalars.set(assignment.name, assignment.value);
+  return scalars;
+}
+
+/** A scalar binding and the zero-based line whose text established it. */
+export interface ScalarAssignment {
+  /** Variable name the line assigns. */
+  readonly name: string;
+  /** Literal value the shell would bind, after decoding escapes. */
+  readonly value: string;
+  /** Zero-based index of the line that makes the assignment. */
+  readonly line: number;
+}
+
+/**
+ * Collect every scalar assignment in file order, each tagged with its line.
+ *
+ * Position is load-bearing. A file-wide map lets an assignment resolve a
+ * command written above it, so `npm publish $FLAG` followed later by
+ * `FLAG=--provenance` would read as attested even though the shell runs the
+ * publish with `$FLAG` unset. Callers auditing a command must use only the
+ * assignments at or above the command's own line -- inclusive, because
+ * `NPM=npm; "$NPM" publish` assigns and then runs on one line and the shell
+ * binds before running it.
+ *
+ * Heredoc bodies are skipped here as well: their lines are data the shell
+ * never evaluates, so an assignment-shaped line inside one establishes no
+ * binding. Every rule about which lines make bindings at all -- the
+ * assignment-only shape, the literal value, the refusal of decoded shell
+ * syntax -- is {@link shellScalars}'s; this is the same walk with position
+ * recorded.
+ *
+ * @param text - File contents with continuations already joined.
+ * @returns Every assignment the shell would make, in file order.
+ */
+export function scalarAssignments(text: string): ScalarAssignment[] {
+  const assignments: ScalarAssignment[] = [];
   // One heredoc body is consumed at a time, in the order the shell reads them;
   // `cat <<A <<B` opens two, and A's terminator line returns to B's body.
   const heredocs: OpenHeredoc[] = [];
+  let lineNumber = -1;
   for (const line of text.split("\n")) {
+    lineNumber += 1;
     const heredoc = heredocs[0];
     if (heredoc !== undefined) {
       const candidate = heredoc.stripTabs ? line.replace(/^\t+/, "") : line;
@@ -771,11 +810,11 @@ export function shellScalars(text: string): Map<string, string> {
         // unescaped. Values that would change when tokenized again are refused.
         const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
         if (/[$`"'()\\;&|<>]/.test(value)) continue;
-        scalars.set(assignment[1]!, value);
+        assignments.push({ name: assignment[1]!, value, line: lineNumber });
       }
     }
   }
-  return scalars;
+  return assignments;
 }
 
 /**

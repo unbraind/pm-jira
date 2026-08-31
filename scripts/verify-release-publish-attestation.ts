@@ -29,7 +29,7 @@ import {
   expandArrays,
   expandScalars,
   joinContinuations,
-  shellScalars,
+  scalarAssignments,
   type ShellCommand,
   type SourceFile,
   tokenizeCommands,
@@ -206,10 +206,26 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
   const raw = source.file.endsWith("package.json") ? manifestCommandLines(source.text) : source.text;
   const text = joinContinuations(raw);
   const arrays = bashArrays(text);
-  const scalars = shellScalars(text);
+  // Resolved per line, against only the assignments at or above it. One
+  // file-wide map let `FLAG=--provenance` written below `npm publish $FLAG`
+  // resolve it, reporting an attested publish where the shell runs one with
+  // `$FLAG` unset. The boundary is inclusive: `NPM=npm; "$NPM" publish`
+  // assigns and then runs on one line, and the shell binds before running it,
+  // so excluding the line's own assignment would leave `$NPM` unexpanded and
+  // miss the publish entirely.
+  const assignments = scalarAssignments(text);
+  const bound = new Map<string, string>();
+  let next = 0;
   const expanded = text
     .split("\n")
-    .map((line) => expandScalars(expandArrays(line, arrays), scalars))
+    .map((line, index) => {
+      while (next < assignments.length && assignments[next]!.line <= index) {
+        const assignment = assignments[next]!;
+        bound.set(assignment.name, assignment.value);
+        next += 1;
+      }
+      return expandScalars(expandArrays(line, arrays), bound);
+    })
     .join("\n");
   const found: PublishInvocation[] = [];
   for (const command of tokenizeCommands(expanded)) {

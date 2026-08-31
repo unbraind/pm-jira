@@ -969,3 +969,32 @@ test("an assignment-shaped line inside a heredoc body establishes no binding", (
     "a heredoc opened after a substitution is queued once, so later assignments still bind");
   assert.match(queuedOnce.failures[0]!, /does not enable --provenance/);
 });
+
+test("an assignment below a publish does not attest it", () => {
+  // The shell runs the publish with $FLAG unset, because the binding is made
+  // below it. Resolving against a file-wide map let the later assignment
+  // rewrite the earlier command into an attested-looking one and the audit
+  // returned zero failures -- the exact shape of a gate that passes without
+  // looking. The attested sibling keeps the scan non-vacuous.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: "npm publish $FLAG\nFLAG=--provenance\nnpm publish --provenance\n",
+  }]);
+  assert.equal(result.failures.length, 1, "a binding made below a use cannot resolve it");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("an assignment earlier on the publish's own line still resolves it", () => {
+  // The boundary is inclusive: 'NPM=npm; "$NPM" publish' assigns and then runs
+  // on one line, and the shell binds before running. A strict earlier-than
+  // test would leave $NPM unexpanded, and the publish would be judged as an
+  // unresolved program instead of the unattested 'npm publish' it is --
+  // turning a readable failure into a blind one. The message is what pins
+  // that the command was resolved and judged, not merely failed closed on.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'NPM=npm; "$NPM" publish\nnpm publish --provenance\n',
+  }]);
+  assert.equal(result.failures.length, 1, "a binding made earlier on the same line resolves it");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
