@@ -554,11 +554,29 @@ export function bashArrays(text: string): Map<string, string> {
   return arrays;
 }
 
-/** A command made only of literal assignments, optionally used as a shell condition. */
+/**
+ * A command made only of literal assignments, optionally used as a shell condition.
+ *
+ * Consecutive assignments must be separated by at least one space or tab — the
+ * same rule a real shell applies.  The earlier form allowed a zero-width
+ * separator (`[ \t]*`) between repetitions, which made the unquoted-value atom
+ * ambiguous on input like `A=!A=!A=…`: at each `!` the engine could either let
+ * the current value swallow `!A` or stop after `!` and start a new assignment,
+ * yielding 2^n viable paths before the overall match failed.  Forcing
+ * `[ \t]+` between assignments removes the ambiguity and makes the match
+ * linear without changing the accepted language (a shell treats `A=1B=2` as a
+ * single assignment of `A` to `1B=2`, not two assignments).
+ */
 const ASSIGNMENT_COMMAND =
-  /^[ \t]*((?:(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)[ \t]*)+)\r?$/;
+  /^[ \t]*((?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+)(?:[ \t]+(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=(?:"(?:\\.|[^"\\$`])*"|'[^']*'|(?:\\.|[^\s;&|"'`$()\\])+))*)[ \t]*\r?$/;
 
-/** One literal assignment inside an assignment-only command. */
+/**
+ * One literal assignment inside an assignment-only command.
+ *
+ * The leading `(?:^|[ \t]+)` requires either start-of-string or at least one
+ * whitespace before each assignment, so the separator is never zero-width and
+ * the walk is linear.  This is the same rule enforced by {@link ASSIGNMENT_COMMAND}.
+ */
 const LITERAL_ASSIGNMENT =
   /(?:^|[ \t]+)(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(?:"((?:\\.|[^"\\$`])*)"|'([^']*)'|((?:\\.|[^\s;&|"'`$()\\])+))/g;
 

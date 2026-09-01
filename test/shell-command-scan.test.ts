@@ -13,7 +13,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
-import { bashArrays, expandArrays, expandScalars, joinContinuations, shellScalars } from "../scripts/shell-command-scan.ts";
+import { bashArrays, expandArrays, expandScalars, joinContinuations, scalarAssignments, shellScalars } from "../scripts/shell-command-scan.ts";
 import { isMainInvocation } from "../scripts/main-invocation.ts";
 
 test("an unknown array reference is left in place rather than erased", () => {
@@ -76,4 +76,66 @@ test("a scalar assignment with a substitution is not indexed", () => {
   // the script, so it must not be indexed.
   const scalars = shellScalars('CMD="$other_cmd publish"\n');
   assert.equal(scalars.has("CMD"), false);
+});
+
+test("the pathological ReDoS input completes in bounded time", () => {
+  // The old ASSIGNMENT_COMMAND regex used [ \t]* (zero-or-more) between
+  // repeated assignment groups, so on input like A=!A=!A=...!( the engine
+  // tried 2^n ways to split the string into assignments before failing.
+  // With 40 repetitions the old regex needs longer than the age of the
+  // session; the fixed regex (which requires [ \t]+ between assignments)
+  // finishes in well under 1 ms.
+  const pathological = "A=" + "!A=".repeat(40) + "(";
+  const start = process.hrtime.bigint();
+  shellScalars(pathological + "\n");
+  const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+  assert.ok(elapsedMs < 100, `ReDoS input took ${elapsedMs.toFixed(2)} ms — expected < 100 ms`);
+});
+
+test("two space-separated assignments bind both names", () => {
+  // A=1 B=2 is an assignment-only command binding both A and B.
+  const assignments = scalarAssignments("A=1 B=2\n");
+  assert.equal(assignments.length, 2);
+  assert.equal(assignments[0]!.name, "A");
+  assert.equal(assignments[0]!.value, "1");
+  assert.equal(assignments[1]!.name, "B");
+  assert.equal(assignments[1]!.value, "2");
+});
+
+test("export with two assignments including a quoted value binds both", () => {
+  // export A=1 B="two three" is an assignment-only command binding both.
+  const assignments = scalarAssignments('export A=1 B="two three"\n');
+  assert.equal(assignments.length, 2);
+  assert.equal(assignments[0]!.name, "A");
+  assert.equal(assignments[0]!.value, "1");
+  assert.equal(assignments[1]!.name, "B");
+  assert.equal(assignments[1]!.value, "two three");
+});
+
+test("A=1B=2 binds A to the literal 1B=2 and does not bind B", () => {
+  // In a real shell, A=1B=2 is a single assignment of A to 1B=2 — separate
+  // assignments require whitespace. The fixed regex enforces this.
+  const assignments = scalarAssignments("A=1B=2\n");
+  assert.equal(assignments.length, 1);
+  assert.equal(assignments[0]!.name, "A");
+  assert.equal(assignments[0]!.value, "1B=2");
+});
+
+test("an assignment line with trailing whitespace or a comment still matches", () => {
+  // Trailing whitespace after the last assignment is allowed.
+  const withTrailingWs = scalarAssignments("A=1   \n");
+  assert.equal(withTrailingWs.length, 1);
+  assert.equal(withTrailingWs[0]!.name, "A");
+  assert.equal(withTrailingWs[0]!.value, "1");
+  // A trailing comment is stripped before the regex sees the segment.
+  const withComment = scalarAssignments("A=1 # set A\n");
+  assert.equal(withComment.length, 1);
+  assert.equal(withComment[0]!.name, "A");
+  assert.equal(withComment[0]!.value, "1");
+});
+
+test("a genuine command is not mistaken for an assignment-only line", () => {
+  // npm publish has no assignment, so ASSIGNMENT_COMMAND must reject it.
+  const assignments = scalarAssignments("npm publish\n");
+  assert.equal(assignments.length, 0);
 });
