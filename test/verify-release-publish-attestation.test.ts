@@ -881,10 +881,29 @@ test("nested assignment text cannot escape into a later publish", () => {
 });
 
 test("assignment-only list commands remain visible to a following publish", () => {
+  // These are lines where the assignment IS indexed (the line opens with one
+  // literal assignment), so $NPM resolves and the publish is judged on its
+  // flags. The three list operators (&&, ||, ;) each keep the binding.
   for (const text of [
     "NPM=npm && $NPM publish",
     "NPM=npm || $NPM publish",
     "NPM=npm FLAG=x; $NPM publish",
+  ]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${text}\nnpm publish --provenance`,
+    }]);
+    assert.equal(result.failures.length, 1, text);
+  }
+});
+
+test("an assignment inside a block prefix is never indexed", () => {
+  // These lines start with a control-flow keyword (if/else/elif), so the
+  // assignment never opens the line and $NPM is never resolved. The publish
+  // fails as an unresolved program, not because the assignment stayed
+  // visible across blocks. The failure count is 1 (the unresolved publish);
+  // the attested sibling keeps the scan non-vacuous.
+  for (const text of [
     "if NPM=npm; then $NPM publish; fi",
     "if true; then NPM=npm; fi; $NPM publish",
     "if false; then :; else NPM=npm; fi; $NPM publish",
@@ -1107,4 +1126,138 @@ test("block nesting is counted outside quotes, comments and escapes only", () =>
   assert.equal(blockDepthChange("echo hi # if fi done"), 0, "a comment ends the counted text");
   assert.equal(blockDepthChange("if true; then :; fi"), 0, "a one-line block is neutral");
   assert.equal(blockDepthChange("for x in a; do :; done"), 0, "a one-line loop is neutral");
+});
+
+
+test("an escaped space before # does not start a comment in the value", () => {
+  // FLAG=--provenance\ #--no-provenance: the \ escapes the space, so # is
+  // part of the word, not a comment start. Without the fix, withoutShellComment
+  // truncated the value at # and the scanner saw --provenance (truncated)
+  // instead of --provenance #--no-provenance (full value).
+  const scalars = shellScalars('FLAG=--provenance\\ #--no-provenance\n');
+  assert.equal(scalars.get("FLAG"), "--provenance #--no-provenance",
+    "escaped space before # must not start a comment");
+});
+
+test("a comment containing esac does not close a case block", () => {
+  // A comment like `# esac` was counted by caseDepthChange, dropping caseDepth
+  // to 0 so the next arm's ) was read as a group close and the arm's assignment
+  // was tagged at file scope. The assignment must stay inside the case arm.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      'case "$x" in',
+      '# esac',
+      '  a)',
+      '    FLAG=--provenance',
+      '    ;;',
+      'esac',
+      'npm publish $FLAG',
+      'npm publish --provenance',
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1,
+    "a binding inside a case arm after an esac comment cannot attest a publish");
+});
+
+test("a mixed-quote heredoc delimiter resolves to the unquoted word", () => {
+  // <<EO"F" must resolve to delimiter EOF, not EO"F. Without the fix, the
+  // quote characters were preserved in the delimiter, so the terminator EOF
+  // never matched and the heredoc stayed open, hiding later publishes.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      'npm publish --provenance',
+      'cat <<EO"F"',
+      'FLAG=--provenance',
+      'EOF',
+      'npm publish $FLAG',
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1,
+    "an unattested publish after a mixed-quote heredoc must be found");
+});
+
+test("an empty quoted heredoc delimiter is accepted", () => {
+  // <<"" opens a heredoc with an empty delimiter; the body runs to the next
+  // blank line. Without the fix, the empty quoted delimiter was rejected
+  // (cursor === start), so the body was not skipped and its assignments
+  // leaked into the scalar map.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      'npm publish --provenance',
+      'cat <<""',
+      'FLAG=--provenance',
+      '',
+      'npm publish $FLAG',
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1,
+    "an assignment in an empty-delimiter heredoc body must not be indexed");
+});
+
+test("a same-line if/fi tags the assignment at the inner depth", () => {
+  // if false; then :; FLAG=--provenance; fi assigns inside the if block.
+  // Without the fix, the net depth change was 0, so the assignment was tagged
+  // at file scope (depth 0) and could attest a later publish.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'if false; then :; FLAG=--provenance; fi\nnpm publish $FLAG\nnpm publish --provenance\n',
+  }]);
+  assert.equal(result.failures.length, 1,
+    "a same-line if/fi assignment must be at the inner scope, not file scope");
+});
+
+test("a block keyword inside a heredoc body does not move the publish depth", () => {
+  // Heredoc body lines are data the shell never evaluates, so a block keyword
+  // inside one must not inflate lineDepth. Without the fix, publishInvocationsIn
+  // did not skip heredoc bodies when updating lineDepth, so an untaken if
+  // block's binding (depth 1) became visible after the heredoc body inflated
+  // lineDepth to 1.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      'if false; then',
+      'FLAG=--provenance',
+      'fi',
+      'cat <<EOF',
+      'if true; then',
+      'EOF',
+      'npm publish $FLAG',
+      'npm publish --provenance',
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1,
+    "a heredoc body must not inflate lineDepth in the publish walk");
+});
+
+test("a binding from a sibling block cannot attest a publish in another block", () => {
+  // A binding made in one if block at depth 1 must not stay visible in a
+  // later, different if block at depth 1. Without the fix, depth-only
+  // visibility could not distinguish siblings from enclosing blocks.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      'if false; then',
+      'FLAG=--provenance',
+      'fi',
+      'if true; then',
+      'npm publish $FLAG',
+      'fi',
+      'npm publish --provenance',
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1,
+    "a sibling block binding must be pruned when the block closes");
+});
+
+test("a value containing glob or brace characters is not inlined", () => {
+  // { and } are operator starts in tokenizeCommands, so inlining a value
+  // like {a,b} splits the command differently from how the shell expands it.
+  // Glob characters (* ? [ ]) also change the command the shell runs.
+  for (const value of ['"{a,b}"', '"echo {1..3}"', '"*.tgz"', '"file[0-9]"']) {
+    const scalars = shellScalars(`CMD=${value}\n`);
+    assert.equal(scalars.has("CMD"), false, `value ${value} must not be inlined`);
+  }
 });

@@ -85,11 +85,18 @@ test("the pathological ReDoS input completes in bounded time", () => {
   // With 40 repetitions the old regex needs longer than the age of the
   // session; the fixed regex (which requires [ \t]+ between assignments)
   // finishes in well under 1 ms.
-  const pathological = "A=" + "!A=".repeat(40) + "(";
-  const start = process.hrtime.bigint();
-  shellScalars(pathological + "\n");
-  const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
-  assert.ok(elapsedMs < 100, `ReDoS input took ${elapsedMs.toFixed(2)} ms — expected < 100 ms`);
+  // Both CodeQL witnesses are asserted: the first uses A= plus repeated !A=,
+  // the second uses A=\\ plus repeated aA=\\.
+  const witnesses = [
+    "A=" + "!A=".repeat(40) + "(",
+    "A=\\" + "aA=\\".repeat(40) + "(",
+  ];
+  for (const pathological of witnesses) {
+    const start = process.hrtime.bigint();
+    shellScalars(pathological + "\n");
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+    assert.ok(elapsedMs < 100, `ReDoS input took ${elapsedMs.toFixed(2)} ms — expected < 100 ms`);
+  }
 });
 
 test("two space-separated assignments bind both names", () => {
