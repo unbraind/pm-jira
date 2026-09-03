@@ -1,0 +1,13 @@
+id: pm-jira-qi5p
+title: "Sixteen review findings on the shell scanner are open, and an unfinished agent left a failing specification for six of them"
+description: "PR 82 carries sixteen unresolved review threads against this repository's vendored copy of the shell-command scanner and the publish-attestation gate it feeds. They are all the same class: the scanner's notion of when a variable binding is visible diverges from the shell's, and every divergence makes the gate report an unattested publish as attested, which is fail-open on the control deciding whether this package can publish.\n\nAn agent working the pull request died mid-task. It had written fifteen tests naming specific shell constructs where the divergence shows — an escaped space before a comment marker, a comment containing esac, an empty quoted heredoc delimiter, a same-line if/fi, a block keyword inside a heredoc body, and a binding from a sibling block attesting a publish in another — and had implemented none of the corresponding scanner changes. Every one of those tests fails.\n\nThey are preserved on the branch wip/unfinished-scanner-tests-from-a-dead-agent rather than discarded, because they are a better specification than the review comments they came from: each is an executable witness rather than a description. They are explicitly not for merge in that state.\n\nThe same class of finding is being worked in pm-todos, whose scanner shares this lineage and which has now had eleven distinct fail modes, three of them introduced by the fix for an earlier one. The fix that lands there should be applied here against these witnesses rather than re-derived from the review comments, and it should be applied to the canonical implementation rather than to each vendored copy — this scanner is one of the copies that de-vendoring into pm-ops has not yet reached."
+type: Issue
+status: open
+priority: 1
+tags[2]: gates,security
+created_at: "2026-09-03T19:43:17.185Z"
+updated_at: "2026-09-03T19:43:17.185Z"
+author: codex
+acceptance_criteria: "Every one of the sixteen threads is answered, fixed or refused with evidence, and resolved; the fifteen preserved witnesses pass against a scanner change rather than being deleted or weakened; each fix is paired, so reverting it turns the new witness red while the guard for the behaviour that must survive stays green; and this repository consumes the canonical scanner from pm-ops rather than a vendored copy, so the fix reaches every consumer at once"
+risk: high
+body: ""
