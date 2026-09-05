@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Other
+
+- Pin the pm toolchain to 2026.9.5 ([pm-jira-kg3e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-kg3e.toon))
+
+## 2026.9.1 - 2026-09-01
+
 ### Fixed
 
 - The JQL date literal escaped quotes but not backslashes, so a trailing backslash breaks out of the clause ([pm-jira-x1jq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x1jq.toon))
