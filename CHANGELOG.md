@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Pin the pm toolchain to 2026.9.5 ([pm-jira-kg3e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-kg3e.toon))
+
 ## 2026.9.1 - 2026-09-01
 
 ### Fixed
