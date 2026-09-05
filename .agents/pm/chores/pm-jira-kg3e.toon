@@ -1,0 +1,28 @@
+id: pm-jira-kg3e
+title: Pin the pm toolchain to 2026.9.5
+description: "Adopt the current published releases (@unbrained/pm-cli 2026.9.5, pm-changelog 2026.9.2, pm-ops ^2026.9.5). pm-changelog 2026.9.2 stopped stamping the wall clock on an unflagged run, so a control that required the clock-derived heading would fail. This repository already asserts only that the flag changes the heading, which is the load-bearing property for both generators."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-09-05T17:48:50.435Z"
+updated_at: "2026-09-05T17:50:14.504Z"
+closed_at: "2026-09-05T17:49:44.401Z"
+completed_at: "2026-09-05T17:49:44.401Z"
+claim_principal: pi-agent
+author: pi-agent
+resolution: Pinned the current published toolchain and confirmed the existing date control already proves --date-from-version is load-bearing without pinning the unflagged heading to the clock.
+expected_result: "release:check and pm health --strict-exit exit 0 against @unbrained/pm-cli 2026.9.5, pm-changelog 2026.9.2, and pm-ops ^2026.9.5; the date control fails if restored to a clock-derived assertion."
+actual_result: "release:check exit 0; pm health --strict-exit exit 0; clock-asserting control 4 fail / 17 pass; property control 21 pass / 0 fail."
+comments[1]{created_at,author,text}:
+  "2026-09-05T17:49:29.138Z",pi-agent,"Pinned @unbrained/pm-cli 2026.9.5 (exact), pm-changelog 2026.9.2 (exact), and pm-ops ^2026.9.5 (caret preserved).\n\npm-changelog 2026.9.2 no longer stamps the wall clock on an unflagged run. The unflagged heading is now the bare ## <version>, where it used to be ## <version> - <today>. This repository already asserts only that the unflagged heading differs from the flagged one (scripts/verify-release-changelog-date.ts, since f443a7d), so the pin did not require a source change.\n\nRevert-proof against 2026.9.2: restoring the old clock-asserting control fails 4 of 21 tests in test/verify-release-changelog-date.test.ts (exit 1). Restoring the property that the flag must change the heading: 21 pass, 0 fail (exit 0).\n\nThe four failures against the clock-asserting control:\n- a control identical to the flagged run fails, because then the flag discriminates nothing\n- a control derived some other way still passes, because the contract is that the flag changes the heading\n- verify runs both halves against this checkout and reports through the process streams\n- main verifies this checkout and reports through the process streams\n\nObserved generator output: flagged ## 2026.1.2 - 2026-01-02, unflagged ## 2026.1.2.\n\nnpm run release:check exits 0. pm health --strict-exit exits 0."
+files[3]{path,scope}:
+  package.json,project
+  package-lock.json,project
+  CHANGELOG.md,project
+tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  verify runs both halves against this checkout and reports through the process streams,project,pi-agent,"2026-09-05T17:48:59.417Z",local_mutation,chore/pin-pm-toolchain-2026.9.5
+  "a control derived some other way still passes, because the contract is that the flag changes the heading",project,pi-agent,"2026-09-05T17:49:18.059Z",local_mutation,chore/pin-pm-toolchain-2026.9.5
+  "a control identical to the flagged run fails, because then the flag discriminates nothing",project,pi-agent,"2026-09-05T17:49:18.813Z",local_mutation,chore/pin-pm-toolchain-2026.9.5
+close_reason: Pinned the current published toolchain and confirmed the existing date control already proves --date-from-version is load-bearing without pinning the unflagged heading to the clock.
+body: ""
