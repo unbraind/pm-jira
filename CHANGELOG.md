@@ -22,6 +22,10 @@
 
 ## 2026.8.29 - 2026-08-29
 
+### Fixed
+
+- Close PR 82 escaped-control review finding ([pm-jira-qi0w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-qi0w.toon))
+
 ### Other
 
 - Pilot pm-github issue sync for pm-jira ([pm-jira-jszx](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jszx.toon))

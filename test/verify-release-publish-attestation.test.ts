@@ -30,7 +30,7 @@ import {
   trackedPublishSources,
   verify,
 } from "../scripts/verify-release-publish-attestation.ts";
-import { commandArguments, commandCandidates, commandName, expandScalars, shellScalars, tokenizeCommands } from "../scripts/shell-command-scan.ts";
+import { blockDepthChange, commandArguments, commandCandidates, commandName, expandScalars, shellScalars, tokenizeCommands } from "../scripts/shell-command-scan.ts";
 
 /** Tokenises one command and returns it, asserting the text held exactly one. */
 function onlyCommand(text: string): ReturnType<typeof tokenizeCommands>[number] {
@@ -783,4 +783,328 @@ test("a substitution's quote state does not leak across its lines", () => {
   const found = publishInvocationsIn({ file: "release.yml", text }).map((i) => renderCommand(i.command));
   assert.ok(found.includes("npm publish"), "the publish inside the substitution is still found");
   assert.ok(found.includes("npm publish --provenance"), "and the one after it is not swallowed");
+});
+
+test("an assignment the shell never makes is not indexed", () => {
+  // Scalars used to be read straight out of the raw text, which indexed three
+  // things the shell does not assign. The middle one is a gate bypass: a name
+  // defined only in a COMMENT was inlined into a later command, so an
+  // unattested publish borrowed `--provenance` from a comment and passed.
+  assert.equal(shellScalars("# FLAG=--provenance\nnpm publish $FLAG\n").get("FLAG"), undefined,
+    "a name in a comment is not an assignment");
+  assert.equal(shellScalars('# CMD="npm publish"\n').get("CMD"), undefined,
+    "quoting it in a comment does not make it an assignment either");
+  assert.equal(shellScalars('echo "config NPM=npm"\n').get("NPM"), undefined,
+    "a name inside a quoted argument is not an assignment");
+  assert.equal(shellScalars('echo "a; FLAG=--provenance; b"\n').get("FLAG"), undefined,
+    "a semicolon inside quotes is not an outer command boundary");
+  assert.equal(shellScalars('$(echo a; FLAG=--provenance)\n').get("FLAG"), undefined,
+    "an assignment inside a substitution does not escape its scope");
+  assert.equal(shellScalars("NPM=npm$SUFFIX\n").get("NPM"), undefined,
+    "a value continuing into an expansion is not a literal, and must not be indexed by its prefix");
+  assert.equal(shellScalars('"NPM=npm" publish\n').get("NPM"), undefined,
+    "quoting the whole word makes it a command name, not a binding");
+
+  // The bypass, end to end: without the fix this audit returns no failures.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      "          # FLAG=--provenance",
+      "          npm publish --access public $FLAG",
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1, "a publish flagged only from a comment is unattested");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("a scalar is taken only from a line that is exactly one literal assignment", () => {
+  assert.equal(shellScalars("NPM=npm\n").get("NPM"), "npm");
+  assert.equal(shellScalars('CMD="npm publish"\n').get("CMD"), "npm publish");
+  assert.equal(shellScalars("OTHER='npm publish --provenance'\n").get("OTHER"), "npm publish --provenance");
+  assert.equal(shellScalars("NPM=npm\\ publish\n").get("NPM"), "npm publish",
+    "an escape is honoured, so one word can still hold a command");
+  assert.equal(shellScalars('NPM=npm; "$NPM" publish\n').get("NPM"), "npm",
+    "a semicolon ends the assignment, and the shell keeps the binding after it");
+  assert.equal(shellScalars("NPM=npm && $NPM publish\n").get("NPM"), "npm");
+  assert.equal(shellScalars("NPM=npm || $NPM publish\n").get("NPM"), "npm");
+  assert.equal(shellScalars("NPM=npm FLAG=x; $NPM publish\n").get("NPM"), "npm");
+  // Static analysis cannot know which control-flow branch executes. Refuse to
+  // invent a file-wide value; unresolved publisher variables fail closed.
+  assert.equal(shellScalars("if NPM=npm; then $NPM publish; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if true; then NPM=npm; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if false; then :; else NPM=npm; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("if false; then :; elif NPM=npm; then :; fi\n").get("NPM"), undefined);
+  assert.equal(shellScalars("export NPM=npm\n").get("NPM"), "npm",
+    "export still declares a persistent binding");
+  assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",
+    "a trailing comment does not stop the line being an assignment");
+  assert.equal(shellScalars("NPM=npm\r\n").get("NPM"), "npm",
+    "a CRLF line ending does not hide the assignment");
+  // A surviving backslash cannot be inlined safely: the tokenizer would parse
+  // it a second time and could manufacture a standalone provenance flag.
+  assert.equal(shellScalars("CMD='npm publish \\--provenance'\n").get("CMD"), undefined,
+    "a single-quoted backslash is literal and unsafe to re-tokenize");
+  assert.equal(shellScalars("# a; FLAG=--provenance\n").get("FLAG"), undefined,
+    "a semicolon inside a comment does not expose an assignment");
+
+  // A command-scoped assignment binds only for the command it precedes; the
+  // shell does not keep it afterwards, so neither may this map. Storing it
+  // rewrote a LATER unattested publish into an attested-looking one.
+  assert.equal(shellScalars("FLAG=--provenance some-command\n").get("FLAG"), undefined,
+    "a temporary assignment does not outlive its command");
+  assert.equal(shellScalars("$(FLAG=--provenance)\n").get("FLAG"), undefined,
+    "a binding made inside a subshell is not visible to the outer shell");
+  assert.equal(shellScalars("NPM=npm$(printf foo)\n").get("NPM"), undefined,
+    "a literal prefix in front of a substitution is not the value");
+
+  // Both leaks were false passes end to end, not merely wrong map entries.
+  for (const text of [
+    ["          FLAG=--provenance some-command", "          npm publish --access public $FLAG"],
+    ["          $(FLAG=--provenance)", "          npm publish --access public $FLAG"],
+  ]) {
+    const result = auditPublishAttestation([{ file: "release.yml", text: text.join("\n") }]);
+    assert.equal(result.failures.length, 1, `a publish flagged only by ${text[0]!.trim()} is unattested`);
+    assert.match(result.failures[0]!, /does not enable --provenance/);
+  }
+});
+test("nested assignment text cannot escape into a later publish", () => {
+  for (const nested of [
+    'echo "a; FLAG=--provenance; b"',
+    '$(echo a; FLAG=--provenance)',
+  ]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${nested}\nnpm publish $FLAG\nnpm publish --provenance`,
+    }]);
+    assert.equal(result.failures.length, 1, nested);
+  }
+});
+
+test("assignment-only list commands remain visible to a following publish", () => {
+  for (const text of [
+    "NPM=npm && $NPM publish",
+    "NPM=npm || $NPM publish",
+    "NPM=npm FLAG=x; $NPM publish",
+    "if NPM=npm; then $NPM publish; fi",
+    "if true; then NPM=npm; fi; $NPM publish",
+    "if false; then :; else NPM=npm; fi; $NPM publish",
+    "if false; then :; elif NPM=npm; then :; fi; $NPM publish",
+  ]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${text}\nnpm publish --provenance`,
+    }]);
+    assert.equal(result.failures.length, 1, text);
+  }
+});
+
+test("escaped shell control characters cannot be re-tokenized into an attestation", () => {
+  for (const escaped of ["\\;", "\\&", "\\|"]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: [
+        `FLAG=--provenance${escaped}ignored`,
+        "npm publish $FLAG",
+        "npm publish --provenance",
+      ].join("\n"),
+    }]);
+    assert.equal(result.failures.length, 1, escaped);
+  }
+});
+
+test("a read-write redirection does not turn its target into the command", () => {
+  // `<>` is one operator, not `<` followed by `>`. Unnamed, it was read as a
+  // joined redirection that consumes no target, so `/dev/null` became the
+  // command word and the real publish after it was never audited -- while an
+  // attested publish elsewhere satisfied the non-vacuity guard, so the whole
+  // audit reported clean.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: [
+      `          npm publish --access public ${ATTESTATION_FLAG}`,
+      "          <> /dev/null npm publish --access public",
+    ].join("\n"),
+  }]);
+  assert.equal(result.failures.length, 1, "the redirected publish must still be audited");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("an assignment-shaped line inside a heredoc body establishes no binding", () => {
+  // A heredoc's body is data the shell never evaluates, so `FLAG=--provenance`
+  // written between `cat <<EOF` and its terminator binds nothing. Indexing it
+  // let the unattested `npm publish $FLAG` below borrow the flag and pass the
+  // gate, while the attested sibling satisfied the non-vacuity guard.
+  for (const opener of ["cat <<EOF", "cat <<-EOF", "cat <<'EOF'", 'cat <<"EOF"']) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${opener}\nFLAG=--provenance\nEOF\nnpm publish $FLAG\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(result.failures.length, 1, `heredoc data from ${opener} is not a binding`);
+    assert.match(result.failures[0]!, /does not enable --provenance/);
+  }
+  // `<<-` strips leading tabs from the terminator line, as the shell does.
+  const tabIndented = auditPublishAttestation([{
+    file: "release.yml",
+    text: "cat <<-EOF\nFLAG=--provenance\n\tEOF\nnpm publish $FLAG\nnpm publish --provenance\n",
+  }]);
+  assert.equal(tabIndented.failures.length, 1, "a tab-indented terminator closes a <<- heredoc");
+  // A heredoc opened inside a command substitution is still an open heredoc:
+  // its body lines are data for the substituted command, not assignments for
+  // the file. Missing the opener indexed those lines as real bindings.
+  const inSubstitution = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'cat "$(cat <<A)" <<B\nFLAG=--provenance\nA\nOTHER=--provenance\nB\nnpm publish $FLAG $OTHER\nnpm publish --provenance\n',
+  }]);
+  assert.equal(inSubstitution.failures.length, 1,
+    "a heredoc opened inside a substitution swallows its body lines too");
+  // A heredoc opened after a completed substitution on the same line is queued
+  // exactly once. Queued twice, the first `EOF` clears only one entry, the
+  // `CMD=npm` line is misread as the second heredoc's body, and `$CMD publish`
+  // is never resolved -- the attested sibling then carried the audit to green.
+  const queuedOnce = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'cat "$(echo hi)" <<EOF\ninside\nEOF\nCMD=npm\n$CMD publish\nnpm publish --provenance\n',
+  }]);
+  assert.equal(queuedOnce.failures.length, 1,
+    "a heredoc opened after a substitution is queued once, so later assignments still bind");
+  assert.match(queuedOnce.failures[0]!, /does not enable --provenance/);
+});
+
+test("an assignment below a publish does not attest it", () => {
+  // The shell runs the publish with $FLAG unset, because the binding is made
+  // below it. Resolving against a file-wide map let the later assignment
+  // rewrite the earlier command into an attested-looking one and the audit
+  // returned zero failures -- the exact shape of a gate that passes without
+  // looking. The attested sibling keeps the scan non-vacuous.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: "npm publish $FLAG\nFLAG=--provenance\nnpm publish --provenance\n",
+  }]);
+  assert.equal(result.failures.length, 1, "a binding made below a use cannot resolve it");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("an assignment earlier on the publish's own line still resolves it", () => {
+  // The boundary is inclusive: 'NPM=npm; "$NPM" publish' assigns and then runs
+  // on one line, and the shell binds before running. A strict earlier-than
+  // test would leave $NPM unexpanded, and the publish would be judged as an
+  // unresolved program instead of the unattested 'npm publish' it is --
+  // turning a readable failure into a blind one. The message is what pins
+  // that the command was resolved and judged, not merely failed closed on.
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'NPM=npm; "$NPM" publish\nnpm publish --provenance\n',
+  }]);
+  assert.equal(result.failures.length, 1, "a binding made earlier on the same line resolves it");
+  assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("a backslash-quoted heredoc delimiter closes on its unquoted terminator", () => {
+  // A backslash quotes a heredoc delimiter exactly as single quotes do, and the
+  // shell strips it before matching the terminator line. Keeping it left the
+  // delimiter as a backslash-prefixed word, which the real 'EOF' line never
+  // matches, so the heredoc stayed open for the rest of the file, 'CMD=npm'
+  // was swallowed as body text, and '$CMD publish' was never recognised as the
+  // publish it is. The message pins that the command was resolved and judged:
+  // without the strip the audit fails closed on an unresolved program instead,
+  // which passes the count while the scan is blind.
+  for (const opener of ["cat <<\\EOF", "cat <<-\\EOF"]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${opener}\ninside\nEOF\nCMD=npm\n$CMD publish\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(result.failures.length, 1,
+      `a backslash-quoted delimiter (${opener}) must close on its unquoted terminator`);
+    assert.match(result.failures[0]!, /does not enable --provenance/);
+  }
+});
+
+test("a binding confined to a block cannot attest a publish outside it", () => {
+  // A binding made inside a block the shell may never enter -- an untaken if
+  // branch, an else branch, an uncalled function body, a subshell -- cannot
+  // attest a publish outside it. 'if false; then FLAG=--provenance; fi' runs
+  // the publish below with $FLAG unset, and a line-aware but scope-blind map
+  // still credited the binding, so the audit returned zero failures while the
+  // attested sibling kept the scan non-vacuous.
+  const outOfScope: ReadonlyArray<readonly [string, string]> = [
+    ["an untaken if branch", "if false; then\nFLAG=--provenance\nfi\n"],
+    ["an uncalled function body", "deploy() {\nFLAG=--provenance\n}\n"],
+    ["a subshell", "(\nFLAG=--provenance\n)\n"],
+    ["an else branch", "if true; then\n:\nelse\nFLAG=--provenance\nfi\n"],
+  ];
+  for (const [label, prelude] of outOfScope) {
+    const scoped = auditPublishAttestation([{
+      file: "release.yml",
+      text: `${prelude}npm publish $FLAG\nnpm publish --provenance\n`,
+    }]);
+    assert.equal(scoped.failures.length, 1,
+      `a binding confined to ${label} cannot attest a publish outside it`);
+    assert.match(scoped.failures[0]!, /does not enable --provenance/);
+  }
+
+  // A `case` arm label ends in a bare `)`. Counted as a group close it drops the
+  // block depth, so an assignment inside an untaken arm was tagged file-scoped
+  // and attested a publish after `esac` -- the same fail-open as the cases above,
+  // reached through the one shell construct a generic paren count misreads.
+  const caseArm = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'case "$x" in\n  a)\n    FLAG=--provenance\n    ;;\nesac\nnpm publish $FLAG\nnpm publish --provenance\n',
+  }]);
+  assert.equal(caseArm.failures.length, 1,
+    "a binding inside a case arm cannot attest a publish after esac");
+
+  // The mirror: narrowing must not blind the scan. A publish inside the arm that
+  // set the flag is genuinely attested and must stay so.
+  const caseArmSameScope = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'case "$x" in\n  a)\n    FLAG=--provenance\n    npm publish $FLAG\n    ;;\nesac\n',
+  }]);
+  assert.equal(caseArmSameScope.failures.length, 0,
+    "a publish in the same case arm still sees that arm's binding");
+});
+
+test("a binding in its own or an enclosing scope still resolves the command", () => {
+  // The mirror direction: narrowing scope must not stop the scan finding
+  // publishes it could see before. A binding shares scope with a command on
+  // its own line, and an enclosing binding still attests a publish nested
+  // below it. The same-block case asserts the message as well, because a
+  // scope-blind refusal would fail closed on an unresolved program instead of
+  // resolving and judging the publish -- the count would pass while the scan
+  // stopped understanding the command.
+  const sameBlock = auditPublishAttestation([{
+    file: "release.yml",
+    text: "if true; then\nCMD=npm\n$CMD publish\nfi\nnpm publish --provenance\n",
+  }]);
+  assert.equal(sameBlock.failures.length, 1, "a binding in the same block still resolves the command");
+  assert.match(sameBlock.failures[0]!, /does not enable --provenance/);
+  for (const [label, text, expected] of [
+    ["an outer binding attests a publish nested below it",
+      "FLAG=--provenance\nif true; then\nnpm publish $FLAG\nfi\n", 0],
+    ["a binding two blocks up still attests",
+      "if true; then\nFLAG=--provenance\nif true; then\nnpm publish $FLAG\nfi\nfi\n", 0],
+  ] as ReadonlyArray<readonly [string, string, number]>) {
+    const resolved = auditPublishAttestation([{ file: "release.yml", text }]);
+    assert.equal(resolved.failures.length, expected, label);
+  }
+});
+
+test("block nesting is counted outside quotes, comments and escapes only", () => {
+  // Scope is decided by structure, not prose: a keyword inside quotes or a
+  // comment does not open anything, and an escaped brace is a literal. Each
+  // arm of the counting is pinned so a later edit cannot remove one quietly.
+  assert.equal(blockDepthChange("if true; then"), 1, "if opens");
+  assert.equal(blockDepthChange("fi"), -1, "fi closes");
+  assert.equal(blockDepthChange("done"), -1, "done closes a loop");
+  assert.equal(blockDepthChange("esac"), -1, "esac closes a case");
+  assert.equal(blockDepthChange("deploy() {"), 1, "a function body opens");
+  assert.equal(blockDepthChange("}"), -1, "a brace group closes");
+  assert.equal(blockDepthChange("("), 1, "a subshell opens");
+  assert.equal(blockDepthChange(")"), -1, "a subshell closes");
+  assert.equal(blockDepthChange("x=$(echo hi)"), 0, "a completed substitution is neutral");
+  assert.equal(blockDepthChange("echo 'if fi done'"), 0, "keywords in single quotes are prose");
+  assert.equal(blockDepthChange('echo "if then fi"'), 0, "keywords in double quotes are prose");
+  assert.equal(blockDepthChange("echo a\\;b"), 0, "an escaped separator is a literal");
+  assert.equal(blockDepthChange("echo hi # if fi done"), 0, "a comment ends the counted text");
+  assert.equal(blockDepthChange("if true; then :; fi"), 0, "a one-line block is neutral");
+  assert.equal(blockDepthChange("for x in a; do :; done"), 0, "a one-line loop is neutral");
 });

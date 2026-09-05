@@ -1,0 +1,25 @@
+id: pm-jira-hsjx
+title: Five fail-open publish-attestation bypasses in the vendored shell scan
+description: "pm-todos closed five fail-open bypasses in its vendored shell-command-scan / verify-release-publish-attestation pair. Port each into pm-jira's own structure on PR 82, proving every one by behaviour: failing fixture first, fix, then revert-red. Bypasses: (1) heredoc bodies invent bindings; (2) escaped separators invent attestation; (3) file-wide scalar resolution lets a later assignment attest an earlier publish; (4) a backslash-quoted heredoc delimiter never matches its terminator; (5) scope-blind expansion credits out-of-scope bindings to a publish."
+type: Issue
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-08-31T20:10:34.861Z"
+updated_at: "2026-08-31T20:42:44.255Z"
+assignee: pi-agent
+claim_principal: pi-agent
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-08-31T20:42:44.255Z",claude,"Two follow-ups after the agent pass. First, the tracker item had been written with the globally installed pm 2026.8.31 while this repository pinned 2026.8.28, and 2026.8.31 writes item_hash_version 3 which 2026.8.28 cannot read at all: pm health failed with unsupported_item_hash_version:3 at gate_failing. Measured the boundary directly, 2026.8.24 and 2026.8.28 both write epoch 2 and 2026.8.31 writes 3, so this is a hard forward-compatibility break rather than the drift class. Resolved by converging this repository's pin on 2026.8.31 like the rest of the fleet. Second, the case-arm bypass was found after the porting pass began and so was missing here: a case arm label ends in a bare closing parenthesis that the generic depth counter read as a group close, dropping the depth so an assignment inside an untaken arm was tagged file-scoped and attested a publish after esac. Ported the case-aware depth counter and verified all eight bypasses plus three in-scope mirror cases behave correctly."
+files[3]{path,scope}:
+  scripts/shell-command-scan.ts,project
+  scripts/verify-release-publish-attestation.ts,project
+  test/verify-release-publish-attestation.test.ts,project
+tests[5]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref},note}:
+  npm run typecheck,project,180,pi-agent,"2026-08-31T20:22:15.167Z",local_mutation,fix/tokenised-shell-scalars,tsc --noEmit over the scanner and verifier changes
+  npm test,project,300,pi-agent,"2026-08-31T20:22:15.781Z",local_mutation,fix/tokenised-shell-scalars,full suite incl. the five bypass fixtures at audit level
+  npm run coverage,project,300,pi-agent,"2026-08-31T20:22:16.548Z",local_mutation,fix/tokenised-shell-scalars,coverage gate thresholds must stay met
+  npm run docstring,project,120,pi-agent,"2026-08-31T20:22:17.474Z",local_mutation,fix/tokenised-shell-scalars,docstring gate over the new exported declarations
+  node scripts/verify-release-publish-attestation.ts,project,120,pi-agent,"2026-08-31T20:22:18.311Z",local_mutation,fix/tokenised-shell-scalars,the verifier green over this repository own tracked files
+body: "Ported from the pm-todos reference (read, not copied): scripts/shell-command-scan.ts, scripts/verify-release-publish-attestation.ts, test/verify-release-publish-attestation.test.ts. Each fix gets an audit-level failing fixture paired with a genuinely attested sibling publish, a revert-red check, and mirror-direction guards so narrowing never blinds the scan."

@@ -23,13 +23,15 @@ import { resolve } from "node:path";
 
 import {
   bashArrays,
+  blockDepthChange,
+  caseDepthChange,
   commandArguments,
   commandCandidates,
   commandName,
   expandArrays,
   expandScalars,
   joinContinuations,
-  shellScalars,
+  scalarAssignments,
   type ShellCommand,
   type SourceFile,
   tokenizeCommands,
@@ -206,10 +208,46 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
   const raw = source.file.endsWith("package.json") ? manifestCommandLines(source.text) : source.text;
   const text = joinContinuations(raw);
   const arrays = bashArrays(text);
-  const scalars = shellScalars(text);
+  // Resolved per line, against only the assignments at or above it. One
+  // file-wide map let `FLAG=--provenance` written below `npm publish $FLAG`
+  // resolve it, reporting an attested publish where the shell runs one with
+  // `$FLAG` unset. The boundary is inclusive: `NPM=npm; "$NPM" publish`
+  // assigns and then runs on one line, and the shell binds before running it,
+  // so excluding the line's own assignment would leave `$NPM` unexpanded and
+  // miss the publish entirely.
+  //
+  // Each binding is held with the block depth it was made at, because scope
+  // decides whether a command may be credited with it. `if false; then
+  // FLAG=--provenance; fi` above `npm publish $FLAG` runs that publish with
+  // `$FLAG` unset, so crediting the binding reports an unattested publish as
+  // attested -- and the same holds for an uncalled function body or a
+  // subshell. A line sees only its own scope or an enclosing one.
+  const assignments = scalarAssignments(text);
+  const bound = new Map<string, { value: string; depth: number }>();
+  let next = 0;
+  let lineDepth = 0;
+  let caseDepth = 0;
   const expanded = text
     .split("\n")
-    .map((line) => expandScalars(expandArrays(line, arrays), scalars))
+    .map((line, index) => {
+      while (next < assignments.length && assignments[next]!.line <= index) {
+        const assignment = assignments[next]!;
+        bound.set(assignment.name, { value: assignment.value, depth: assignment.depth });
+        next += 1;
+      }
+      // A closer returns to the outer scope on its own line, and an opener
+      // takes effect after it, which is the order the shell runs in.
+      const change = blockDepthChange(line, caseDepth > 0);
+      caseDepth = Math.max(0, caseDepth + caseDepthChange(line));
+      if (change < 0) lineDepth = Math.max(0, lineDepth + change);
+      const visible = new Map<string, string>();
+      for (const [name, binding] of bound) {
+        if (binding.depth <= lineDepth) visible.set(name, binding.value);
+      }
+      const resolved = expandScalars(expandArrays(line, arrays), visible);
+      if (change > 0) lineDepth += change;
+      return resolved;
+    })
     .join("\n");
   const found: PublishInvocation[] = [];
   for (const command of tokenizeCommands(expanded)) {
@@ -220,7 +258,8 @@ export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
     for (const candidate of commandCandidates(command)) {
       const program = commandName(candidate);
       if (program === undefined) continue;
-      if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program)) continue;
+      const unresolvedProgram = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(program);
+      if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program) && !unresolvedProgram) continue;
       if (!isPublishCommand(candidate)) continue;
       // Not de-duplicated: two identical publish lines are two invocations, and
       // collapsing them would report one of them as if the other did not exist.
