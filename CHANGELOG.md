@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Consume the canonical attestation gate instead of carrying a copy of it ([pm-jira-cruz](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-cruz.toon))
+
 ## 2026.9.6 - 2026-09-06
 
 ### Other
