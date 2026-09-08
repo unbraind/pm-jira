@@ -29,10 +29,25 @@ import extension, {
   resolveCommitItemMutations,
   runExportPush,
   runImport,
-  __setPmSdkImporterForTests,
+  __resetCommitItemMutationsCacheForTests,
 } from "../index.ts";
+import { __setPmSdkImporterForTests } from "../sdk-importer.ts";
 import type { ExportPlan, JiraIssue } from "../index.ts";
 import type { CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
+
+/**
+ * Swap the SDK loader and drop the resolution cached against the previous one.
+ *
+ * The loader lives in `sdk-importer.ts` (off the package entry point) and the
+ * cache in `index.ts`, so a test that swaps one without clearing the other
+ * would still observe the previously resolved module.
+ *
+ * @param replacement - Replacement loader, or `undefined` to restore the default.
+ */
+function swapPmSdkImporter(replacement?: () => Promise<unknown>): void {
+  __setPmSdkImporterForTests(replacement);
+  __resetCommitItemMutationsCacheForTests();
+}
 
 function commitResult(
   overrides: Partial<CommitItemMutationsResult> = {},
@@ -263,12 +278,12 @@ function preflightContext(command: string, options: Record<string, unknown> = {}
 
 describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
   test("resolveCommitItemMutations production import, cache hit, poison, and prior-failure", async () => {
-    __setPmSdkImporterForTests();
+    swapPmSdkImporter();
     const first = await resolveCommitItemMutations();
     const second = await resolveCommitItemMutations();
     assert.equal(first, second);
 
-    __setPmSdkImporterForTests(async () => {
+    swapPmSdkImporter(async () => {
       throw new Error("Cannot find module '@unbrained/pm-cli/sdk'");
     });
     await assert.rejects(
@@ -288,12 +303,12 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       },
     );
 
-    __setPmSdkImporterForTests(async () => {
+    swapPmSdkImporter(async () => {
       throw "not-an-error";
     });
     await assert.rejects(() => resolveCommitItemMutations(), /not-an-error/);
 
-    __setPmSdkImporterForTests(async () => ({}));
+    swapPmSdkImporter(async () => ({}));
     await assert.rejects(
       () => resolveCommitItemMutations(),
       (err: unknown) => {
@@ -303,13 +318,13 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       },
     );
     await assert.rejects(() => resolveCommitItemMutations(), /prior attempt in this process failed/);
-    __setPmSdkImporterForTests();
+    swapPmSdkImporter();
   });
 
   test("importJiraAtomic getSdk import failure and settings fallback", async () => {
     const root = freshTracker();
     try {
-      __setPmSdkImporterForTests(async () => {
+      swapPmSdkImporter(async () => {
         throw "sdk-gone";
       });
       await assert.rejects(
@@ -321,7 +336,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           }),
         /sdk-gone/,
       );
-      __setPmSdkImporterForTests(async () => {
+      swapPmSdkImporter(async () => {
         throw new Error("sdk missing as Error");
       });
       await assert.rejects(
@@ -333,7 +348,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           }),
         /sdk missing as Error/,
       );
-      __setPmSdkImporterForTests();
+      swapPmSdkImporter();
 
       const res = (await runImport({ project: "PROJ" }, root, {
         atomic: true,
@@ -369,7 +384,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         /commit-blew/,
       );
     } finally {
-      __setPmSdkImporterForTests();
+      swapPmSdkImporter();
       fs.rmSync(root, { recursive: true, force: true });
     }
   });

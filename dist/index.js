@@ -25,6 +25,7 @@ import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { importPmSdk } from "./sdk-importer.js";
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
 // (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
@@ -1064,36 +1065,14 @@ const ATOMIC_TX_PREFIX = "jira-import-";
  * fresh process, so this is safe).
  */
 let cachedCommitItemMutations;
-/** Default loader for `@unbrained/pm-cli/sdk` (dynamic so a missing peer is a CommandError). */
-const defaultImportPmSdk = () => import("@unbrained/pm-cli/sdk");
 /**
- * Replaceable SDK importer used by the uncached `--atomic` resolution path and
- * by {@link importJiraAtomic}'s helper lookup. Production always uses
- * {@link defaultImportPmSdk}; tests swap it via {@link __setPmSdkImporterForTests}.
+ * Clear the cached `commitItemMutations` resolution.
+ *
+ * NOT PART OF THE SUPPORTED API. Paired with
+ * `__setPmSdkImporterForTests` in `sdk-importer.ts`: swapping the loader is
+ * only observable once the cache keyed on the previous loader is dropped.
  */
-let importPmSdk = defaultImportPmSdk;
-/**
- * Replace the `@unbrained/pm-cli/sdk` importer and clear the cached
- * `commitItemMutations` resolver.
- *
- * NOT PART OF THE SUPPORTED API. The double-underscore name is the contract:
- * this exists only because the resolver cache is process-wide, so once a real
- * resolve succeeds the import-failure, not-a-function and "prior attempt
- * failed" branches become unreachable in the same process, and the existing
- * `importSdk` parameter cannot reach them because it returns before the cache
- * logic runs. It is exported because the tests import this module rather than
- * reaching into it.
- *
- * A consumer calling this redirects where `--atomic` resolves its SDK
- * primitive for the rest of the process. Nothing outside this package's own
- * tests should call it, and it may be removed without a major version.
- *
- * @param importer - Replacement loader, or `undefined` to restore the default.
- */
-export function __setPmSdkImporterForTests(importer) {
-    importPmSdk = importer
-        ? () => importer()
-        : defaultImportPmSdk;
+export function __resetCommitItemMutationsCacheForTests() {
     cachedCommitItemMutations = undefined;
 }
 /**
@@ -1662,13 +1641,23 @@ export function decidePushOnWrite(hookCtx, envLike = process.env) {
     return { shouldPush: true, reason: `mirror ${op}` };
 }
 /**
- * Opt-in onWrite mirror used by the registered hook.
+ * Opt-in onWrite gate used by the registered hook.
  *
- * When {@link decidePushOnWrite} says the event should be mirrored, this looks
- * up credentials and no-ops unless they are present. A stray write must never
- * spam Jira, and a hook must never throw into the user's command, so diagnostics
- * failures are swallowed. `diagnose` is injectable so that swallow path is a
- * real, fail-able test rather than an untestable catch.
+ * **This does not write to Jira.** It evaluates whether a write *would* be
+ * mirrored — {@link decidePushOnWrite} for the opt-in flag, scope and op, then
+ * a credential check — and returns. The Jira write itself is not implemented,
+ * so no pm write currently reaches Jira through this hook. The name and this
+ * contract are stated plainly because the function is exported: a consumer
+ * reading only the declaration would otherwise reasonably assume its writes
+ * are being mirrored, and silently rely on a mirror that does not run. The
+ * README documents the same absence of an automatic POST.
+ *
+ * What it does guarantee is the two conditions a future write must satisfy: a
+ * stray write must never spam Jira, so an event that is not opted in, not
+ * project-scoped, or not a create/update returns early; and a hook must never
+ * throw into the user's command, so diagnostics failures are swallowed.
+ * `diagnose` is injectable so that swallow path is a real, fail-able test
+ * rather than an untestable catch.
  *
  * @param hookCtx - The write event, or undefined when the runtime omits it.
  * @param envLike - Environment inspected for the opt-in flag and credentials.
@@ -1983,7 +1972,8 @@ export default defineExtension({
             },
         });
         // -----------------------------------------------------------------------
-        // hooks — best-effort export-on-write mirror (OPT-IN).
+        // hooks — opt-in export-on-write GATE (no Jira write is performed yet; see
+        // handlePushOnWrite, which evaluates the conditions and returns).
         // Gated on PM_JIRA_PUSH_ON_WRITE being truthy AND full creds present. When
         // disabled or unconfigured it is a strict no-op. The pm hook runtime already
         // swallows any throw from a hook into a warning, so this can NEVER fail the
