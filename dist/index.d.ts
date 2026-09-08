@@ -382,6 +382,18 @@ export declare function optionInt(options: Record<string, unknown>, defaultValue
  */
 export declare function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean;
 /**
+ * Coalesce a possibly-missing options bag to an empty object.
+ *
+ * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
+ * Reading properties off `undefined` would throw, so a missing bag is treated
+ * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
+ * or other falsy value cannot leak through as a non-object.
+ *
+ * @param options - The raw options bag, or a falsy stand-in.
+ * @returns The given bag when it is truthy, otherwise `{}`.
+ */
+export declare function optionsOrEmpty(options: Record<string, unknown> | undefined | null | false | "" | 0): Record<string, unknown>;
+/**
  * Resolved Jira credentials and the ready-to-send Authorization header.
  *
  * Produced by {@link resolveCreds} from the host option and environment.
@@ -435,6 +447,14 @@ export declare function issueToItem(issue: JiraIssue, baseUrl: string, optionsOr
  * through {@link ImportRunOptions.commitItemMutations} for tests.
  */
 type CommitItemMutations = (options: CommitItemMutationsOptions) => Promise<CommitItemMutationsResult>;
+/**
+ * Clear the cached `commitItemMutations` resolution.
+ *
+ * NOT PART OF THE SUPPORTED API. Paired with
+ * `__setPmSdkImporterForTests` in `sdk-importer.ts`: swapping the loader is
+ * only observable once the cache keyed on the previous loader is dropped.
+ */
+export declare function __resetCommitItemMutationsCacheForTests(): void;
 /**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
  * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
@@ -663,6 +683,34 @@ export declare function decidePushOnWrite(hookCtx: {
     scope?: string;
     op?: string;
 } | undefined, envLike?: NodeJS.ProcessEnv): PushOnWriteDecision;
+/**
+ * Opt-in onWrite gate used by the registered hook.
+ *
+ * **This does not write to Jira.** It evaluates whether a write *would* be
+ * mirrored — {@link decidePushOnWrite} for the opt-in flag, scope and op, then
+ * a credential check — and returns. The Jira write itself is not implemented,
+ * so no pm write currently reaches Jira through this hook. The name and this
+ * contract are stated plainly because the function is exported: a consumer
+ * reading only the declaration would otherwise reasonably assume its writes
+ * are being mirrored, and silently rely on a mirror that does not run. The
+ * README documents the same absence of an automatic POST.
+ *
+ * What it does guarantee is the two conditions a future write must satisfy: a
+ * stray write must never spam Jira, so an event that is not opted in, not
+ * project-scoped, or not a create/update returns early; and a hook must never
+ * throw into the user's command, so diagnostics failures are swallowed.
+ * `diagnose` is injectable so that swallow path is a real, fail-able test
+ * rather than an untestable catch.
+ *
+ * @param hookCtx - The write event, or undefined when the runtime omits it.
+ * @param envLike - Environment inspected for the opt-in flag and credentials.
+ * @param diagnose - Credential diagnostics function (defaults to {@link diagnoseCreds}).
+ */
+export declare function handlePushOnWrite(hookCtx: {
+    path?: string;
+    scope?: string;
+    op?: string;
+} | undefined, envLike?: NodeJS.ProcessEnv, diagnose?: typeof diagnoseCreds): void;
 declare const _default: {
     name: string;
     version: string;

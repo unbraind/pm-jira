@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Close the coverage mandate gap ([pm-jira-67mq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-67mq.toon))
+
 ## 2026.9.8 - 2026-09-08
 
 ### Security

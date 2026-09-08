@@ -25,6 +25,7 @@ import https from "node:https";
 import { URL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { importPmSdk } from "./sdk-importer.js";
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
 // (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
@@ -651,6 +652,20 @@ export function optionInt(options, defaultValue, ...keys) {
 export function optionEnabled(options, ...keys) {
     return keys.some((key) => readBooleanOption(options, key));
 }
+/**
+ * Coalesce a possibly-missing options bag to an empty object.
+ *
+ * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
+ * Reading properties off `undefined` would throw, so a missing bag is treated
+ * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
+ * or other falsy value cannot leak through as a non-object.
+ *
+ * @param options - The raw options bag, or a falsy stand-in.
+ * @returns The given bag when it is truthy, otherwise `{}`.
+ */
+export function optionsOrEmpty(options) {
+    return options || {};
+}
 // Resolve Jira credentials from options (--host) + env. Returns a structured
 // CommandError (numeric exitCode) when anything is missing rather than throwing
 // a bare Error, so the CLI exits non-zero exactly once with a helpful message.
@@ -1051,6 +1066,16 @@ const ATOMIC_TX_PREFIX = "jira-import-";
  */
 let cachedCommitItemMutations;
 /**
+ * Clear the cached `commitItemMutations` resolution.
+ *
+ * NOT PART OF THE SUPPORTED API. Paired with
+ * `__setPmSdkImporterForTests` in `sdk-importer.ts`: swapping the loader is
+ * only observable once the cache keyed on the previous loader is dropped.
+ */
+export function __resetCommitItemMutationsCacheForTests() {
+    cachedCommitItemMutations = undefined;
+}
+/**
  * Assert a dynamically-resolved `@unbrained/pm-cli/sdk` export is callable,
  * throwing the shared, friendly {@link CommandError} (USAGE) when the installed
  * SDK is too old to provide it. Centralizing this guard keeps the check and the
@@ -1096,7 +1121,7 @@ export async function resolveCommitItemMutations(importSdk) {
         return cachedCommitItemMutations;
     let mod;
     try {
-        mod = await import("@unbrained/pm-cli/sdk");
+        mod = await importPmSdk();
     }
     catch (err) {
         cachedCommitItemMutations = null;
@@ -1213,7 +1238,7 @@ export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
         if (sdkHelpers)
             return sdkHelpers;
         try {
-            sdkHelpers = await import("@unbrained/pm-cli/sdk");
+            sdkHelpers = await importPmSdk();
             return sdkHelpers;
         }
         catch (err) {
@@ -1615,6 +1640,42 @@ export function decidePushOnWrite(hookCtx, envLike = process.env) {
     }
     return { shouldPush: true, reason: `mirror ${op}` };
 }
+/**
+ * Opt-in onWrite gate used by the registered hook.
+ *
+ * **This does not write to Jira.** It evaluates whether a write *would* be
+ * mirrored — {@link decidePushOnWrite} for the opt-in flag, scope and op, then
+ * a credential check — and returns. The Jira write itself is not implemented,
+ * so no pm write currently reaches Jira through this hook. The name and this
+ * contract are stated plainly because the function is exported: a consumer
+ * reading only the declaration would otherwise reasonably assume its writes
+ * are being mirrored, and silently rely on a mirror that does not run. The
+ * README documents the same absence of an automatic POST.
+ *
+ * What it does guarantee is the two conditions a future write must satisfy: a
+ * stray write must never spam Jira, so an event that is not opted in, not
+ * project-scoped, or not a create/update returns early; and a hook must never
+ * throw into the user's command, so diagnostics failures are swallowed.
+ * `diagnose` is injectable so that swallow path is a real, fail-able test
+ * rather than an untestable catch.
+ *
+ * @param hookCtx - The write event, or undefined when the runtime omits it.
+ * @param envLike - Environment inspected for the opt-in flag and credentials.
+ * @param diagnose - Credential diagnostics function (defaults to {@link diagnoseCreds}).
+ */
+export function handlePushOnWrite(hookCtx, envLike = process.env, diagnose = diagnoseCreds) {
+    const decision = decidePushOnWrite(hookCtx, envLike);
+    if (!decision.shouldPush)
+        return;
+    try {
+        const diag = diagnose({}, envLike);
+        if (!diag.ready)
+            return;
+    }
+    catch {
+        // Swallow — a hook must never break the user's pm command.
+    }
+}
 // ---------------------------------------------------------------------------
 // Extension
 // ---------------------------------------------------------------------------
@@ -1737,14 +1798,14 @@ export default defineExtension({
         // importer — `pm jira import` (native import pipeline)
         // -----------------------------------------------------------------------
         api.registerImporter("jira", async (ctx) => {
-            return runImport(ctx.options || {}, ctx.pm_root);
+            return runImport(optionsOrEmpty(ctx.options), ctx.pm_root);
         });
         // -----------------------------------------------------------------------
         // importer — `jira-sync` (config-driven; kept for back-compat)
         // Credentials may arrive via options (importer config) or env.
         // -----------------------------------------------------------------------
         api.registerImporter("jira-sync", async (ctx) => {
-            const options = ctx.options || {};
+            const options = optionsOrEmpty(ctx.options);
             // Merge importer-config creds into a virtual env so resolveCreds can read
             // them uniformly without leaking secrets into process.env.
             const envLike = {
@@ -1784,7 +1845,7 @@ export default defineExtension({
         // POST each payload to Jira's create-issue API.
         // -----------------------------------------------------------------------
         api.registerExporter("jira", async (ctx) => {
-            const options = ctx.options || {};
+            const options = optionsOrEmpty(ctx.options);
             const push = readBooleanOption(options, "push");
             const dryRun = readBooleanOption(options, "dry-run");
             const rich = readBooleanOption(options, "rich");
@@ -1891,7 +1952,7 @@ export default defineExtension({
             examples: ["pm jira validate", "pm jira validate --json", "pm jira validate --host https://co.atlassian.net"],
             flags: VALIDATE_FLAGS,
             async run(ctx) {
-                const diag = diagnoseCreds(ctx.options || {});
+                const diag = diagnoseCreds(optionsOrEmpty(ctx.options));
                 const json = Boolean(ctx.global?.json);
                 if (!json) {
                     // Human-readable summary on stderr; the returned object is what pm
@@ -1911,34 +1972,18 @@ export default defineExtension({
             },
         });
         // -----------------------------------------------------------------------
-        // hooks — best-effort export-on-write mirror (OPT-IN).
+        // hooks — opt-in export-on-write GATE (no Jira write is performed yet; see
+        // handlePushOnWrite, which evaluates the conditions and returns).
         // Gated on PM_JIRA_PUSH_ON_WRITE being truthy AND full creds present. When
         // disabled or unconfigured it is a strict no-op. The pm hook runtime already
         // swallows any throw from a hook into a warning, so this can NEVER fail the
         // user's pm command; we additionally guard internally for clarity.
         // -----------------------------------------------------------------------
         api.hooks.onWrite(async (hookCtx) => {
-            // `OnWriteHookContext` is structurally assignable to `decidePushOnWrite`'s
+            // `OnWriteHookContext` is structurally assignable to `handlePushOnWrite`'s
             // loose `{ path?; scope?; op? }` param, so it flows through unchanged —
             // no cast, and the runtime guard inside `decidePushOnWrite` stays.
-            const decision = decidePushOnWrite(hookCtx, process.env);
-            if (!decision.shouldPush)
-                return;
-            // Live mirror requires creds + network; in this build it is intentionally
-            // a best-effort stub that no-ops without creds. When creds are present a
-            // future revision can PUT the changed item upstream. We keep the network
-            // call out of the default path so writes stay fast and offline-safe.
-            try {
-                const diag = diagnoseCreds({}, process.env);
-                if (!diag.ready)
-                    return; // no creds → silent no-op
-                // Intentionally minimal: real upstream PUT is left to an explicit
-                // `pm jira export --push` so a stray write never spams Jira. The hook
-                // exists to make the opt-in surface real + testable.
-            }
-            catch {
-                // Swallow — a hook must never break the user's pm command.
-            }
+            handlePushOnWrite(hookCtx, process.env);
         });
     },
 });
