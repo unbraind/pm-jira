@@ -1069,21 +1069,28 @@ const defaultImportPmSdk = () => import("@unbrained/pm-cli/sdk");
 /**
  * Replaceable SDK importer used by the uncached `--atomic` resolution path and
  * by {@link importJiraAtomic}'s helper lookup. Production always uses
- * {@link defaultImportPmSdk}; tests swap it via {@link setPmSdkImporter}.
+ * {@link defaultImportPmSdk}; tests swap it via {@link __setPmSdkImporterForTests}.
  */
 let importPmSdk = defaultImportPmSdk;
 /**
  * Replace the `@unbrained/pm-cli/sdk` importer and clear the cached
  * `commitItemMutations` resolver.
  *
- * Test seam: the production cache is process-wide, so a successful resolve
- * would otherwise make the import-failure, not-a-function, and "prior attempt
- * failed" branches unreachable in the same process. Passing `undefined`
- * restores the default importer. Production callers never need this.
+ * NOT PART OF THE SUPPORTED API. The double-underscore name is the contract:
+ * this exists only because the resolver cache is process-wide, so once a real
+ * resolve succeeds the import-failure, not-a-function and "prior attempt
+ * failed" branches become unreachable in the same process, and the existing
+ * `importSdk` parameter cannot reach them because it returns before the cache
+ * logic runs. It is exported because the tests import this module rather than
+ * reaching into it.
+ *
+ * A consumer calling this redirects where `--atomic` resolves its SDK
+ * primitive for the rest of the process. Nothing outside this package's own
+ * tests should call it, and it may be removed without a major version.
  *
  * @param importer - Replacement loader, or `undefined` to restore the default.
  */
-export function setPmSdkImporter(importer) {
+export function __setPmSdkImporterForTests(importer) {
     importPmSdk = importer
         ? () => importer()
         : defaultImportPmSdk;

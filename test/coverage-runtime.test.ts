@@ -29,7 +29,7 @@ import extension, {
   resolveCommitItemMutations,
   runExportPush,
   runImport,
-  setPmSdkImporter,
+  __setPmSdkImporterForTests,
 } from "../index.ts";
 import type { ExportPlan, JiraIssue } from "../index.ts";
 import type { CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
@@ -108,11 +108,31 @@ function withEnv(updates: Record<string, string | undefined>, fn: () => Promise<
     });
 }
 
+/**
+ * Put a fake `pm` executable on PATH for the duration of one async block.
+ *
+ * `source` is a Node script carrying a `#!/usr/bin/env node` shebang. On POSIX
+ * that shebang is what makes the file executable. On Windows there is no
+ * shebang handling: `cmd.exe` reads `pm.cmd` as batch, and the first line is
+ * not batch, so writing `source` there verbatim produces a wrapper that cannot
+ * run. Windows therefore gets a real batch wrapper that hands the script to
+ * `node`, with the script written beside it.
+ *
+ * @param source - The Node script the fake `pm` should execute.
+ * @param fn - The block to run while the fake is on PATH.
+ * @returns Resolves once the block settles and PATH is restored.
+ */
 function withFakePm(source: string, fn: () => Promise<void>): Promise<void> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-pm-"));
-  const bin = path.join(dir, process.platform === "win32" ? "pm.cmd" : "pm");
-  fs.writeFileSync(bin, source);
-  fs.chmodSync(bin, 0o755);
+  if (process.platform === "win32") {
+    const script = path.join(dir, "fake-pm.js");
+    fs.writeFileSync(script, source);
+    fs.writeFileSync(path.join(dir, "pm.cmd"), `@echo off\r\nnode "%~dp0fake-pm.js" %*\r\n`);
+  } else {
+    const bin = path.join(dir, "pm");
+    fs.writeFileSync(bin, source);
+    fs.chmodSync(bin, 0o755);
+  }
   const prev = process.env.PATH;
   process.env.PATH = `${dir}${path.delimiter}${prev ?? ""}`;
   return Promise.resolve()
@@ -184,6 +204,28 @@ function installHttpsMock(handler: MockHttpsHandler): () => void {
   };
 }
 
+/**
+ * Install an https mock for the duration of one async block, always restoring it.
+ *
+ * `installHttpsMock` replaces the process-global `https.request`. Calling its
+ * restore function after an `await` leaves the global patched whenever that
+ * block throws, and every later test in the file then runs against a stale
+ * mock while reporting its own name. Restoring in `finally` keeps one failure
+ * from silently rewriting the result of the tests that follow it.
+ *
+ * @param handler - Responds to each intercepted request.
+ * @param fn - The block to run while the mock is installed.
+ * @returns Resolves once the block settles and the global is restored.
+ */
+async function withHttpsMock(handler: MockHttpsHandler, fn: () => Promise<void>): Promise<void> {
+  const restore = installHttpsMock(handler);
+  try {
+    await fn();
+  } finally {
+    restore();
+  }
+}
+
 const JIRA_ENV = {
   JIRA_BASE_URL: "https://example.atlassian.net",
   JIRA_EMAIL: "a@b.c",
@@ -221,12 +263,12 @@ function preflightContext(command: string, options: Record<string, unknown> = {}
 
 describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
   test("resolveCommitItemMutations production import, cache hit, poison, and prior-failure", async () => {
-    setPmSdkImporter();
+    __setPmSdkImporterForTests();
     const first = await resolveCommitItemMutations();
     const second = await resolveCommitItemMutations();
     assert.equal(first, second);
 
-    setPmSdkImporter(async () => {
+    __setPmSdkImporterForTests(async () => {
       throw new Error("Cannot find module '@unbrained/pm-cli/sdk'");
     });
     await assert.rejects(
@@ -246,12 +288,12 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       },
     );
 
-    setPmSdkImporter(async () => {
+    __setPmSdkImporterForTests(async () => {
       throw "not-an-error";
     });
     await assert.rejects(() => resolveCommitItemMutations(), /not-an-error/);
 
-    setPmSdkImporter(async () => ({}));
+    __setPmSdkImporterForTests(async () => ({}));
     await assert.rejects(
       () => resolveCommitItemMutations(),
       (err: unknown) => {
@@ -261,13 +303,13 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       },
     );
     await assert.rejects(() => resolveCommitItemMutations(), /prior attempt in this process failed/);
-    setPmSdkImporter();
+    __setPmSdkImporterForTests();
   });
 
   test("importJiraAtomic getSdk import failure and settings fallback", async () => {
     const root = freshTracker();
     try {
-      setPmSdkImporter(async () => {
+      __setPmSdkImporterForTests(async () => {
         throw "sdk-gone";
       });
       await assert.rejects(
@@ -279,7 +321,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           }),
         /sdk-gone/,
       );
-      setPmSdkImporter(async () => {
+      __setPmSdkImporterForTests(async () => {
         throw new Error("sdk missing as Error");
       });
       await assert.rejects(
@@ -291,7 +333,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           }),
         /sdk missing as Error/,
       );
-      setPmSdkImporter();
+      __setPmSdkImporterForTests();
 
       const res = (await runImport({ project: "PROJ" }, root, {
         atomic: true,
@@ -327,7 +369,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         /commit-blew/,
       );
     } finally {
-      setPmSdkImporter();
+      __setPmSdkImporterForTests();
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
@@ -442,91 +484,91 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         }),
       },
     ];
-    let restore = installHttpsMock(() => pages.shift() ?? { statusCode: 200, body: JSON.stringify({ total: 2, issues: [] }) });
-    await withEnv(JIRA_ENV, async () => {
-      const root = freshTracker();
-      try {
-        const res = (await runImport({ project: "PROJ", "max-results": 2 }, root)) as { imported: number };
-        assert.equal(res.imported, 2);
-      } finally {
-        fs.rmSync(root, { recursive: true, force: true });
-      }
+    await withHttpsMock(() => pages.shift() ?? { statusCode: 200, body: JSON.stringify({ total: 2, issues: [] }) }, async () => {
+      await withEnv(JIRA_ENV, async () => {
+        const root = freshTracker();
+        try {
+          const res = (await runImport({ project: "PROJ", "max-results": 2 }, root)) as { imported: number };
+          assert.equal(res.imported, 2);
+        } finally {
+          fs.rmSync(root, { recursive: true, force: true });
+        }
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ statusCode: 200, body: JSON.stringify({ total: 0, issues: [] }) }));
-    await withEnv(JIRA_ENV, async () => {
-      const root = freshTracker();
-      try {
-        const res = (await runImport({ project: "PROJ" }, root)) as { imported: number };
-        assert.equal(res.imported, 0);
-      } finally {
-        fs.rmSync(root, { recursive: true, force: true });
-      }
+    await withHttpsMock(() => ({ statusCode: 200, body: JSON.stringify({ total: 0, issues: [] }) }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        const root = freshTracker();
+        try {
+          const res = (await runImport({ project: "PROJ" }, root)) as { imported: number };
+          assert.equal(res.imported, 0);
+        } finally {
+          fs.rmSync(root, { recursive: true, force: true });
+        }
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ statusCode: 401, body: "nope" }));
-    await withEnv(JIRA_ENV, async () => {
-      await assert.rejects(
-        () => runImport({ project: "PROJ" }, "."),
-        (err: unknown) => {
-          assert.ok(err instanceof CommandError);
-          assert.equal(err.exitCode, EXIT_CODE.USAGE);
-          assert.match(err.message, /authentication failed/);
-          return true;
-        },
-      );
+    await withHttpsMock(() => ({ statusCode: 401, body: "nope" }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        await assert.rejects(
+          () => runImport({ project: "PROJ" }, "."),
+          (err: unknown) => {
+            assert.ok(err instanceof CommandError);
+            assert.equal(err.exitCode, EXIT_CODE.USAGE);
+            assert.match(err.message, /authentication failed/);
+            return true;
+          },
+        );
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ statusCode: 404, body: "missing" }));
-    await withEnv(JIRA_ENV, async () => {
-      await assert.rejects(
-        () => runImport({ project: "PROJ" }, "."),
-        (err: unknown) => {
-          assert.ok(err instanceof CommandError);
-          assert.equal(err.exitCode, EXIT_CODE.NOT_FOUND);
-          return true;
-        },
-      );
+    await withHttpsMock(() => ({ statusCode: 404, body: "missing" }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        await assert.rejects(
+          () => runImport({ project: "PROJ" }, "."),
+          (err: unknown) => {
+            assert.ok(err instanceof CommandError);
+            assert.equal(err.exitCode, EXIT_CODE.NOT_FOUND);
+            return true;
+          },
+        );
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ timeout: true }));
-    await withEnv(JIRA_ENV, async () => {
-      await assert.rejects(
-        () => runImport({ project: "PROJ" }, "."),
-        (err: unknown) => {
-          assert.ok(err instanceof CommandError);
-          assert.equal(err.exitCode, EXIT_CODE.GENERIC_FAILURE);
-          assert.match(err.message, /timed out/);
-          return true;
-        },
-      );
+    await withHttpsMock(() => ({ timeout: true }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        await assert.rejects(
+          () => runImport({ project: "PROJ" }, "."),
+          (err: unknown) => {
+            assert.ok(err instanceof CommandError);
+            assert.equal(err.exitCode, EXIT_CODE.GENERIC_FAILURE);
+            assert.match(err.message, /timed out/);
+            return true;
+          },
+        );
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ error: new Error("ECONNREFUSED") }));
-    await withEnv(JIRA_ENV, async () => {
-      await assert.rejects(
-        () => runImport({ project: "PROJ" }, "."),
-        /ECONNREFUSED/,
-      );
+    await withHttpsMock(() => ({ error: new Error("ECONNREFUSED") }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        await assert.rejects(
+          () => runImport({ project: "PROJ" }, "."),
+          /ECONNREFUSED/,
+        );
+      });
     });
-    restore();
 
-    restore = installHttpsMock(() => ({ statusCode: undefined, body: JSON.stringify({ total: 0, issues: [] }) }));
-    await withEnv(JIRA_ENV, async () => {
-      const root = freshTracker();
-      try {
-        const res = (await runImport({ project: "PROJ" }, root)) as { imported: number };
-        assert.equal(res.imported, 0);
-      } finally {
-        fs.rmSync(root, { recursive: true, force: true });
-      }
+    await withHttpsMock(() => ({ statusCode: undefined, body: JSON.stringify({ total: 0, issues: [] }) }), async () => {
+      await withEnv(JIRA_ENV, async () => {
+        const root = freshTracker();
+        try {
+          const res = (await runImport({ project: "PROJ" }, root)) as { imported: number };
+          assert.equal(res.imported, 0);
+        } finally {
+          fs.rmSync(root, { recursive: true, force: true });
+        }
+      });
     });
-    restore();
   });
 
   test("runExportPush default HTTP layer posts, puts, times out, and isolates non-Error throws", async () => {
@@ -906,24 +948,27 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     ];
     const script = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ items }))});\n`;
     let posts = 0;
-    const restore = installHttpsMock(() => {
-      posts += 1;
-      if (posts === 1) return { statusCode: 201, body: "{}" };
-      return { statusCode: 400, body: "nope" };
-    });
-    await withFakePm(script, async () => {
-      await withEnv(JIRA_ENV, async () => {
-        const { result } = await ext.runExporter({
-          exporter: "jira",
-          options: { push: true, project: "PROJ" },
-          pmRoot: "/tmp",
+    await withHttpsMock(
+      () => {
+        posts += 1;
+        if (posts === 1) return { statusCode: 201, body: "{}" };
+        return { statusCode: 400, body: "nope" };
+      },
+      async () => {
+        await withFakePm(script, async () => {
+          await withEnv(JIRA_ENV, async () => {
+            const { result } = await ext.runExporter({
+              exporter: "jira",
+              options: { push: true, project: "PROJ" },
+              pmRoot: "/tmp",
+            });
+            const mixed = result as { created: number; failed: number };
+            assert.equal(mixed.created, 1);
+            assert.equal(mixed.failed, 1);
+          });
         });
-        const mixed = result as { created: number; failed: number };
-        assert.equal(mixed.created, 1);
-        assert.equal(mixed.failed, 1);
-      });
-    });
-    restore();
+      },
+    );
   });
 
   test("default export uses JIRA_BASE_URL when --host is absent", async () => {

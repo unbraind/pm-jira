@@ -451,14 +451,21 @@ type CommitItemMutations = (options: CommitItemMutationsOptions) => Promise<Comm
  * Replace the `@unbrained/pm-cli/sdk` importer and clear the cached
  * `commitItemMutations` resolver.
  *
- * Test seam: the production cache is process-wide, so a successful resolve
- * would otherwise make the import-failure, not-a-function, and "prior attempt
- * failed" branches unreachable in the same process. Passing `undefined`
- * restores the default importer. Production callers never need this.
+ * NOT PART OF THE SUPPORTED API. The double-underscore name is the contract:
+ * this exists only because the resolver cache is process-wide, so once a real
+ * resolve succeeds the import-failure, not-a-function and "prior attempt
+ * failed" branches become unreachable in the same process, and the existing
+ * `importSdk` parameter cannot reach them because it returns before the cache
+ * logic runs. It is exported because the tests import this module rather than
+ * reaching into it.
+ *
+ * A consumer calling this redirects where `--atomic` resolves its SDK
+ * primitive for the rest of the process. Nothing outside this package's own
+ * tests should call it, and it may be removed without a major version.
  *
  * @param importer - Replacement loader, or `undefined` to restore the default.
  */
-export declare function setPmSdkImporter(importer?: () => Promise<unknown>): void;
+export declare function __setPmSdkImporterForTests(importer?: () => Promise<unknown>): void;
 /**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
  * actionable {@link CommandError} when the installed @unbrained/pm-cli is too

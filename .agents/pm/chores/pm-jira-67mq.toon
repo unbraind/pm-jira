@@ -6,7 +6,7 @@ status: closed
 priority: 2
 tags[1]: coverage
 created_at: "2026-09-08T15:54:05.035Z"
-updated_at: "2026-09-08T16:10:36.244Z"
+updated_at: "2026-09-08T16:38:00.847Z"
 closed_at: "2026-09-08T16:10:36.187Z"
 completed_at: "2026-09-08T16:10:36.187Z"
 claim_principal: pi-agent
@@ -14,8 +14,9 @@ author: pi-agent
 resolution: Statement/branch/function/line coverage is 100/100/100 on index.ts with thresholds raised to match.
 expected_result: Coverage gate reports 100/100/100 without c8 ignore or deleted branches.
 actual_result: "npm run coverage reports index.ts 100.00 / 100.00 / 100.00; docstring, typecheck, audit, and pack:dry-run pass."
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-09-08T16:09:55.029Z",pi-agent,"Coverage before (origin/main, measured with npm run coverage):\n\n- index.ts lines 84.24 / branches 81.91 / functions 82.95\n- statements track lines under V8 (same 84.24)\n- uncovered regions classified as:\n  - real untested behaviour: httpsGet/httpsPost/httpsPut, fetchAllJiraIssues, createPmItem, live import/export/jira-sync/validate/preflight/onWrite, readPmItems error envelopes, non-atomic import\n  - error/edge paths: empty --map/--status-map names, unknown priority fallback, ADF non-text nodes, invalid diagnose URL, SDK import failure cache poison, settings unreadable, HTTP 401/404/timeout\n  - not dead: all of the above are reachable; none deleted; no c8 ignore\n\nCoverage after:\n\n- index.ts lines 100.00 / branches 100.00 / functions 100.00\n- coverageGate thresholds raised to 100/100/100\n- no behaviour deleted\n\nRed-on-revert confirmations (break, observe FAIL, restore):\n\n1. mapJiraPriority unknown-name fallback changed from return 3 to return 1\n   FAIL: AssertionError 1 !== 3 at test/coverage-unit.test.ts:70 (test \"mapJiraPriority covers critical, lowest, and unknown names\")\n\n2. parseFieldMap empty-name guard changed from throw CommandError to continue\n   FAIL: AssertionError Missing expected exception at test/coverage-unit.test.ts:88 (test \"parseFieldMap rejects empty names...\")\n\n3. handlePushOnWrite catch rethrows instead of swallowing\n   FAIL: Error: diagnose boom at test/coverage-unit.test.ts:279 via handlePushOnWrite (test \"handlePushOnWrite no-ops, swallows diagnose failures...\")\n\nProduction changes kept behaviour and only added test seams:\n- setPmSdkImporter so the process-wide SDK cache/import-failure paths are exercisable\n- handlePushOnWrite extracted so the hook swallow path is a real fail-able test\n- optionsOrEmpty extracted so falsy options bags are unit-tested without lying about harness defaults\n"
+  "2026-09-08T16:38:00.847Z",claude-orchestrator,"Addressed three Greptile findings. First, installHttpsMock replaces the process-global https.request and seven sites called their restore function after an await rather than in a finally, so any assertion failure left the global patched and every later test in the file ran against a stale mock while reporting its own name. Added withHttpsMock, which restores in a finally, and converted every unguarded site; the remaining restore calls were already inside finally blocks. Second, withFakePm wrote a Node script carrying a shebang into pm.cmd on Windows, where cmd.exe reads it as batch and the wrapper cannot run; Windows now gets a real batch wrapper that hands the script to node. CI is ubuntu-latest only, so this was a portability defect rather than a broken gate. Third, renamed the exported SDK seam to __setPmSdkImporterForTests and documented that it is not part of the supported API, that a consumer calling it redirects --atomic SDK resolution for the rest of the process, and why the existing importSdk parameter cannot replace it. Coverage stays 100/100/100 and the docstring gate reports 7 files, 48 declarations."
 files[5]{path,scope,note}:
   dist/index.js,project,rebuilt dist
   index.ts,project,test seams and optionsOrEmpty/handlePushOnWrite extracts
