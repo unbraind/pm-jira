@@ -839,6 +839,23 @@ export function optionEnabled(options: Record<string, unknown>, ...keys: string[
   return keys.some((key) => readBooleanOption(options, key));
 }
 
+/**
+ * Coalesce a possibly-missing options bag to an empty object.
+ *
+ * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
+ * Reading properties off `undefined` would throw, so a missing bag is treated
+ * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
+ * or other falsy value cannot leak through as a non-object.
+ *
+ * @param options - The raw options bag, or a falsy stand-in.
+ * @returns The given bag when it is truthy, otherwise `{}`.
+ */
+export function optionsOrEmpty(
+  options: Record<string, unknown> | undefined | null | false | "" | 0,
+): Record<string, unknown> {
+  return options || {};
+}
+
 // ---------------------------------------------------------------------------
 // Credential resolution — env vars, with an optional --host override for the
 // base URL. NEVER hard-codes a host or any secret.
@@ -1371,6 +1388,36 @@ type CommitItemMutations = (
  */
 let cachedCommitItemMutations: CommitItemMutations | null | undefined;
 
+/** Default loader for `@unbrained/pm-cli/sdk` (dynamic so a missing peer is a CommandError). */
+const defaultImportPmSdk = () => import("@unbrained/pm-cli/sdk");
+
+/**
+ * Replaceable SDK importer used by the uncached `--atomic` resolution path and
+ * by {@link importJiraAtomic}'s helper lookup. Production always uses
+ * {@link defaultImportPmSdk}; tests swap it via {@link setPmSdkImporter}.
+ */
+let importPmSdk: () => ReturnType<typeof defaultImportPmSdk> = defaultImportPmSdk;
+
+/**
+ * Replace the `@unbrained/pm-cli/sdk` importer and clear the cached
+ * `commitItemMutations` resolver.
+ *
+ * Test seam: the production cache is process-wide, so a successful resolve
+ * would otherwise make the import-failure, not-a-function, and "prior attempt
+ * failed" branches unreachable in the same process. Passing `undefined`
+ * restores the default importer. Production callers never need this.
+ *
+ * @param importer - Replacement loader, or `undefined` to restore the default.
+ */
+export function setPmSdkImporter(
+  importer?: () => Promise<unknown>,
+): void {
+  importPmSdk = importer
+    ? () => importer() as ReturnType<typeof defaultImportPmSdk>
+    : defaultImportPmSdk;
+  cachedCommitItemMutations = undefined;
+}
+
 /**
  * Assert a dynamically-resolved `@unbrained/pm-cli/sdk` export is callable,
  * throwing the shared, friendly {@link CommandError} (USAGE) when the installed
@@ -1428,9 +1475,9 @@ export async function resolveCommitItemMutations(
     );
   }
   if (cachedCommitItemMutations) return cachedCommitItemMutations;
-  let mod: typeof import("@unbrained/pm-cli/sdk");
+  let mod: Awaited<ReturnType<typeof defaultImportPmSdk>>;
   try {
-    mod = await import("@unbrained/pm-cli/sdk");
+    mod = await importPmSdk();
   } catch (err: unknown) {
     cachedCommitItemMutations = null;
     const msg = err instanceof Error ? err.message : String(err);
@@ -1564,11 +1611,11 @@ export async function importJiraAtomic(
   // commitItemMutations, so a missing/old SDK surfaces the friendly
   // "upgrade to >=2026.7.20" CommandError rather than a raw module-not-found
   // rejection when normalizeItemId/readSettings are not injected (tests).
-  let sdkHelpers: typeof import("@unbrained/pm-cli/sdk") | undefined;
-  const getSdk = async (): Promise<typeof import("@unbrained/pm-cli/sdk")> => {
+  let sdkHelpers: Awaited<ReturnType<typeof defaultImportPmSdk>> | undefined;
+  const getSdk = async (): Promise<Awaited<ReturnType<typeof defaultImportPmSdk>>> => {
     if (sdkHelpers) return sdkHelpers;
     try {
-      sdkHelpers = await import("@unbrained/pm-cli/sdk");
+      sdkHelpers = await importPmSdk();
       return sdkHelpers;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2230,6 +2277,34 @@ export function decidePushOnWrite(
   return { shouldPush: true, reason: `mirror ${op}` };
 }
 
+/**
+ * Opt-in onWrite mirror used by the registered hook.
+ *
+ * When {@link decidePushOnWrite} says the event should be mirrored, this looks
+ * up credentials and no-ops unless they are present. A stray write must never
+ * spam Jira, and a hook must never throw into the user's command, so diagnostics
+ * failures are swallowed. `diagnose` is injectable so that swallow path is a
+ * real, fail-able test rather than an untestable catch.
+ *
+ * @param hookCtx - The write event, or undefined when the runtime omits it.
+ * @param envLike - Environment inspected for the opt-in flag and credentials.
+ * @param diagnose - Credential diagnostics function (defaults to {@link diagnoseCreds}).
+ */
+export function handlePushOnWrite(
+  hookCtx: { path?: string; scope?: string; op?: string } | undefined,
+  envLike: NodeJS.ProcessEnv = process.env,
+  diagnose: typeof diagnoseCreds = diagnoseCreds,
+): void {
+  const decision = decidePushOnWrite(hookCtx, envLike);
+  if (!decision.shouldPush) return;
+  try {
+    const diag = diagnose({}, envLike);
+    if (!diag.ready) return;
+  } catch {
+    // Swallow — a hook must never break the user's pm command.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Extension
 // ---------------------------------------------------------------------------
@@ -2362,7 +2437,7 @@ export default defineExtension({
     // importer — `pm jira import` (native import pipeline)
     // -----------------------------------------------------------------------
     api.registerImporter("jira", async (ctx: ImportExportContext) => {
-      return runImport(ctx.options || {}, ctx.pm_root);
+      return runImport(optionsOrEmpty(ctx.options), ctx.pm_root);
     });
 
     // -----------------------------------------------------------------------
@@ -2370,7 +2445,7 @@ export default defineExtension({
     // Credentials may arrive via options (importer config) or env.
     // -----------------------------------------------------------------------
     api.registerImporter("jira-sync", async (ctx: ImportExportContext) => {
-      const options = ctx.options || {};
+      const options = optionsOrEmpty(ctx.options);
       // Merge importer-config creds into a virtual env so resolveCreds can read
       // them uniformly without leaking secrets into process.env.
       const envLike: NodeJS.ProcessEnv = {
@@ -2427,7 +2502,7 @@ export default defineExtension({
     // POST each payload to Jira's create-issue API.
     // -----------------------------------------------------------------------
     api.registerExporter("jira", async (ctx: ImportExportContext) => {
-      const options = ctx.options || {};
+      const options = optionsOrEmpty(ctx.options);
       const push = readBooleanOption(options, "push");
       const dryRun = readBooleanOption(options, "dry-run");
       const rich = readBooleanOption(options, "rich");
@@ -2559,7 +2634,7 @@ export default defineExtension({
       examples: ["pm jira validate", "pm jira validate --json", "pm jira validate --host https://co.atlassian.net"],
       flags: VALIDATE_FLAGS,
       async run(ctx) {
-        const diag = diagnoseCreds(ctx.options || {});
+        const diag = diagnoseCreds(optionsOrEmpty(ctx.options));
         const json = Boolean(ctx.global?.json);
         if (!json) {
           // Human-readable summary on stderr; the returned object is what pm
@@ -2585,24 +2660,10 @@ export default defineExtension({
     // user's pm command; we additionally guard internally for clarity.
     // -----------------------------------------------------------------------
     api.hooks.onWrite(async (hookCtx: OnWriteHookContext) => {
-      // `OnWriteHookContext` is structurally assignable to `decidePushOnWrite`'s
+      // `OnWriteHookContext` is structurally assignable to `handlePushOnWrite`'s
       // loose `{ path?; scope?; op? }` param, so it flows through unchanged —
       // no cast, and the runtime guard inside `decidePushOnWrite` stays.
-      const decision = decidePushOnWrite(hookCtx, process.env);
-      if (!decision.shouldPush) return;
-      // Live mirror requires creds + network; in this build it is intentionally
-      // a best-effort stub that no-ops without creds. When creds are present a
-      // future revision can PUT the changed item upstream. We keep the network
-      // call out of the default path so writes stay fast and offline-safe.
-      try {
-        const diag = diagnoseCreds({}, process.env);
-        if (!diag.ready) return; // no creds → silent no-op
-        // Intentionally minimal: real upstream PUT is left to an explicit
-        // `pm jira export --push` so a stray write never spams Jira. The hook
-        // exists to make the opt-in surface real + testable.
-      } catch {
-        // Swallow — a hook must never break the user's pm command.
-      }
+      handlePushOnWrite(hookCtx, process.env);
     });
   },
 });
