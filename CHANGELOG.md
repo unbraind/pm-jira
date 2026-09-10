@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Certify pm CLI 2026.9.10 and pick up the canonical auditor fixes the lockfile was holding back ([pm-jira-j3px](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-j3px.toon))
+
 ## 2026.9.9 - 2026-09-09
 
 ### Other
