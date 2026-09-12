@@ -4,7 +4,6 @@
 
 ### Other
 
-- Certify the CLI and SDK on PM 2026.9.7 ([pm-jira-9cww](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-9cww.toon))
 - Certify pm CLI 2026.9.12 and the pm-ops 2026.9.11 auditor ([pm-jira-rspz](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-rspz.toon))
 
 ## 2026.9.11 - 2026-09-11
