@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Certify pm CLI 2026.9.17 ([pm-jira-s87q](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-s87q.toon))
+
 ## 2026.9.13 - 2026-09-13
 
 ### Other
@@ -46,6 +52,10 @@
 
 ## 2026.8.29 - 2026-08-29
 
+### Fixed
+
+- A failed provenance publish silently falls back to an unattested one ([pm-jira-j2zv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-j2zv.toon))
+
 ### Other
 
 - Pilot pm-github issue sync for pm-jira ([pm-jira-jszx](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jszx.toon))
@@ -54,7 +64,6 @@
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-jira-j2zv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-j2zv.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
 
 ### Security
@@ -65,11 +74,16 @@
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-jira-qd15](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-qd15.toon))
 
-## 2026.8.16 - 2026-08-16
+## 2026.8.17 - 2026-08-17
 
 ### Fixed
 
 - The pm CLI compatibility floor was declared only in peerDependencies, which only npm enforces, and not in manifest.json pm_min_version, which is the field the CLI enforces ([pm-jira-2wbj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-2wbj.toon))
+
+## 2026.8.16 - 2026-08-16
+
+### Fixed
+
 - Scope preflight override to pm-jira's owned commands ([pm-jira-5mxw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5mxw.toon))
 
 ### Deprecated
@@ -99,7 +113,7 @@
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-jira-w72d](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-w72d.toon))
 
-## 2026.7.31 - 2026-07-31
+## 2026.8.1 - 2026-08-01
 
 ### Fixed
 
