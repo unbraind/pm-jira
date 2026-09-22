@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
-    "prepare": "node scripts/prepare-merge-driver.mjs",
+    "prepare": "node scripts/prepare-merge-driver.ts",
     "merge:install": "pm merge install",
     "test": "npm run build && npm run build:test && node --test test/*.test.ts",
     "dev": "tsc --watch",
@@ -62,9 +62,9 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
-    "@unbrained/pm-cli": "2026.9.17",
-    "pm-changelog": "2026.9.16",
-    "pm-ops": "2026.9.13",
+    "@unbrained/pm-cli": "2026.9.21",
+    "pm-changelog": "2026.9.18",
+    "pm-ops": "2026.9.18",
     "typescript": "^7.0.2"
   },
   "keywords": [

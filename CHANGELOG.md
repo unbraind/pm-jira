@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag ([pm-jira-9b9k](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-9b9k.toon))
+
+### Other
+
+- Certify pm CLI 2026.9.21 and install merge drivers through the canonical pm-ops launcher ([pm-jira-jrkg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jrkg.toon))
+
 ## 2026.9.18 - 2026-09-18
 
 ### Other
