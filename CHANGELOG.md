@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Certify pm CLI 2026.9.23 and adopt the guarded pm-ops merge-driver launcher ([pm-jira-mn9w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-mn9w.toon))
+
 ## 2026.9.22 - 2026-09-22
 
 ### Fixed
