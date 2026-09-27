@@ -1,0 +1,27 @@
+id: pm-jira-b0n8
+title: Certify pm-jira on CLI 2026.9.27 and pinned GitHub extension
+description: "The main checkout pins PM CLI, pm-ops, and pm-changelog 2026.9.23 and manages pm-github 2026.8.18. Host CLI 2026.9.27 reports extension SDK-link skew. CI and disabled scheduled sync install an unversioned extension through an obsolete npm 10 shim and rewrite its manifest. Align the package toolchain and tracked extension metadata with current published versions, and use the exact managed extension source in both workflows."
+type: Issue
+status: in_progress
+priority: 1
+tags[3]: agent-ux,"area:github","area:release"
+created_at: "2026-09-27T08:01:14.699Z"
+updated_at: "2026-09-27T08:04:22.372Z"
+assignee: codex
+author: codex
+acceptance_criteria: "Exact package/lock pins for current CLI, pm-ops, and pm-changelog; tracked managed pm-github 2026.9.26; local strict health and full release gate pass; CI uses exact source; disabled sync stays disabled; staged privacy scan and exact-head review complete."
+repro_steps: "Run pm health --strict-exit --json on main with host CLI 2026.9.27; observe extension_host_pm_cli_version_skew. Inspect both workflows for npm:pm-github without a version and the npm 10 / manifest-rewrite steps."
+expected_result: Strict health passes with the project-local CLI/SDK 2026.9.27; both workflows install exact pm-github 2026.9.26; the package release gate passes; the sync workflow stays disabled until a separate pre-push privacy gate exists.
+actual_result: Main reports SDK-link skew and both workflow installs can drift to future unreviewed extension versions.
+notes[2]{created_at,author,text}:
+  "2026-09-27T08:02:51.137Z",codex,"2026-09-27: First full release gate failed at the package launcher byte-identity assertion after upgrading published pm-ops to 2026.9.26. Copied the exact canonical launcher from installed pm-ops 2026.9.26 to scripts/prepare-merge-driver.ts; this includes its broken local-install guard. The full gate must rerun. The disabled GitHub sync workflow remains disabled."
+  "2026-09-27T08:04:22.372Z",codex,"2026-09-27 08:04 UTC: Full local release gate passed after copying the exact published pm-ops 2026.9.26 launcher: 173/173 tests, zero skips, 100% measured lines/branches/functions across two production source files, 51/51 declarations documented, zero production audit vulnerabilities, current changelog and attestation checks. Strict PM health passes on CLI 2026.9.27 with stale_in_progress_items:1 advisory. A real pm-github 2026.9.26 project install activated and an open-issue dry run found no public Jira issues; no tracker import was applied. Scheduled sync remains disabled_manually pending pre-push privacy gating. GitHub CI, reviewer evidence, and statement coverage remain separate gates."
+files[5]{path,scope,note}:
+  .agents/pm/extensions/.managed-extensions.json,project,Exact managed pm-github source
+  .github/workflows/ci.yml,project,CI installs pinned extension
+  .github/workflows/pm-github-sync.yml,project,Disabled sync installs pinned extension
+  package.json,project,Published CLI and quality-tool pins
+  scripts/prepare-merge-driver.ts,project,Published pm-ops launcher copy
+tests[1]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+  "npm run release:check",project,600,codex,"2026-09-27T08:04:20.900Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
+body: ""
