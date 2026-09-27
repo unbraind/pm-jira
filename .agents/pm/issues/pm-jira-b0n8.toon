@@ -6,19 +6,20 @@ status: in_progress
 priority: 1
 tags[3]: agent-ux,"area:github","area:release"
 created_at: "2026-09-27T08:01:14.699Z"
-updated_at: "2026-09-27T08:19:09.910Z"
+updated_at: "2026-09-27T08:35:53.489Z"
 assignee: codex
 author: codex
 acceptance_criteria: "Exact package/lock pins for current CLI, pm-ops, and pm-changelog; tracked managed pm-github 2026.9.26; local strict health and full release gate pass; CI uses exact source; disabled sync stays disabled; staged privacy scan and exact-head review complete."
 repro_steps: "Run pm health --strict-exit --json on main with host CLI 2026.9.27; observe extension_host_pm_cli_version_skew. Inspect both workflows for npm:pm-github without a version and the npm 10 / manifest-rewrite steps."
 expected_result: Strict health passes with the project-local CLI/SDK 2026.9.27; both workflows install exact pm-github 2026.9.26; the package release gate passes; the sync workflow stays disabled until a separate pre-push privacy gate exists.
 actual_result: Main reports SDK-link skew and both workflow installs can drift to future unreviewed extension versions.
-notes[5]{created_at,author,text}:
+notes[6]{created_at,author,text}:
   "2026-09-27T08:02:51.137Z",codex,"2026-09-27: First full release gate failed at the package launcher byte-identity assertion after upgrading published pm-ops to 2026.9.26. Copied the exact canonical launcher from installed pm-ops 2026.9.26 to scripts/prepare-merge-driver.ts; this includes its broken local-install guard. The full gate must rerun. The disabled GitHub sync workflow remains disabled."
   "2026-09-27T08:04:22.372Z",codex,"2026-09-27 08:04 UTC: Full local release gate passed after copying the exact published pm-ops 2026.9.26 launcher: 173/173 tests, zero skips, 100% measured lines/branches/functions across two production source files, 51/51 declarations documented, zero production audit vulnerabilities, current changelog and attestation checks. Strict PM health passes on CLI 2026.9.27 with stale_in_progress_items:1 advisory. A real pm-github 2026.9.26 project install activated and an open-issue dry run found no public Jira issues; no tracker import was applied. Scheduled sync remains disabled_manually pending pre-push privacy gating. GitHub CI, reviewer evidence, and statement coverage remain separate gates."
   "2026-09-27T08:10:17.650Z",codex,"2026-09-27: Greptile on PR #119 head d184a0c found the copied canonical launcher gained a broken-install branch without consumer regression coverage. The finding is valid. Added real child-checkout cases for an incomplete pm-ops directory and dangling link; both fail without the omit-dev notice and without merge drivers. Focused suite passes 7/7 with zero skips. Inline finding was voted and acknowledged; full release gate and exact-head rereview remain pending."
   "2026-09-27T08:17:04.429Z",codex,"2026-09-27: CodeRabbit on PR #119 head d184a0c found the disabled GitHub issue-sync workflow still had runnable schedule/manual triggers and write permissions if re-enabled before a fail-closed imported-content privacy gate. The finding is valid. Added a checked-in job-level if: false guard and confirmed GitHub workflow remains disabled_manually. The same defense is being added to the pm-graph and pm-todos pilot candidates. This does not implement the privacy gate or authorize enabling sync. Review was voted and answered inline; full release gate and new-head CI/review remain pending."
   "2026-09-27T08:19:09.910Z",codex,"2026-09-27 08:19 UTC: After both first-head review fixes, the full npm run release:check gate passes 174/174 tests with zero skips; measured lines/branches/functions are 100/100/100, 51/51 declarations documented, and production audit reports zero vulnerabilities. The real child-checkout launcher suite passes 7/7. The scheduled issue-sync job has a checked-in if: false guard, and GitHub API still reports disabled_manually. The separate content privacy gate, statement coverage, GitHub CI, and fresh exact-head bot reviews remain open."
+  "2026-09-27T08:35:53.468Z",codex,"2026-09-27 downstream Greptile P1 on pm-todos #103 revealed the published pm-ops 2026.9.26 launcher copied here misses incomplete hoisted installs in ancestor node_modules. Canonical source issue ops-jzp5 and unmerged pm-ops #124 already fix and test this path. This PR is blocked until the reviewed source is published, this package pins and copies its new template byte for byte, full release gate and strict health pass, and exact-head bot review repeats. Earlier green CI/Greptile status does not certify this edge case."
 files[6]{path,scope,note}:
   .agents/pm/extensions/.managed-extensions.json,project,Exact managed pm-github source
   .github/workflows/ci.yml,project,CI installs pinned extension
@@ -29,4 +30,7 @@ files[6]{path,scope,note}:
 tests[2]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
   "npm run release:check",project,600,codex,"2026-09-27T08:04:20.900Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
   node --test test/prepare-merge-driver.test.ts,project,120,codex,"2026-09-27T08:10:16.001Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
+docs[2]{path,scope,note}:
+  "https://github.com/unbraind/pm-ops/blob/main/.agents/pm/issues/ops-jzp5.toon",global,Canonical hoisted broken-install source issue
+  "https://github.com/unbraind/pm-ops/pull/124",global,Canonical source fix candidate pending publication
 body: ""
