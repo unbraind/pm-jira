@@ -1,5 +1,6 @@
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
+import { type PmSdkModule } from "./sdk-importer.ts";
 /**
  * Semantic exit codes pm's command runtime propagates to the shell.
  *
@@ -423,7 +424,8 @@ export declare function isMutatingJiraInvocation(command: string, options: Recor
 export declare function jiraPreflightShouldFailFast(command: string, options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): boolean;
 export declare function jiraPreflightErrorMessage(command: string, diag: CredDiagnostics): string;
 export declare function classifyHttpError(statusCode: number | undefined, body: unknown): string;
-export declare function formatImportProgress(fetched: number, jiraTotal: number, maxResults: number): string;
+/** Report fetched issues without inventing a total for Cloud cursor searches. */
+export declare function formatImportProgress(fetched: number, jiraTotal: number | undefined, maxResults: number): string;
 export interface IssueToItem {
     title: string;
     status: PmStatus;
@@ -468,7 +470,7 @@ export declare function __resetCommitItemMutationsCacheForTests(): void;
  * without an actual old SDK on disk. Production always uses the default
  * (cached) dynamic import.
  */
-export declare function resolveCommitItemMutations(importSdk?: () => Promise<Partial<typeof import("@unbrained/pm-cli/sdk")>>): Promise<CommitItemMutations>;
+export declare function resolveCommitItemMutations(importSdk?: () => Promise<Partial<PmSdkModule>>): Promise<CommitItemMutations>;
 /**
  * Derive a stable, resumable transaction id from the exact content being
  * imported: the ordered list of Jira issue keys plus the JQL/project that
@@ -546,7 +548,8 @@ export interface IssueExtras {
     hasExtras: boolean;
 }
 export declare function countIssueExtras(issue: JiraIssue): IssueExtras;
-export declare function buildSearchRequest(baseUrl: string, jql: string, startAt: number, maxResults: number): JiraSearchRequest;
+/** Build an enhanced Cloud request, encoding the opaque cursor without offsets. */
+export declare function buildSearchRequest(baseUrl: string, jql: string, nextPageToken: string | undefined, maxResults: number): JiraSearchRequest;
 /**
  * Internal options for {@link runImport}. Extends the public dry-run/status
  * knobs with opt-in atomic-import controls and test seams. The atomic seams

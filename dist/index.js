@@ -808,11 +808,13 @@ export function classifyHttpError(statusCode, body) {
     }
     return `Jira API error ${code}: ${snippet}`;
 }
+/** Fetch a Jira page over TLS, preserving an explicitly configured host port. */
 function httpsGet(url, authHeader) {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const options = {
             hostname: parsed.hostname,
+            port: parsed.port,
             path: parsed.pathname + parsed.search,
             method: "GET",
             headers: {
@@ -923,35 +925,58 @@ function httpsPut(url, authHeader, payload) {
 // ---------------------------------------------------------------------------
 // Fetch all pages from Jira search API
 // ---------------------------------------------------------------------------
-// Format a per-page import progress line, e.g. "Fetched 200/512...". The
-// effective total is clamped to maxResults (we never fetch beyond it) so the
-// denominator reflects what the import will actually pull. Pure + testable;
-// the importer streams these to STDERR only (stdout/json contract unchanged).
+/** Report fetched issues without inventing a total for Cloud cursor searches. */
 export function formatImportProgress(fetched, jiraTotal, maxResults) {
+    if (jiraTotal === undefined)
+        return `Fetched ${fetched} (limit ${maxResults})...`;
     const effectiveTotal = Math.min(jiraTotal, maxResults);
     return `Fetched ${fetched}/${effectiveTotal}...`;
 }
+/**
+ * Read enhanced Cloud search pages before the caller mutates its tracker.
+ * Refuse malformed, oversized, repeated or cycling pages. Empty intermediate
+ * pages may advance their token; a 1000-page ceiling bounds stalled queries.
+ */
 async function fetchAllJiraIssues(baseUrl, authHeader, jql, maxResults, onProgress) {
     const allIssues = [];
-    let startAt = 0;
+    let nextPageToken;
+    const tokens = new Set();
+    const keys = new Set();
     const pageSize = Math.min(maxResults, 100);
-    while (allIssues.length < maxResults) {
+    for (let page = 0; allIssues.length < maxResults; page++) {
+        if (page === 1000)
+            throw new Error("Jira search exceeded 1000 pages; narrow the JQL query and retry.");
         const remaining = maxResults - allIssues.length;
         const fetchSize = Math.min(remaining, pageSize);
         // Reuse the single source-of-truth request builder so the live fetch and
         // the --dry-run preview can never drift apart.
-        const { url } = buildSearchRequest(baseUrl, jql, startAt, fetchSize);
+        const { url } = buildSearchRequest(baseUrl, jql, nextPageToken, fetchSize);
         const raw = await httpsGet(url, authHeader);
         const data = JSON.parse(raw);
-        if (!data.issues || data.issues.length === 0)
-            break;
+        if (!Array.isArray(data?.issues) || typeof data.isLast !== "boolean") {
+            throw new Error("Jira search returned an invalid enhanced-search page; expected issues and isLast.");
+        }
+        if (data.issues.length > fetchSize)
+            throw new Error("Jira search returned more issues than requested.");
+        for (const issue of data.issues) {
+            if (typeof issue?.key !== "string" || !issue.key.trim() || keys.has(issue.key)) {
+                throw new Error("Jira search returned an invalid or repeated issue key; retry the query before importing.");
+            }
+            keys.add(issue.key);
+        }
+        if (!data.isLast) {
+            if (typeof data.nextPageToken !== "string" || !data.nextPageToken.trim() || tokens.has(data.nextPageToken)) {
+                throw new Error("Jira search returned a missing or repeated nextPageToken; no items were imported.");
+            }
+            tokens.add(data.nextPageToken);
+        }
         allIssues.push(...data.issues);
-        startAt += data.issues.length;
         // Stream paginated progress to the caller (stderr-only). Emitted per page
         // so a large multi-page import surfaces feedback instead of looking hung.
-        onProgress?.(allIssues.length, data.total);
-        if (startAt >= data.total)
+        onProgress?.(allIssues.length, undefined);
+        if (data.isLast)
             break;
+        nextPageToken = data.nextPageToken;
     }
     return allIssues;
 }
@@ -1295,11 +1320,12 @@ export function countIssueExtras(issue) {
             : 0;
     return { attachments, comments, hasExtras: attachments > 0 || comments > 0 };
 }
-export function buildSearchRequest(baseUrl, jql, startAt, maxResults) {
-    const url = `${baseUrl.replace(/\/$/, "")}/rest/api/3/search` +
+/** Build an enhanced Cloud request, encoding the opaque cursor without offsets. */
+export function buildSearchRequest(baseUrl, jql, nextPageToken, maxResults) {
+    const url = `${baseUrl.replace(/\/$/, "")}/rest/api/3/search/jql` +
         `?jql=${encodeURIComponent(jql)}` +
         `&fields=${encodeURIComponent(SEARCH_FIELDS)}` +
-        `&startAt=${startAt}` +
+        (nextPageToken === undefined ? "" : `&nextPageToken=${encodeURIComponent(nextPageToken)}`) +
         `&maxResults=${Math.min(maxResults, 100)}`;
     return { method: "GET", url, fields: SEARCH_FIELDS };
 }
@@ -1325,7 +1351,7 @@ export async function runImport(options, pmRoot, opts = {}) {
     if (dryRun) {
         const dryRunBaseUrl = (readStringOption(options, "host") ??
             (process.env["JIRA_BASE_URL"]?.trim() || "https://<JIRA_BASE_URL>")).replace(/\/$/, "");
-        const request = buildSearchRequest(dryRunBaseUrl, jql, 0, maxResults);
+        const request = buildSearchRequest(dryRunBaseUrl, jql, undefined, maxResults);
         console.error(`[dry-run] No network call will be made.`);
         console.error(`[dry-run] JQL: ${jql}`);
         console.error(`[dry-run] Would ${request.method} ${request.url}`);
@@ -1420,12 +1446,12 @@ export async function runImport(options, pmRoot, opts = {}) {
     }
     let created = 0;
     let atomicTransactionId;
-    if (atomic) {
+    if (atomic && filtered.length > 0) {
         // --atomic: commit ALL creates in one all-or-nothing, crash-recoverable
         // transaction via the official commitItemMutations SDK helper. On
         // failure every applied create is compensated (deleted); an interrupted
         // run resumes on re-invocation. The dry-run path returns earlier above, so
-        // no transaction is committed for a dry-run + --atomic invocation.
+        // no transaction is committed for a dry-run or an empty result set.
         const atomicResult = await importJiraAtomic(pmRoot, jql, filtered, opts);
         created = atomicResult.created;
         atomicTransactionId = atomicResult.transactionId;
