@@ -1,0 +1,13 @@
+id: pm-jira-gpjr
+title: Measure every executable source and all four coverage dimensions in pm-jira
+description: "The current release gate reports 100 percent lines branches functions for index.ts and sdk-importer.ts. It excludes executable scripts, does not measure a fourth statement column, and the documentation gate counts only selected declarations. Existing tests include injected HTTP and process seams. This is not full all-source coverage or exhaustive documentation."
+type: Issue
+status: open
+priority: 1
+tags[2]: coverage,quality
+created_at: "2026-09-29T21:38:53.933Z"
+updated_at: "2026-09-29T21:38:53.933Z"
+author: codex-jira-search
+estimated_minutes: 240
+acceptance_criteria: Adopt reviewed canonical all-source coverage once published; enforce 100 statements branches functions lines for runtime and tooling with independent scope assertion; document every runtime declaration; preserve real HTTPS and SDK acceptance and inventory any remaining mocks.
+body: ""
