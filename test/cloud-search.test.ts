@@ -2,11 +2,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import https from "node:https";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { generate } from "selfsigned";
 import { runImport, type JiraIssue } from "../index.ts";
 
 /** Minimal synthetic issues; no provider or hosted tenant data enters these tests. */
@@ -36,13 +37,14 @@ test("HTTPS cursor traversal imports once and refuses incomplete page chains bef
     }
   });
   t.after(() => { https.globalAgent.options.ca = originalCa; rmSync(dir, { recursive: true, force: true }); });
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-    "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1", "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem")], { stdio: "ignore" });
-  const cert = readFileSync(join(dir, "cert.pem"));
+  const { cert, private: key } = await generate([{ name: "commonName", value: "localhost" }], {
+    keyType: "ec", algorithm: "sha256",
+    extensions: [{ name: "subjectAltName", altNames: [{ type: 7, ip: "127.0.0.1" }] }],
+  });
   https.globalAgent.options.ca = cert;
   let pages: unknown[] = [];
   const requests: URL[] = [];
-  const server = https.createServer({ key: readFileSync(join(dir, "key.pem")), cert }, (req, res) => {
+  const server = https.createServer({ key, cert }, (req, res) => {
     requests.push(new URL(req.url!, "https://localhost"));
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(pages.shift()));

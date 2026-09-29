@@ -1,4 +1,8 @@
-// pm-jira — Jira issue sync / importer / exporter for pm-cli
+/**
+ * Jira Cloud issue import/export extension for pm-cli.
+ * Pulls are fully fetched and mapped before writes; callers opt into atomic
+ * SDK transactions. Exports require an explicit push flag to mutate Jira.
+ */
 //
 // Capabilities (see manifest.json):
 //   commands  — `pm jira sync` (legacy, full-featured pull) + `pm jira validate`
@@ -1782,6 +1786,18 @@ export interface ImportRunOptions {
   issues?: JiraIssue[];
 }
 
+/**
+ * Fetch and map a bounded Jira Cloud query, then import the selected PM items.
+ * Dry runs only describe the initial request and require no credentials.
+ * Cursor-chain failures occur before writes. Atomic mode commits the mapped
+ * set through the SDK; an empty set succeeds without creating a transaction.
+ * Sequential mode retains its per-item error reporting and partial success.
+ *
+ * @param options - CLI/importer options, with credentials read from the environment.
+ * @param pmRoot - Destination PM tracker, used only after fetching and mapping.
+ * @param opts - Import controls and explicitly injected test dependencies.
+ * @returns The dry-run request or import counts and optional transaction receipt.
+ */
 export async function runImport(
   options: Record<string, unknown>,
   pmRoot: string,

@@ -6,7 +6,7 @@ status: in_progress
 priority: 1
 tags[3]: correctness,jira,pagination
 created_at: "2026-09-29T21:32:52.063Z"
-updated_at: "2026-09-29T21:42:31.859Z"
+updated_at: "2026-09-29T21:59:40.237Z"
 assignee: codex-jira-search
 claim_principal: codex-jira-search
 author: codex-jira-search
@@ -15,11 +15,13 @@ acceptance_criteria: Official Cloud request contract; real HTTPS cursor and fail
 repro_steps: Inspect dry-run URL and exercise a Cloud-shaped two-page response without total.
 expected_result: Fetch each cursor page once from search/jql before importing.
 actual_result: Requests the removed endpoint and expects offset pagination.
-notes[4]{created_at,author,text}:
+notes[6]{created_at,author,text}:
   "2026-09-29T21:37:07.216Z",codex-jira-search,"Red-first regression: Cloud dry-run expected /rest/api/3/search/jql but returned removed /rest/api/3/search. New tests use real local TLS with a generated certificate and actual PM atomic transactions, including opaque cursors, empty intermediate pages, bounded traversal and refusal without writes. Source reference: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/ . No live Jira credential or hosted user data is used."
   "2026-09-29T21:39:14.964Z",codex-jira-search,"The real HTTPS test also exposed empty atomic imports being sent to commitItemMutations, which correctly refuses zero mutations. The package now treats an empty import as successful without a transaction. Full release:check passed 193 tests with zero skips and 100 percent lines/branches/functions on its two measured runtime files; npm audit reports zero vulnerabilities. All-source/four-dimension/documentation gaps are tracked separately in pm-jira-gpjr. Published CLI SDK 2026.9.29 resolves prior host/extension skew. pm-github dry-run finds zero open source issues."
   "2026-09-29T21:40:36.749Z",codex-jira-search,"Packed artifact acceptance passed in separate npm/npx and Bun/bunx projects with CLI 2026.9.29: fresh PM initialization, merge-driver installation, tarball extension installation, Cloud dry-run URL assertions and strict health all succeeded. The package is not published or deployed. This branch is based on the existing certification PR #119 and preserves that work and its ownership. Live authenticated Jira acceptance and complete bot review are still required."
   "2026-09-29T21:42:31.859Z",codex-jira-search,"Linked HTTPS acceptance passed in an isolated source snapshot with pm_context_mode=none, 19 tests and zero skips. An earlier accidental full release run in snapshot mode failed four Git-dependent checks because snapshots do not contain repository metadata; that failure is retained and is not a core CLI defect. The full gate passed directly in the real checkout. Review and actual Jira tenant acceptance remain open."
+  "2026-09-29T21:54:50.626Z",codex-jira-search,"Review round one: Greptile finding 4138693215 about external OpenSSL is valid, upvoted and answered inline. Replaced certificate generation with declared selfsigned 5.5.0 using inspected installed types and native crypto; the full 193-test release gate passes and the real HTTPS suite passes 19/19 with PATH pointing at an empty directory. TLS verification remains enabled and no private key fixture is stored. Added module and runImport documentation for the embedded CodeRabbit docstring warning. CodeRabbit first-head review had no inline correctness findings; Sourcery and cubic quotas and silent Gemini are missing reviews, not approval."
+  "2026-09-29T21:59:40.237Z",codex-jira-search,"Runtime distinction: default bunx packed acceptance passes but can honor the Node shebang. A stronger fresh install using bunx --bun for every CLI step passes initialization, extension installation and Jira Cloud dry-run, but strict health fails merge_driver_configuration_drift:5. The failure persists with --no-extensions, independently confirming existing open upstream pm-cli#1349 rather than a Jira defect. Do not call native Bun strict health green or duplicate that upstream issue. npm/npx strict health remains green."
 files[2]{path,scope,note}:
   index.ts,project,Shared Cloud request and cursor traversal
   test/cloud-search.test.ts,project,Real HTTPS and tracker regression
