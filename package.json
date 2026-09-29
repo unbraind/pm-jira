@@ -65,6 +65,7 @@
     "@unbrained/pm-cli": "2026.9.29",
     "pm-changelog": "2026.9.25",
     "pm-ops": "2026.9.28",
+    "selfsigned": "5.5.0",
     "typescript": "^7.0.2"
   },
   "keywords": [
