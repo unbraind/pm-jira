@@ -6,17 +6,19 @@ status: blocked
 priority: 1
 tags[3]: agent-ux,"area:github","area:release"
 created_at: "2026-09-27T08:01:14.699Z"
-updated_at: "2026-10-02T23:14:09.869Z"
+updated_at: "2026-10-02T23:37:35.133Z"
 author: codex
 acceptance_criteria: "Exact package/lock pins for current CLI, pm-ops, and pm-changelog; tracked managed pm-github 2026.9.26; local strict health and full release gate pass; CI uses exact source; disabled sync stays disabled; staged privacy scan and exact-head review complete."
 repro_steps: "Run pm health --strict-exit --json on main with host CLI 2026.9.27; observe extension_host_pm_cli_version_skew. Inspect both workflows for npm:pm-github without a version and the npm 10 / manifest-rewrite steps."
 expected_result: Strict health passes with the project-local CLI/SDK 2026.9.27; both workflows install exact pm-github 2026.9.26; the package release gate passes; the sync workflow stays disabled until a separate pre-push privacy gate exists.
 actual_result: Main reports SDK-link skew and both workflow installs can drift to future unreviewed extension versions.
-comments[4]{created_at,author,text}:
+comments[6]{created_at,author,text}:
   "2026-09-28T06:02:04.601Z",claude-hub,"2026-09-28: pinned pm-ops 2026.9.28 and re-copied its templates/prepare-merge-driver.ts (pm-ops#124: the omit-dev skip now checks every Node resolution path for an incomplete hoisted pm-ops, so a broken ancestor install fails instead of silently skipping the merge drivers). release:check and changelog:check pass on this branch."
   "2026-10-02T23:13:22.459Z",codex-sol-land,"Resumed PR #119 from 39409056e819fac1ccd2c0721594dc36d4aea360. Rebase onto current main yields 39409056e819fac1ccd2c0721594dc36d4aea360. All existing bot artifacts and restart-era owner replies inspected; no new actionable finding. Preserve earlier fixes and technical refusals. Verifying unchanged CI gates under the shared heavy lock; no merge, release or closure."
   "2026-10-02T23:13:26.769Z",codex-sol-land,"Corrected the linked source note: pm-ops#124 is already published in the pinned 2026.9.28 package, as the existing September 28 comment records. Preserve every dated note and append-only history line."
   "2026-10-02T23:14:08.171Z",codex-sol-land,"Resumed verification: npm ci, current-base rebase, fresh committed-dist comparison, strict local tracker health with required merge drivers, npm run release:check, and bun install --no-save all passed. Full gate: 174 tests, 174 pass, 0 skips; configured coverage thresholds unchanged. PM-linked test/release-workflow.test.ts passed. Earlier findings and technical refusals retained; no new source fix was needed in this restart. Exact pushed-head CI and substantive reviewer availability remain separate checks; no merge, release, publication or item closure."
+  "2026-10-02T23:28:07.013Z",codex-sol-land,"New Cubic finding 4170603509 is refused: Refused for this exact head: the completed Node 26 job used Node v26.10.0 and npm 11.19.1, not npm 12. Its real project-local pm package install of pm-github@2026.9.26, installed-version assertion, strict health and full CI gate all passed at acf6918. The statement that CI had not run is also contradicted by that completed job. Evidence: https://github.com/unbraind/pm-jira/actions/runs/37076601628/job/111067793577 . This is current-runner certification; no npm-12 certification is claimed and the obsolete npm-10 shim is not required for this verified job."
+  "2026-10-02T23:37:33.721Z",codex-sol-land,"Resumed verification: npm ci, current-base rebase, fresh committed-dist comparison, strict local tracker health with required merge drivers, npm run release:check, and bun install --no-save all passed. Full gate: 174 tests, 174 pass, 0 skips; configured coverage thresholds unchanged. PM-linked test/release-workflow.test.ts passed. Earlier findings and technical refusals retained; no new source fix was needed in this restart. Exact pushed-head CI and substantive reviewer availability remain separate checks; no merge, release, publication or item closure."
 notes[6]{created_at,author,text}:
   "2026-09-27T08:02:51.137Z",codex,"2026-09-27: First full release gate failed at the package launcher byte-identity assertion after upgrading published pm-ops to 2026.9.26. Copied the exact canonical launcher from installed pm-ops 2026.9.26 to scripts/prepare-merge-driver.ts; this includes its broken local-install guard. The full gate must rerun. The disabled GitHub sync workflow remains disabled."
   "2026-09-27T08:04:22.372Z",codex,"2026-09-27 08:04 UTC: Full local release gate passed after copying the exact published pm-ops 2026.9.26 launcher: 173/173 tests, zero skips, 100% measured lines/branches/functions across two production source files, 51/51 declarations documented, zero production audit vulnerabilities, current changelog and attestation checks. Strict PM health passes on CLI 2026.9.27 with stale_in_progress_items:1 advisory. A real pm-github 2026.9.26 project install activated and an open-issue dry run found no public Jira issues; no tracker import was applied. Scheduled sync remains disabled_manually pending pre-push privacy gating. GitHub CI, reviewer evidence, and statement coverage remain separate gates."
@@ -49,7 +51,10 @@ tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,
   "npm run release:check",project,600,codex,"2026-09-27T08:04:20.900Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
   node --test test/prepare-merge-driver.test.ts,project,120,codex,"2026-09-27T08:10:16.001Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
   node --test test/release-workflow.test.ts,project,120,codex-sol-land,"2026-10-02T23:13:24.983Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
-docs[3]:
+docs[4]:
+  - path: "https://github.com/unbraind/pm-jira/actions/runs/37076601628/job/111067793577"
+    scope: global
+    note: Exact-head Node 26 CI proves bundled npm 11.19.1 and successful pinned extension installation
   - path: "https://github.com/unbraind/pm-ops/blob/main/.agents/pm/issues/ops-jzp5.toon"
     scope: global
     note: Canonical hoisted broken-install source issue
