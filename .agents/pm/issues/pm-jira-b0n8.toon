@@ -2,20 +2,21 @@ id: pm-jira-b0n8
 title: Certify pm-jira on CLI 2026.9.27 and pinned GitHub extension
 description: "The main checkout pins PM CLI, pm-ops, and pm-changelog 2026.9.23 and manages pm-github 2026.8.18. Host CLI 2026.9.27 reports extension SDK-link skew. CI and disabled scheduled sync install an unversioned extension through an obsolete npm 10 shim and rewrite its manifest. Align the package toolchain and tracked extension metadata with current published versions, and use the exact managed extension source in both workflows."
 type: Issue
-status: in_progress
+status: blocked
 priority: 1
 tags[3]: agent-ux,"area:github","area:release"
 created_at: "2026-09-27T08:01:14.699Z"
-updated_at: "2026-09-28T06:30:26.878Z"
-assignee: claude-hub
-claim_principal: claude-hub
+updated_at: "2026-10-02T23:14:09.869Z"
 author: codex
 acceptance_criteria: "Exact package/lock pins for current CLI, pm-ops, and pm-changelog; tracked managed pm-github 2026.9.26; local strict health and full release gate pass; CI uses exact source; disabled sync stays disabled; staged privacy scan and exact-head review complete."
 repro_steps: "Run pm health --strict-exit --json on main with host CLI 2026.9.27; observe extension_host_pm_cli_version_skew. Inspect both workflows for npm:pm-github without a version and the npm 10 / manifest-rewrite steps."
 expected_result: Strict health passes with the project-local CLI/SDK 2026.9.27; both workflows install exact pm-github 2026.9.26; the package release gate passes; the sync workflow stays disabled until a separate pre-push privacy gate exists.
 actual_result: Main reports SDK-link skew and both workflow installs can drift to future unreviewed extension versions.
-comments[1]{created_at,author,text}:
+comments[4]{created_at,author,text}:
   "2026-09-28T06:02:04.601Z",claude-hub,"2026-09-28: pinned pm-ops 2026.9.28 and re-copied its templates/prepare-merge-driver.ts (pm-ops#124: the omit-dev skip now checks every Node resolution path for an incomplete hoisted pm-ops, so a broken ancestor install fails instead of silently skipping the merge drivers). release:check and changelog:check pass on this branch."
+  "2026-10-02T23:13:22.459Z",codex-sol-land,"Resumed PR #119 from 39409056e819fac1ccd2c0721594dc36d4aea360. Rebase onto current main yields 39409056e819fac1ccd2c0721594dc36d4aea360. All existing bot artifacts and restart-era owner replies inspected; no new actionable finding. Preserve earlier fixes and technical refusals. Verifying unchanged CI gates under the shared heavy lock; no merge, release or closure."
+  "2026-10-02T23:13:26.769Z",codex-sol-land,"Corrected the linked source note: pm-ops#124 is already published in the pinned 2026.9.28 package, as the existing September 28 comment records. Preserve every dated note and append-only history line."
+  "2026-10-02T23:14:08.171Z",codex-sol-land,"Resumed verification: npm ci, current-base rebase, fresh committed-dist comparison, strict local tracker health with required merge drivers, npm run release:check, and bun install --no-save all passed. Full gate: 174 tests, 174 pass, 0 skips; configured coverage thresholds unchanged. PM-linked test/release-workflow.test.ts passed. Earlier findings and technical refusals retained; no new source fix was needed in this restart. Exact pushed-head CI and substantive reviewer availability remain separate checks; no merge, release, publication or item closure."
 notes[6]{created_at,author,text}:
   "2026-09-27T08:02:51.137Z",codex,"2026-09-27: First full release gate failed at the package launcher byte-identity assertion after upgrading published pm-ops to 2026.9.26. Copied the exact canonical launcher from installed pm-ops 2026.9.26 to scripts/prepare-merge-driver.ts; this includes its broken local-install guard. The full gate must rerun. The disabled GitHub sync workflow remains disabled."
   "2026-09-27T08:04:22.372Z",codex,"2026-09-27 08:04 UTC: Full local release gate passed after copying the exact published pm-ops 2026.9.26 launcher: 173/173 tests, zero skips, 100% measured lines/branches/functions across two production source files, 51/51 declarations documented, zero production audit vulnerabilities, current changelog and attestation checks. Strict PM health passes on CLI 2026.9.27 with stale_in_progress_items:1 advisory. A real pm-github 2026.9.26 project install activated and an open-issue dry run found no public Jira issues; no tracker import was applied. Scheduled sync remains disabled_manually pending pre-push privacy gating. GitHub CI, reviewer evidence, and statement coverage remain separate gates."
@@ -23,17 +24,38 @@ notes[6]{created_at,author,text}:
   "2026-09-27T08:17:04.429Z",codex,"2026-09-27: CodeRabbit on PR #119 head d184a0c found the disabled GitHub issue-sync workflow still had runnable schedule/manual triggers and write permissions if re-enabled before a fail-closed imported-content privacy gate. The finding is valid. Added a checked-in job-level if: false guard and confirmed GitHub workflow remains disabled_manually. The same defense is being added to the pm-graph and pm-todos pilot candidates. This does not implement the privacy gate or authorize enabling sync. Review was voted and answered inline; full release gate and new-head CI/review remain pending."
   "2026-09-27T08:19:09.910Z",codex,"2026-09-27 08:19 UTC: After both first-head review fixes, the full npm run release:check gate passes 174/174 tests with zero skips; measured lines/branches/functions are 100/100/100, 51/51 declarations documented, and production audit reports zero vulnerabilities. The real child-checkout launcher suite passes 7/7. The scheduled issue-sync job has a checked-in if: false guard, and GitHub API still reports disabled_manually. The separate content privacy gate, statement coverage, GitHub CI, and fresh exact-head bot reviews remain open."
   "2026-09-27T08:35:53.468Z",codex,"2026-09-27 downstream Greptile P1 on pm-todos #103 revealed the published pm-ops 2026.9.26 launcher copied here misses incomplete hoisted installs in ancestor node_modules. Canonical source issue ops-jzp5 and unmerged pm-ops #124 already fix and test this path. This PR is blocked until the reviewed source is published, this package pins and copies its new template byte for byte, full release gate and strict health pass, and exact-head bot review repeats. Earlier green CI/Greptile status does not certify this edge case."
-files[6]{path,scope,note}:
-  .agents/pm/extensions/.managed-extensions.json,project,Exact managed pm-github source
-  .github/workflows/ci.yml,project,CI installs pinned extension
-  .github/workflows/pm-github-sync.yml,project,Disabled sync installs pinned extension
-  package.json,project,Published CLI and quality-tool pins
-  scripts/prepare-merge-driver.ts,project,Published pm-ops launcher copy
-  test/prepare-merge-driver.test.ts,project,Incomplete directory and dangling-link real child checkouts
-tests[2]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+files[7]:
+  - path: .agents/pm/extensions/.managed-extensions.json
+    scope: project
+    note: Exact managed pm-github source
+  - path: .github/workflows/ci.yml
+    scope: project
+    note: CI installs pinned extension
+  - path: .github/workflows/pm-github-sync.yml
+    scope: project
+    note: Disabled sync installs pinned extension
+  - path: package.json
+    scope: project
+    note: Published CLI and quality-tool pins
+  - path: scripts/prepare-merge-driver.ts
+    scope: project
+    note: Published pm-ops launcher copy
+  - path: test/prepare-merge-driver.test.ts
+    scope: project
+    note: Incomplete directory and dangling-link real child checkouts
+  - path: test/release-workflow.test.ts
+    scope: project
+tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
   "npm run release:check",project,600,codex,"2026-09-27T08:04:20.900Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
   node --test test/prepare-merge-driver.test.ts,project,120,codex,"2026-09-27T08:10:16.001Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
-docs[2]{path,scope,note}:
-  "https://github.com/unbraind/pm-ops/blob/main/.agents/pm/issues/ops-jzp5.toon",global,Canonical hoisted broken-install source issue
-  "https://github.com/unbraind/pm-ops/pull/124",global,Canonical source fix candidate pending publication
+  node --test test/release-workflow.test.ts,project,120,codex-sol-land,"2026-10-02T23:13:24.983Z",local_mutation,fix/pm-jira-cli-2026-09-27-github-pin
+docs[3]:
+  - path: "https://github.com/unbraind/pm-ops/blob/main/.agents/pm/issues/ops-jzp5.toon"
+    scope: global
+    note: Canonical hoisted broken-install source issue
+  - path: "https://github.com/unbraind/pm-ops/pull/124"
+    scope: global
+    note: Already published canonical launcher source included in pinned pm-ops 2026.9.28
+  - path: "https://github.com/unbraind/pm-jira/pull/119"
+    scope: project
 body: ""
