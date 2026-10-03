@@ -1,0 +1,14 @@
+id: pm-jira-0571
+title: Restore a successful Hound review for Jira Cloud cursor PR #120
+description: "At head 713d3c47a2e521e31c09c83375ab10b75aa622d9, Hound reports ERROR: We have encountered an error while reviewing your code. It supplies no finding or target URL. Node 22/26 and the full local 193-test release gate pass; this external review status still prevents a fully green rollup. Verify Hound recovery at the eventual exact head before merge; do not bypass its status or change application code to silence a service failure."
+type: Issue
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-03T00:28:31.529Z"
+updated_at: "2026-10-03T00:28:32.333Z"
+author: codex-sol-land
+acceptance_criteria: Hound completes successfully on the current PR head without disabling the check.
+docs[1]{path,scope}:
+  "https://github.com/unbraind/pm-jira/pull/120",project
+body: ""
