@@ -487,19 +487,19 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       {
         statusCode: 200,
         body: JSON.stringify({
-          total: 2,
+          isLast: false, nextPageToken: "next",
           issues: [issueJson(fakeIssue("PROJ-1", "One"))],
         }),
       },
       {
         statusCode: 200,
         body: JSON.stringify({
-          total: 2,
+          isLast: true,
           issues: [issueJson(fakeIssue("PROJ-2", "Two"))],
         }),
       },
     ];
-    await withHttpsMock(() => pages.shift() ?? { statusCode: 200, body: JSON.stringify({ total: 2, issues: [] }) }, async () => {
+    await withHttpsMock(() => pages.shift() ?? { statusCode: 200, body: JSON.stringify({ isLast: true, issues: [] }) }, async () => {
       await withEnv(JIRA_ENV, async () => {
         const root = freshTracker();
         try {
@@ -511,7 +511,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       });
     });
 
-    await withHttpsMock(() => ({ statusCode: 200, body: JSON.stringify({ total: 0, issues: [] }) }), async () => {
+    await withHttpsMock(() => ({ statusCode: 200, body: JSON.stringify({ isLast: true, issues: [] }) }), async () => {
       await withEnv(JIRA_ENV, async () => {
         const root = freshTracker();
         try {
@@ -573,7 +573,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       });
     });
 
-    await withHttpsMock(() => ({ statusCode: undefined, body: JSON.stringify({ total: 0, issues: [] }) }), async () => {
+    await withHttpsMock(() => ({ statusCode: undefined, body: JSON.stringify({ isLast: true, issues: [] }) }), async () => {
       await withEnv(JIRA_ENV, async () => {
         const root = freshTracker();
         try {
@@ -712,7 +712,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     extras.fields.attachment = [{}];
     const restore = installHttpsMock(() => ({
       statusCode: 200,
-      body: JSON.stringify({ total: 1, issues: [issueJson(extras)] }),
+      body: JSON.stringify({ isLast: true, issues: [issueJson(extras)] }),
     }));
     const root = freshTracker();
     try {
@@ -734,7 +734,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
 
     const restorePlain = installHttpsMock(() => ({
       statusCode: 200,
-      body: JSON.stringify({ total: 1, issues: [issueJson(fakeIssue("PROJ-2", "Plain"))] }),
+      body: JSON.stringify({ isLast: true, issues: [issueJson(fakeIssue("PROJ-2", "Plain"))] }),
     }));
     const plainRoot = freshTracker();
     try {
