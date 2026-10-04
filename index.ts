@@ -2472,6 +2472,9 @@ export default defineExtension({
     // -----------------------------------------------------------------------
     // importer — `pm jira import` (native import pipeline)
     // -----------------------------------------------------------------------
+    api.registerFlags("jira import", PULL_FLAGS);
+    api.registerFlags("jira export", EXPORT_FLAGS);
+
     api.registerImporter("jira", async (ctx: ImportExportContext) => {
       return runImport(optionsOrEmpty(ctx.options), ctx.pm_root);
     });
