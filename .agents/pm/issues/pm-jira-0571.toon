@@ -6,9 +6,11 @@ status: open
 priority: 2
 tags: []
 created_at: "2026-10-03T00:28:31.529Z"
-updated_at: "2026-10-03T00:28:32.333Z"
+updated_at: "2026-10-04T09:14:52.797Z"
 author: codex-sol-land
 acceptance_criteria: Hound completes successfully on the current PR head without disabling the check.
+comments[1]{created_at,author,text}:
+  "2026-10-04T09:14:52.797Z",pi-land-s2,"Resolved externally at rebased head d7fc466: Hound completed successfully on the new head ('Smells good to me. Woof!', 0 findings) together with Node 22/26 CI, Greptile/DeepScan and CodeQL. No code change was made for the service failure; the acceptance (successful Hound review on the current PR head) is met. Full exact-head gate: 193/193 tests, extension install, strict health, dist equality, and Bun install pass."
 docs[1]{path,scope}:
   "https://github.com/unbraind/pm-jira/pull/120",project
 body: ""
