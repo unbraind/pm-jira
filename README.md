@@ -2,6 +2,22 @@
 
 A [pm-cli](https://github.com/unbraind/pm-cli) extension that syncs Jira issues into pm items using the Jira REST API v3.
 
+Cloud imports use the [enhanced JQL search API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get)
+at `/rest/api/3/search/jql`. All import entrypoints follow opaque
+`nextPageToken` cursors until `isLast` or the requested `--max-results` limit.
+Progress reports fetched counts and the configured limit because this API has
+no exact total. Dry runs show the same initial request without making a network
+call. The exported `buildSearchRequest` helper now takes a cursor string or
+`undefined` as its third argument, replacing the removed numeric offset.
+
+Malformed pages, repeated issue keys, missing or cycling continuation tokens,
+oversized responses, and searches exceeding 1,000 pages fail before any tracker
+write. Empty intermediate pages may advance the cursor; an empty final result
+succeeds without opening an atomic transaction. Narrow the JQL query if the
+page ceiling is reached. Jira search is eventually consistent: cursor validation
+does not guarantee a point-in-time snapshot. This integration targets Jira Cloud;
+Jira Data Center's separate search contract is not implemented.
+
 ## Features
 
 - Pull issues from any Jira project into pm items via `pm jira import` or `pm jira sync`
@@ -145,9 +161,12 @@ pm jira import --project PROJ --map "status=in_progress"
 
 #### Progress + transparency notes (STDERR)
 
-For large paginated imports the importer prints `Fetched N/total...` progress to
+For large paginated imports the importer prints `Fetched N (limit M)...` progress to
 **STDERR** after each page, so a multi-page pull surfaces feedback instead of
-looking hung. This is additive and never touches the stdout / `--json` output.
+looking hung. The enhanced JQL cursor search returns no total, so `N` counts the
+issues fetched so far and `M` is the configured `--max-results` ceiling (default
+500), never a denominator. This is additive and never touches the stdout /
+`--json` output.
 
 If any fetched issue carries **attachments or comments**, the importer logs a
 one-line note to STDERR that those are **not imported** (pm-jira imports

@@ -652,9 +652,9 @@ test("issueToItem still accepts a bare statusMap (back-compat 3rd arg)", () => {
 // --- search request (dry-run import) --------------------------------------
 
 test("buildSearchRequest builds the exact GET url with encoded jql", () => {
-  const req = buildSearchRequest("https://x.atlassian.net/", "project = P AND a = b", 0, 250);
+  const req = buildSearchRequest("https://x.atlassian.net/", "project = P AND a = b", undefined, 250);
   assert.strictEqual(req.method, "GET");
-  assert.ok(req.url.startsWith("https://x.atlassian.net/rest/api/3/search?"));
+  assert.ok(req.url.startsWith("https://x.atlassian.net/rest/api/3/search/jql?"));
   assert.ok(req.url.includes("jql=project%20%3D%20P%20AND%20a%20%3D%20b"));
   assert.ok(req.url.includes("maxResults=100")); // capped at 100 per page
   assert.ok(req.url.includes("issuetype")); // fields include issuetype
@@ -739,6 +739,12 @@ test("formatImportProgress clamps the denominator to maxResults", () => {
   assert.strictEqual(formatImportProgress(50, 50, 500), "Fetched 50/50...");
   // When Jira reports fewer than the cap, the real total wins.
   assert.strictEqual(formatImportProgress(30, 30, 1000), "Fetched 30/30...");
+  // Enhanced cursor search reports no total: fetchAllJiraIssues always passes
+  // undefined, so the documented progress line prints the fetched count and the
+  // configured --max-results limit instead of a denominator (README progress
+  // section).
+  assert.strictEqual(formatImportProgress(120, undefined, 500), "Fetched 120 (limit 500)...");
+  assert.strictEqual(formatImportProgress(40, undefined, 1000), "Fetched 40 (limit 1000)...");
 });
 
 // --- attachment / comment transparency ------------------------------------
