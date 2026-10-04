@@ -1,0 +1,35 @@
+id: pm-jira-gdlw
+title: Certify pm-jira on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates
+description: "Exact pins, pending Dependabot updates, canonical launcher, full CI gates with unchanged 100% thresholds, packed real tracker npm/native Bun offline commands, read-only GitHub preview and complete review handling; orchestrator merges/closes."
+type: Chore
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-04T12:12:49.321Z"
+updated_at: "2026-10-04T12:34:35.354Z"
+author: codex-sol
+actual_result: "195/195 pass, zero skips; 100% L/B/F across 2 application files (statements unmeasured). Both audits zero. Strict health exit0 with 1 stale-item advisory. Packed real-tracker npm/native Bun commands agree and export all9 items. Managed GitHub dry-run zero provenance cases. Awaiting exact-head CI/reviews and orchestrator verification."
+comments[4]{created_at,author,text}:
+  "2026-10-04T12:16:58.700Z",codex-sol,"Consolidating Dependabot PRs #118, #121, #122 and #123. CLI, pm-ops and pm-changelog pinned exactly to 2026.10.4; existing peer floor retained. Full source coverage and packed real-tracker npm/native Bun acceptance will be measured separately."
+  "2026-10-04T12:18:54.174Z",codex-sol,npm audit and npm audit --omit=dev both report zero vulnerabilities; zero open Dependabot alerts. Canonical pm-ops 2026.10.4 launcher byte identity and non-directory module lookup regression pass (8/8; old launcher failed ENOTDIR). Managed pm-github 2026.10.4 installed; read-only github sync --repo unbraind/pm-jira --dry-run reports synced=0/skipped=0/planned=0 with no provenance-linked items. CI restoration pin updated without enabling scheduled sync.
+  "2026-10-04T12:25:28.464Z",codex-sol,"Initial serialized release:check passed 194/194 with zero skips and 100% L/B/F over two application TS files (operational scripts remain outside the existing measured inventory). Packed real-tracker acceptance caught jira import flags rejected by CLI 2026.10.4: the package never registered its native importer/exporter options. Test-first harness assertion failed, then passed after registering existing PULL_FLAGS and EXPORT_FLAGS via the supported schema API. No floor increase or parser bypass."
+  "2026-10-04T12:34:33.582Z",codex-sol,"Final full gate: env -u PM_PATH npm run release:check via pm test --run --progress passed 195/195, zero skips, 100% lines/branches/functions over 2 application source files; statements unmeasured. npm ci and bun install --no-save pass. npm pack + npm install <tarball> @unbrained/pm-cli@2026.10.4 into copied real tracker; npx -y @unbrained/pm-cli@2026.10.4 and bunx --bun @unbrained/pm-cli@2026.10.4 both pass jira validate --json, jira sync/import --project CERT --dry-run --json, jira export --project CERT --dry-run --json and jira export --project CERT --rich --update-existing --json. Complete JSON parity; all 9 items exported with certification owner present; independent unbounded list reports 9 items without omissions. pushed=false; no live Jira test; scratch deleted. No new upstream issue required for package-owned flag repair."
+files[13]{path,scope}:
+  .agents/pm/extensions/.managed-extensions.json,project
+  .github/workflows/ci.yml,project
+  .github/workflows/codeql.yml,project
+  CHANGELOG.md,project
+  dist/index.js,project
+  dist/index.js.map,project
+  docs/certification-2026.10.4.md,project
+  index.ts,project
+  package-lock.json,project
+  package.json,project
+  scripts/prepare-merge-driver.ts,project
+  test/prepare-merge-driver.test.ts,project
+  test/smoke.test.ts,project
+tests[1]{command,scope,timeout_seconds,pm_context_mode,workspace_context_mode,provenance{author,created_at,source_kind,source_ref}}:
+  "env -u PM_PATH npm run release:check",project,2400,tracker,source,codex-sol,"2026-10-04T12:17:37.346Z",local_mutation,chore/pm-jira-pm-cli-2026-10-4
+docs[1]{path,scope}:
+  docs/certification-2026.10.4.md,project
+body: ""

@@ -126,6 +126,16 @@ test("incomplete and dangling pm-ops installs fail without silently skipping mer
   }
 });
 
+test("a non-directory node_modules lookup retains the original module resolution failure", posixOnly, () => {
+  const directory = checkout("non-directory", "absent");
+  writeFileSync(join(directory, "node_modules"), "not a directory");
+  const result = prepare(directory, hostPath);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /MODULE_NOT_FOUND/);
+  assert.doesNotMatch(result.stderr, /ENOTDIR/);
+  assert.deepEqual(registeredDrivers(directory), []);
+});
+
 test("a failing pm merge install fails the install with the same status", posixOnly, () => {
   const result = prepare(checkout("failing-pm", "pinned"), stubPm("failing-pm", 7));
   assert.equal(result.status, 7, result.stderr);

@@ -95,6 +95,18 @@ test("extension activates cleanly and registers importer, exporter, schema field
   ext.assertHook({ kind: "on_write" });
 });
 
+test("native Jira import and export advertise their parser flags", async () => {
+  const ext = await getHarness();
+  ext.assertFlags({
+    targetCommand: "jira import",
+    flags: ["--project", "--project-key", "--jql", "--dry-run", "--atomic", "--map", "--field-map"],
+  });
+  ext.assertFlags({
+    targetCommand: "jira export",
+    flags: ["--project", "--project-key", "--dry-run", "--rich", "--update-existing", "--push", "--map", "--field-map"],
+  });
+});
+
 test("preflight override is scoped to pm-jira's owned command paths", async () => {
   // The override MUST register as a scoped object (commands + run), not a bare
   // function: a global (unscoped) override collides pairwise with every other
