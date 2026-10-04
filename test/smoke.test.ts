@@ -739,6 +739,12 @@ test("formatImportProgress clamps the denominator to maxResults", () => {
   assert.strictEqual(formatImportProgress(50, 50, 500), "Fetched 50/50...");
   // When Jira reports fewer than the cap, the real total wins.
   assert.strictEqual(formatImportProgress(30, 30, 1000), "Fetched 30/30...");
+  // Enhanced cursor search reports no total: fetchAllJiraIssues always passes
+  // undefined, so the documented progress line prints the fetched count and the
+  // configured --max-results limit instead of a denominator (README progress
+  // section).
+  assert.strictEqual(formatImportProgress(120, undefined, 500), "Fetched 120 (limit 500)...");
+  assert.strictEqual(formatImportProgress(40, undefined, 1000), "Fetched 40 (limit 1000)...");
 });
 
 // --- attachment / comment transparency ------------------------------------

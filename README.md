@@ -161,9 +161,12 @@ pm jira import --project PROJ --map "status=in_progress"
 
 #### Progress + transparency notes (STDERR)
 
-For large paginated imports the importer prints `Fetched N/total...` progress to
+For large paginated imports the importer prints `Fetched N (limit M)...` progress to
 **STDERR** after each page, so a multi-page pull surfaces feedback instead of
-looking hung. This is additive and never touches the stdout / `--json` output.
+looking hung. The enhanced JQL cursor search returns no total, so `N` counts the
+issues fetched so far and `M` is the configured `--max-results` ceiling (default
+500), never a denominator. This is additive and never touches the stdout /
+`--json` output.
 
 If any fetched issue carries **attachments or comments**, the importer logs a
 one-line note to STDERR that those are **not imported** (pm-jira imports
