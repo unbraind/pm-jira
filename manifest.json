@@ -1,6 +1,6 @@
 {
   "name": "pm-jira",
-  "version": "2026.10.4",
+  "version": "2026.10.5",
   "description": "Jira issue sync for pm-cli",
   "author": "@unbraind",
   "entry": "./dist/index.js",
