@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Certify complete local reads before Jira export and reconciliation ([pm-jira-sdwp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-sdwp.toon))
+
 ## 2026.10.5 - 2026-10-05
 
 ### Other
