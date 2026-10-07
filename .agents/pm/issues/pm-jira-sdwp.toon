@@ -1,0 +1,34 @@
+id: pm-jira-sdwp
+title: Certify complete local reads before Jira export and reconciliation
+description: "Track https://github.com/unbraind/pm-jira/issues/128. Replace the bounded local reader with the certified SDK whole-corpus read and verify refusal, terminal matching, large trackers and repeat imports with synthetic fixtures."
+type: Issue
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-07T11:48:08.234Z"
+updated_at: "2026-10-07T12:13:52.908Z"
+author: codex-sol
+comments[7]{created_at,author,text}:
+  "2026-10-07T11:48:44.087Z",codex-sol,"Issue #128 correction confirms the bounded reader is currently export-only. Plan: use listAllComplete with body, explicit tracker root and extensions disabled; certify receipts and validate payload fields before export or import writes. Add all-status import matching and real scratch-tracker regressions without live provider access."
+  "2026-10-07T12:01:13.602Z",codex-sol,"Implementation uses listAllComplete with body, explicit tracker context and no extensions, followed by public certification and payload-field validation. Both import paths match all statuses by browse URL; atomic plans retain their original transaction identity for interruption recovery. Targeted real SDK/tracker suite passed 59 tests, including 10001 items, 51 refusal cases, zero-write snapshots, terminal matching, repeat imports and deterministic interruption recovery. No SDK mocks, real provider requests or live credentials were used."
+  "2026-10-07T12:05:31.089Z",codex-sol,"Revert proof restored the baseline CLI reader, baseline envelope decoder through the validation test entrypoint, and original runImport. The unchanged regressions exited 1: 57 failures, including all 51 refusal cases and terminal matching in both modes (3 creates instead of 1). Baseline export returned 9999 of 10001 rows because terminal work was excluded. The implementation was restored. The final large fixture is expanded to 10003 rows (10001 active plus two terminal) to independently demonstrate the old 10000 ceiling."
+  "2026-10-07T12:06:46.756Z",codex-sol,Follow-up pm-jira-d3tp records the existing misleading atomic interruption diagnostic. Public certifyCompleteListResult validates identities and completeness receipts but not payload field types or included bodies; integration validation closes that boundary. Peer and extension minimums now both require the pinned known-supported 2026.10.4 API.
+  "2026-10-07T12:07:21.938Z",codex-sol,"The reader-only revert on the final 10003-row fixture exited 1: the baseline returned exactly 10000 instead of 10003. The original code was restored. Updated runtime tests use real trackers for export and verify repeat jira-sync import creates zero; no coverage thresholds were reduced."
+  "2026-10-07T12:11:28.286Z",codex-sol,"The final 60-test focused suite passes. Expanded fixture coverage also exercises jira_url metadata, body provenance and repeated local identities. The configured source inventory reached 100 percent lines, branches and functions without exclusions; both remaining branches are covered with real tracker reads and a repeated config-driven sync."
+  "2026-10-07T12:13:51.952Z",codex-sol,"Final linked checks: npm run release:check passed 254 tests and bun run release:check passed 254 tests, each with 100 percent lines, branches and functions for index.ts and sdk-importer.ts; audit, pack dry run, changelog and release metadata gates passed. The corrected node --test test/complete-local-reads.test.ts run passed all 60 tests through pm test --run --match complete-local-reads --progress. Test-result tracking is disabled by existing policy; this comment records the receipts. Revert controls failed as expected (57 failures; separate 10000-versus-10003 ceiling failure). Documentation and generated dist are included. The claim is released without closing; exact-commit gates will be repeated before pushing."
+files[7]{path,scope}:
+  index.ts,project
+  manifest.json,project
+  package-lock.json,project
+  package.json,project
+  test/atomic.test.ts,project
+  test/complete-local-reads.test.ts,project
+  test/coverage-runtime.test.ts,project
+tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/complete-local-reads.test.ts,project,codex-sol,"2026-10-07T12:01:15.865Z",local_mutation,fix/complete-local-reads
+  "npm run release:check",project,codex-sol,"2026-10-07T12:08:43.147Z",local_mutation,fix/complete-local-reads
+  "bun run release:check",project,codex-sol,"2026-10-07T12:08:43.147Z",local_mutation,fix/complete-local-reads
+docs[2]{path,scope}:
+  docs/complete-local-reads.md,project
+  README.md,project
+body: ""

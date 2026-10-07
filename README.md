@@ -175,6 +175,25 @@ silent expectation that attachment or comment data came across.
 
 ### Exporter: `pm jira export`
 
+Local selection uses the public in-process SDK `listAllComplete` with bodies,
+all lifecycle states, strict source reads, no extensions, and unbounded output.
+There is no 10,000-item ceiling or CLI JSON buffer. Both export previews and
+pushes certify the whole corpus before constructing payloads. Import and sync
+also certify it before local writes and skip issues whose browse URL already
+exists, including closed and canceled items. Equal keys on different Jira hosts
+remain distinct. Import matching preserves existing items; it does not update
+or reopen them. Re-import reports zero newly imported items when all issues match.
+
+An absent/malformed items array, incomplete source scan, pagination, counts that
+disagree, compact projection, missing or contradictory receipts, output
+compaction/omission, duplicate or missing IDs, or malformed payload fields causes
+a `CommandError` before writes. The error includes a strict, all-status,
+unbounded inspection command and a tracker/SDK recovery hint. A certified empty
+tracker succeeds; a missing or uninitialized tracker fails. See
+[complete-read verification](docs/complete-local-reads.md) for the refusal matrix
+and regression evidence.
+
+
 Render pm items as Jira create payloads. Prints JSON by default; with `--push`
 (and credentials + `--project`) it POSTs each payload to Jira's create-issue API.
 
@@ -417,7 +436,7 @@ older blunt `pm history-repair --all` remains available as a lower-level primiti
 ## Requirements
 
 - Node.js `>=22.18.0` (uses native `https` module and `Buffer`)
-- pm-cli `>=2026.7.29`
+- pm-cli `>=2026.10.4`
 - TypeScript 6.x (dev dependency)
 
 ## License

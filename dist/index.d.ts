@@ -569,6 +569,8 @@ export interface ImportRunOptions {
     atomic?: boolean;
     /** Author attributed to the atomic transaction journal (defaults to `pm-jira`). */
     atomicAuthor?: string;
+    /** Stable original issue-set identity retained while excluding prior imports. */
+    atomicTransactionId?: string;
     /** Test seam: inject the commit coordinator (skips SDK resolution). */
     commitItemMutations?: CommitItemMutations;
     /** Test seam: inject readSettings (skips SDK resolution). */
@@ -626,8 +628,30 @@ interface PmItem {
     tags?: string[];
     priority?: number;
     type?: string;
+    jira_url?: string;
 }
 export declare function mapPmTypeToJira(pmType: string | undefined, override?: string): string;
+/**
+ * Certify an unknown whole-corpus result with the public SDK, then validate
+ * every field consumed by Jira payload construction and provenance matching.
+ * The SDK certificate validates identifiers and receipts; it does not validate
+ * the remaining item fields. No plan or write may consume an unchecked row.
+ *
+ * @param candidate - Complete-list answer to verify before using any item.
+ * @returns Full, intact item rows including terminal work.
+ */
+export declare function certifyPmItems(candidate: unknown): Promise<PmItem[]>;
+/**
+ * Read the full tracker in process, without extensions, page limits, rendered
+ * JSON transport, or implicit active-status selection. The public SDK enforces
+ * strict source reads and attaches a whole-corpus certificate; revalidation
+ * also checks the fields this integration consumes before any writes.
+ *
+ * @param pmRoot - Explicit tracker root supplied by the host.
+ * @returns Certified item rows with bodies and all lifecycle states.
+ */
+export declare function readPmItems(pmRoot: string): Promise<PmItem[]>;
+/** Jira issue fields emitted after the local corpus has passed certification. */
 export interface JiraCreatePayload {
     fields: {
         project?: {

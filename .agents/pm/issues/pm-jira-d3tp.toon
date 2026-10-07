@@ -1,0 +1,16 @@
+id: pm-jira-d3tp
+title: Distinguish resumable atomic interruption from compensated import failure
+description: "Real SDK interruption testing for #128 showed that importJiraAtomic catches WorkspaceTransactionInterruptedError and claims all creates were deleted, although one applied item remains and the journal resumes correctly. Update the diagnostic to distinguish resumable interruption from compensated failure; retain the synthetic interruption regression in test/complete-local-reads.test.ts."
+type: Issue
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-07T12:04:04.395Z"
+updated_at: "2026-10-07T12:06:45.843Z"
+author: codex-sol
+comments[1]{created_at,author,text}:
+  "2026-10-07T12:06:45.843Z",codex-sol,"Deferred diagnostic fix. The real WorkspaceTransactionInterruptedError fixture leaves one applied item and a resumable journal, while importJiraAtomic reports compensation. The complete-read change preserves recovery and verifies that retry creates the remaining two items; the misleading interruption message remains separate work."
+files[2]{path,scope}:
+  index.ts,project
+  test/complete-local-reads.test.ts,project
+body: ""

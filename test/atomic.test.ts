@@ -196,7 +196,7 @@ test("atomic happy path: --atomic creates N items in one transaction", async () 
   }
 });
 
-test("atomic resume: a second run with the same issues is idempotent (recovered=true, no duplicates)", async () => {
+test("atomic re-import: a certified existing index skips every previously imported issue", async () => {
   const root = freshTracker();
   try {
     const issues = [fakeIssue("PROJ-10", "Alpha"), fakeIssue("PROJ-11", "Beta")];
@@ -212,12 +212,9 @@ test("atomic resume: a second run with the same issues is idempotent (recovered=
       imported: number;
       transactionId?: string;
     };
-    assert.strictEqual(second.transactionId, first.transactionId, "same content => same tx id");
+    assert.strictEqual(second.transactionId, first.transactionId, "SDK replays its original plan without new creates");
     assert.strictEqual(itemCount(root), 2, "no duplicate items created on resume");
-    // The resumed results still enumerate the committed items (resumability
-    // reports the recovered count), so imported stays 2 — but the tracker does
-    // not grow. The key guarantee: idempotency, not zero count.
-    assert.strictEqual(second.imported, 2, "resumed items are reported from the journal");
+    assert.strictEqual(second.imported, 0, "no existing issue is created again");
     assert.ok(validateOk(root), "tracker still validates after resume");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -232,12 +229,12 @@ test("atomic rollback: a failing mutation leaves ZERO committed items", async ()
     // whose `type` is rejected by `pm create` (invalid item type). The helper
     // will create the valid ones, fail on the bad one, then compensate (delete)
     // every applied create — leaving the tracker empty.
-    const wrappingCommit = async (opts: any) => {
+    const wrappingCommit = async (opts: import("@unbrained/pm-cli/sdk").CommitItemMutationsOptions) => {
       const settings = await sdk.readSettings(opts.pmRoot);
       const badId = sdk.normalizeItemId("jira-tx-brokenfail", settings.id_prefix);
       const broken = [
         ...opts.mutations,
-        { op: "create", id: badId, options: { title: "broken", type: "NoSuchType_XYZ", status: "open", priority: 3 } },
+        { op: "create" as const, id: badId, options: { title: "broken", type: "NoSuchType_XYZ", status: "open", priority: 3 } },
       ];
       return sdk.commitItemMutations({ ...opts, mutations: broken });
     };

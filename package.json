@@ -58,7 +58,7 @@
     "ignore": []
   },
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.7.29"
+    "@unbrained/pm-cli": ">=2026.10.4"
   },
   "devDependencies": {
     "@types/node": "26.6.4",
