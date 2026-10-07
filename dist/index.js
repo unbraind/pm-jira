@@ -1259,23 +1259,11 @@ export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
     const commit = opts.commitItemMutations
         ? opts.commitItemMutations
         : await resolveCommitItemMutations();
-    // Resolve the SDK once through the SAME guarded path used for
-    // commitItemMutations, so a missing/old SDK surfaces the friendly
-    // "upgrade to >=2026.7.20" CommandError rather than a raw module-not-found
-    // rejection when normalizeItemId/readSettings are not injected (tests).
+    // The complete local read already loaded the SDK in this process and refused
+    // a missing one with a recovery hint before any writes, so the id helpers
+    // reuse that module instead of re-mapping an import failure here.
     let sdkHelpers;
-    const getSdk = async () => {
-        if (sdkHelpers)
-            return sdkHelpers;
-        try {
-            sdkHelpers = await importPmSdk();
-            return sdkHelpers;
-        }
-        catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            throw new CommandError(`--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`, EXIT_CODE.USAGE);
-        }
-    };
+    const getSdk = async () => (sdkHelpers ??= await importPmSdk());
     const normalizeItemId = opts.normalizeItemId ??
         assertSdkFunction((await getSdk()).normalizeItemId, "normalizeItemId");
     const readSettings = opts.readSettings ??
@@ -1467,7 +1455,7 @@ export async function runImport(options, pmRoot, opts = {}) {
     if (atomic && filtered.length > 0) {
         const originalTransactionId = deriveAtomicTransactionId(jql, filtered.map(({ issue }) => issue.key));
         transactionId = originalTransactionId;
-        const sdk = await import("@unbrained/pm-cli/sdk");
+        const sdk = await importPmSdk();
         const settings = await sdk.readSettings(pmRoot);
         // Retain this transaction's own applied steps so the SDK can recover its
         // original plan after interruption. Other imported identities stay skipped.
@@ -1537,7 +1525,7 @@ const COMPLETE_READ_RECOVERY = "Repair the tracker or install @unbrained/pm-cli 
  */
 export async function certifyPmItems(candidate) {
     try {
-        const sdk = await import("@unbrained/pm-cli/sdk");
+        const sdk = await importPmSdk();
         const result = sdk.certifyCompleteListResult(candidate);
         if (result.filters.include_body !== true) {
             throw new Error("Local read did not prove that bodies were included.");
@@ -1582,7 +1570,7 @@ export async function certifyPmItems(candidate) {
 export async function readPmItems(pmRoot) {
     let candidate;
     try {
-        const sdk = await import("@unbrained/pm-cli/sdk");
+        const sdk = await importPmSdk();
         const root = resolve(pmRoot);
         candidate = await sdk.listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
     }

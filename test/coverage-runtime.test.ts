@@ -306,7 +306,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     swapPmSdkImporter();
   });
 
-  test("importJiraAtomic getSdk import failure and settings fallback", async () => {
+  test("importJiraAtomic refuses a missing SDK at the complete read before writes, and settings fallback", async () => {
     const root = freshTracker();
     try {
       swapPmSdkImporter(async () => {
@@ -319,7 +319,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
             issues: [fakeIssue("PROJ-1", "One")],
             commitItemMutations: async () => commitResult(),
           }),
-        /sdk-gone/,
+        /Cannot read complete local items: sdk-gone Repair/,
       );
       swapPmSdkImporter(async () => {
         throw new Error("sdk missing as Error");
@@ -331,7 +331,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
             issues: [fakeIssue("PROJ-1b", "OneB")],
             commitItemMutations: async () => commitResult(),
           }),
-        /sdk missing as Error/,
+        /Cannot read complete local items: Error: sdk missing as Error Repair/,
       );
       swapPmSdkImporter();
 
