@@ -123,39 +123,24 @@ function withEnv(updates: Record<string, string | undefined>, fn: () => Promise<
     });
 }
 
-/**
- * Put a fake `pm` executable on PATH for the duration of one async block.
- *
- * `source` is a Node script carrying a `#!/usr/bin/env node` shebang. On POSIX
- * that shebang is what makes the file executable. On Windows there is no
- * shebang handling: `cmd.exe` reads `pm.cmd` as batch, and the first line is
- * not batch, so writing `source` there verbatim produces a wrapper that cannot
- * run. Windows therefore gets a real batch wrapper that hands the script to
- * `node`, with the script written beside it.
- *
- * @param source - The Node script the fake `pm` should execute.
- * @param fn - The block to run while the fake is on PATH.
- * @returns Resolves once the block settles and PATH is restored.
- */
-function withFakePm(source: string, fn: () => Promise<void>): Promise<void> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-pm-"));
-  if (process.platform === "win32") {
-    const script = path.join(dir, "fake-pm.js");
-    fs.writeFileSync(script, source);
-    fs.writeFileSync(path.join(dir, "pm.cmd"), `@echo off\r\nnode "%~dp0fake-pm.js" %*\r\n`);
-  } else {
-    const bin = path.join(dir, "pm");
-    fs.writeFileSync(bin, source);
-    fs.chmodSync(bin, 0o755);
+/** Populate a real scratch tracker so exporter coverage exercises the SDK reader. */
+async function withTrackerItems(
+  items: { id: string; title: string; description?: string }[],
+  fn: (root: string) => Promise<void>,
+): Promise<void> {
+  const root = freshTracker();
+  try {
+    const sdk = await import("@unbrained/pm-cli/sdk");
+    for (const item of items) {
+      await sdk.create({
+        title: item.title, id: item.id, type: "Task", description: item.description,
+        createMode: "progressive", allowDuplicate: true,
+      }, { pmRoot: root, cwd: root, noExtensions: true });
+    }
+    await fn(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
-  const prev = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${prev ?? ""}`;
-  return Promise.resolve()
-    .then(fn)
-    .finally(() => {
-      process.env.PATH = prev;
-      fs.rmSync(dir, { recursive: true, force: true });
-    });
 }
 
 type MockHttpsResult = {
@@ -321,7 +306,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     swapPmSdkImporter();
   });
 
-  test("importJiraAtomic getSdk import failure and settings fallback", async () => {
+  test("importJiraAtomic refuses a missing SDK at the complete read before writes, and settings fallback", async () => {
     const root = freshTracker();
     try {
       swapPmSdkImporter(async () => {
@@ -334,7 +319,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
             issues: [fakeIssue("PROJ-1", "One")],
             commitItemMutations: async () => commitResult(),
           }),
-        /sdk-gone/,
+        /Cannot read complete local items: sdk-gone Repair/,
       );
       swapPmSdkImporter(async () => {
         throw new Error("sdk missing as Error");
@@ -346,7 +331,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
             issues: [fakeIssue("PROJ-1b", "OneB")],
             commitItemMutations: async () => commitResult(),
           }),
-        /sdk missing as Error/,
+        /Cannot read complete local items: Error: sdk missing as Error Repair/,
       );
       swapPmSdkImporter();
 
@@ -444,11 +429,9 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
 
       const dead = fs.mkdtempSync(path.join(os.tmpdir(), "pm-jira-not-a-tracker-"));
       try {
-        const failed = (await runImport({ project: "PROJ" }, dead, {
+        await assert.rejects(() => runImport({ project: "PROJ" }, dead, {
           issues: [fakeIssue("PROJ-11", "Will fail")],
-        })) as { imported: number };
-        assert.equal(failed.imported, 0);
-        assert.ok(errors.some((line) => /Failed to create item for PROJ-11/.test(line)));
+        }), /Cannot read complete local items/);
       } finally {
         fs.rmSync(dead, { recursive: true, force: true });
       }
@@ -727,6 +710,9 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       const imported = result as { imported: number; total: number };
       assert.equal(imported.imported, 1);
       assert.equal(imported.total, 1);
+      const repeated = await ext.runImporter({ importer: "jira-sync", options: { ...JIRA_ENV, project: "PROJ" }, pmRoot: root });
+      assert.equal((repeated.result as { imported: number }).imported, 0);
+      assert.equal(itemCount(root), 1);
     } finally {
       restore();
       fs.rmSync(root, { recursive: true, force: true });
@@ -851,11 +837,10 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       items.push({
         id: `item-${i}`,
         title: `Item ${i}`,
-        description: i === 0 ? jiraProvenance("PROJ-1", "https://example.atlassian.net/browse/PROJ-1") : undefined,
+        description: i === 20 ? jiraProvenance("PROJ-1", "https://example.atlassian.net/browse/PROJ-1") : undefined,
       });
     }
-    const script = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ items }))});\n`;
-    await withFakePm(script, async () => {
+    await withTrackerItems(items, async (root) => {
       const errors: string[] = [];
       const origError = console.error;
       console.error = (...args: unknown[]) => {
@@ -865,7 +850,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         const { result } = await ext.runExporter({
           exporter: "jira",
           options: { "dry-run": true, project: "PROJ", "update-existing": true },
-          pmRoot: "/tmp",
+          pmRoot: root,
         });
         const dry = result as { dryRun: boolean; plan: { entries: unknown[] } };
         assert.equal(dry.dryRun, true);
@@ -878,7 +863,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         await ext.runExporter({
           exporter: "jira",
           options: { "dry-run": true, project: "PROJ" },
-          pmRoot: "/tmp",
+          pmRoot: root,
         });
         assert.ok(errors.some((line) => /skip — pass --update-existing/.test(line) || /SKIP PUT/.test(line)));
       } finally {
@@ -897,15 +882,14 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         description: jiraProvenance("PROJ-1", "https://example.atlassian.net/browse/PROJ-1"),
       },
     ];
-    const script = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ items }))});\n`;
-    await withFakePm(script, async () => {
+    await withTrackerItems(items, async (root) => {
       await withEnv(JIRA_ENV, async () => {
         await assert.rejects(
           () =>
             ext.runExporter({
               exporter: "jira",
               options: { push: true },
-              pmRoot: "/tmp",
+              pmRoot: root,
             }),
           /--push requires --project/,
         );
@@ -918,7 +902,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           const { result } = await ext.runExporter({
             exporter: "jira",
             options: { push: true, project: "PROJ" },
-            pmRoot: "/tmp",
+            pmRoot: root,
           });
           const pushed = result as { created: number; skipped: number; failed: number };
           assert.equal(pushed.created, 1);
@@ -928,7 +912,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
           const updated = await ext.runExporter({
             exporter: "jira",
             options: { push: true, project: "PROJ", "update-existing": true },
-            pmRoot: "/tmp",
+            pmRoot: root,
           });
           const upd = updated.result as { created: number; updated: number };
           assert.equal(upd.created, 1);
@@ -944,7 +928,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
               ext.runExporter({
                 exporter: "jira",
                 options: { push: true, project: "PROJ" },
-                pmRoot: "/tmp",
+                pmRoot: root,
               }),
             /all 1 item\(s\) errored/,
           );
@@ -961,7 +945,6 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
       { id: "a", title: "A" },
       { id: "b", title: "B" },
     ];
-    const script = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ items }))});\n`;
     let posts = 0;
     await withHttpsMock(
       () => {
@@ -970,12 +953,12 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         return { statusCode: 400, body: "nope" };
       },
       async () => {
-        await withFakePm(script, async () => {
+        await withTrackerItems(items, async (root) => {
           await withEnv(JIRA_ENV, async () => {
             const { result } = await ext.runExporter({
               exporter: "jira",
               options: { push: true, project: "PROJ" },
-              pmRoot: "/tmp",
+              pmRoot: root,
             });
             const mixed = result as { created: number; failed: number };
             assert.equal(mixed.created, 1);
@@ -988,113 +971,21 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
 
   test("default export uses JIRA_BASE_URL when --host is absent", async () => {
     const ext = await getHarness();
-    const script = `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(JSON.stringify({ items: [{ id: "a", title: "A" }] }))});\n`;
-    await withFakePm(script, async () => {
+    const items = [{ id: "a", title: "A" }];
+    await withTrackerItems(items, async (root) => {
       await withEnv({ JIRA_BASE_URL: "https://from-env.atlassian.net" }, async () => {
         const { result } = await ext.runExporter({
           exporter: "jira",
           options: {},
-          pmRoot: "/tmp",
+          pmRoot: root,
         });
         const exported = result as { plan: { endpoint: string }[] };
         assert.match(exported.plan[0]?.endpoint ?? "", /from-env\.atlassian\.net/);
+        const preview = await ext.runExporter({ exporter: "jira", options: { "dry-run": true }, pmRoot: root });
+        const dry = preview.result as { plan: { baseUrl: string } };
+        assert.equal(dry.plan.baseUrl, "https://from-env.atlassian.net");
       });
     });
-  });
-
-  test("readPmItems names ENOBUFS, other spawn errors, non-zero status, and parse envelopes", async () => {
-    const ext = await getHarness();
-    const root = freshTracker();
-    try {
-      const created = spawnSync(
-        PM_BIN,
-        ["--path", root, "create", "task", "Buffer bait", "--priority", "3"],
-        { ...PM_SPAWN_OPTS, env: { ...process.env, PM_AUTHOR: "pm-jira-test" } },
-      );
-      assert.equal(created.status, 0, created.stderr);
-      await withEnv({ PM_JSON_MAX_BUFFER: "10" }, async () => {
-        await assert.rejects(
-          () => ext.runExporter({ exporter: "jira", options: { project: "PROJ" }, pmRoot: root }),
-          /PM_JSON_MAX_BUFFER/,
-        );
-      });
-      await withEnv({ PM_JSON_MAX_BUFFER: "64MiB" }, async () => {
-        const { result } = await ext.runExporter({
-          exporter: "jira",
-          options: { project: "PROJ" },
-          pmRoot: root,
-        });
-        const exported = result as { exported: number };
-        assert.equal(exported.exported, 1);
-      });
-      await withEnv({ PM_JSON_MAX_BUFFER: "0" }, async () => {
-        const { result } = await ext.runExporter({
-          exporter: "jira",
-          options: { project: "PROJ" },
-          pmRoot: root,
-        });
-        const exported = result as { exported: number };
-        assert.equal(exported.exported, 1);
-      });
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-
-    await withFakePm("#!/usr/bin/env node\nprocess.exit(1);\n", async () => {
-      await assert.rejects(
-        () => ext.runExporter({ exporter: "jira", options: { project: "PROJ" }, pmRoot: "/tmp" }),
-        /pm list failed/,
-      );
-    });
-    await withFakePm("#!/usr/bin/env node\nprocess.stderr.write('listed badly');\nprocess.exit(2);\n", async () => {
-      await assert.rejects(
-        () => ext.runExporter({ exporter: "jira", options: { project: "PROJ" }, pmRoot: "/tmp" }),
-        /listed badly/,
-      );
-    });
-    await withFakePm("#!/usr/bin/env node\nprocess.stdout.write('not-json');\n", async () => {
-      await assert.rejects(
-        () => ext.runExporter({ exporter: "jira", options: { project: "PROJ" }, pmRoot: "/tmp" }),
-        /Could not parse/,
-      );
-    });
-    await withFakePm("#!/usr/bin/env node\nprocess.stdout.write('[]');\n", async () => {
-      const { result } = await ext.runExporter({
-        exporter: "jira",
-        options: { project: "PROJ" },
-        pmRoot: "/tmp",
-      });
-      assert.equal((result as { exported: number }).exported, 0);
-    });
-    await withFakePm("#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ results: [{ id: 'r', title: 'R' }] }));\n", async () => {
-      const { result } = await ext.runExporter({
-        exporter: "jira",
-        options: { project: "PROJ" },
-        pmRoot: "/tmp",
-      });
-      assert.equal((result as { exported: number }).exported, 1);
-    });
-    await withFakePm("#!/usr/bin/env node\nprocess.stdout.write('{}');\n", async () => {
-      const { result } = await ext.runExporter({
-        exporter: "jira",
-        options: { project: "PROJ" },
-        pmRoot: "/tmp",
-      });
-      assert.equal((result as { exported: number }).exported, 0);
-    });
-
-    const emptyPath = fs.mkdtempSync(path.join(os.tmpdir(), "no-pm-bin-"));
-    const prevPath = process.env.PATH;
-    process.env.PATH = emptyPath;
-    try {
-      await assert.rejects(
-        () => ext.runExporter({ exporter: "jira", options: { project: "PROJ" }, pmRoot: "/tmp" }),
-        /pm read failed/,
-      );
-    } finally {
-      process.env.PATH = prevPath;
-      fs.rmSync(emptyPath, { recursive: true, force: true });
-    }
   });
 
   test("onWrite hook no-ops through the registered callback", async () => {

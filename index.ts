@@ -35,6 +35,7 @@ import type {
 } from "@unbrained/pm-cli/sdk/authoring";
 import https from "node:https";
 import { URL } from "node:url";
+import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
@@ -1610,7 +1611,7 @@ export async function importJiraAtomic(
   opts: ImportRunOptions,
 ): Promise<{ created: number; recovered: boolean; transactionId: string }> {
   const issueKeys = filtered.map(({ issue }) => issue.key);
-  const transactionId = deriveAtomicTransactionId(jql, issueKeys);
+  const transactionId = opts.atomicTransactionId ?? deriveAtomicTransactionId(jql, issueKeys);
   const author = opts.atomicAuthor ?? "pm-jira";
 
   // Resolve the SDK helpers once: commitItemMutations (guarded), plus the
@@ -1620,24 +1621,11 @@ export async function importJiraAtomic(
   const commit: CommitItemMutations = opts.commitItemMutations
     ? opts.commitItemMutations
     : await resolveCommitItemMutations();
-  // Resolve the SDK once through the SAME guarded path used for
-  // commitItemMutations, so a missing/old SDK surfaces the friendly
-  // "upgrade to >=2026.7.20" CommandError rather than a raw module-not-found
-  // rejection when normalizeItemId/readSettings are not injected (tests).
+  // The complete local read already loaded the SDK in this process and refused
+  // a missing one with a recovery hint before any writes, so the id helpers
+  // reuse that module instead of re-mapping an import failure here.
   let sdkHelpers: PmSdkModule | undefined;
-  const getSdk = async (): Promise<PmSdkModule> => {
-    if (sdkHelpers) return sdkHelpers;
-    try {
-      sdkHelpers = await importPmSdk();
-      return sdkHelpers;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new CommandError(
-        `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`,
-        EXIT_CODE.USAGE,
-      );
-    }
-  };
+  const getSdk = async (): Promise<PmSdkModule> => (sdkHelpers ??= await importPmSdk());
   const normalizeItemId: (input: string, prefix: string) => string =
     opts.normalizeItemId ??
     assertSdkFunction<(input: string, prefix: string) => string>(
@@ -1772,6 +1760,8 @@ export interface ImportRunOptions {
   atomic?: boolean;
   /** Author attributed to the atomic transaction journal (defaults to `pm-jira`). */
   atomicAuthor?: string;
+  /** Stable original issue-set identity retained while excluding prior imports. */
+  atomicTransactionId?: string;
   /** Test seam: inject the commit coordinator (skips SDK resolution). */
   commitItemMutations?: CommitItemMutations;
   /** Test seam: inject readSettings (skips SDK resolution). */
@@ -1942,16 +1932,31 @@ export async function runImport(
     console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter.pmStatus}"`);
   }
 
+  const existing = await existingJiraUrls(pmRoot);
+  let pending = filtered.filter(({ item }) => !existing.has(item.jiraUrl));
+  let transactionId: string | undefined;
+  if (atomic && filtered.length > 0) {
+    const originalTransactionId = deriveAtomicTransactionId(jql, filtered.map(({ issue }) => issue.key));
+    transactionId = originalTransactionId;
+    const sdk = await importPmSdk();
+    const settings = await sdk.readSettings(pmRoot);
+    // Retain this transaction's own applied steps so the SDK can recover its
+    // original plan after interruption. Other imported identities stay skipped.
+    pending = filtered.filter(({ issue, item }) => {
+      const ownId = buildAtomicCreateMutation(item, issue.key, originalTransactionId, settings.id_prefix, sdk.normalizeItemId).id;
+      return !existing.has(item.jiraUrl) || existing.get(item.jiraUrl)!.has(ownId);
+    });
+  }
   let created = 0;
   let atomicTransactionId: string | undefined;
-  if (atomic && filtered.length > 0) {
+  if (atomic && pending.length > 0) {
     // --atomic: commit ALL creates in one all-or-nothing, crash-recoverable
     // transaction via the official commitItemMutations SDK helper. On
     // failure every applied create is compensated (deleted); an interrupted
     // run resumes on re-invocation. The dry-run path returns earlier above, so
     // no transaction is committed for a dry-run or an empty result set.
-    const atomicResult = await importJiraAtomic(pmRoot, jql, filtered, opts);
-    created = atomicResult.created;
+    const atomicResult = await importJiraAtomic(pmRoot, jql, pending, { ...opts, atomicTransactionId: transactionId });
+    created = Math.max(0, atomicResult.created - pending.filter(({ item }) => existing.has(item.jiraUrl)).length);
     atomicTransactionId = atomicResult.transactionId;
     if (atomicResult.recovered) {
       console.error(
@@ -1959,7 +1964,7 @@ export async function runImport(
       );
     }
   } else {
-    for (const { issue, item } of filtered) {
+    for (const { issue, item } of pending) {
       if (createPmItem(pmRoot, item)) created++;
       else console.error(`Failed to create item for ${issue.key}`);
     }
@@ -1991,6 +1996,7 @@ interface PmItem {
   tags?: string[];
   priority?: number;
   type?: string;
+  jira_url?: string;
 }
 
 // Reverse type map: pm item type -> Jira issue type name, for export.
@@ -2002,58 +2008,98 @@ export function mapPmTypeToJira(pmType: string | undefined, override?: string): 
   return "Task";
 }
 
-// Node's spawnSync defaults to a 1 MiB stdout cap, which a mature tracker's JSON
-// dump passes at a few hundred items. Past that the child is killed with ENOBUFS,
-// status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
-// (and at larger sizes stdout is genuinely truncated mid-document).
-// 64 MiB matches the cap the sibling pm packages settled on.
-/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
- * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
- * without an import-order dependency. Invalid or non-positive values fall back to
- * the default rather than silently disabling the guard. */
-function pmJsonMaxBuffer(): number {
-  // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
-  // impose a 64-BYTE cap and break every ordinary read while appearing to honor
-  // the documented invalid-value fallback. Number() rejects the whole string.
-  const raw = Number(process.env.PM_JSON_MAX_BUFFER);
-  return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
-}
+/** Canonical recovery read used when local completeness cannot be established. */
+const COMPLETE_READ_RECOVERY = "Repair the tracker or install @unbrained/pm-cli >=2026.10.4, then retry. "
+  + "Inspect with: pm list --all --full --include-body --strict-read --no-truncate "
+  + "--output-budget unbounded --output-limit unbounded --json.";
 
-/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
- * with `status: null` and EMPTY stderr, so without this the failure surfaces as
- * an unexplained error (or, worse, as an empty result set). */
-function describePmReadFailure(error: Error, limitBytes: number): string {
-  const code = (error as NodeJS.ErrnoException).code;
-  if (code === "ENOBUFS") {
-    return `pm output exceeded the ${limitBytes} byte read buffer. `
-      + "The workspace is larger than this integration's read limit; narrow the "
-      + "operation or raise PM_JSON_MAX_BUFFER.";
-  }
-  return `pm read failed: ${error.message}`;
-}
-
-function readPmItems(pmRoot: string): PmItem[] {
-  const maxBuffer = pmJsonMaxBuffer();
-  const result = spawnSync(
-    "pm",
-    ["--path", pmRoot, "--json", "list", "--full", "--include-body", "--limit", "10000"],
-    { encoding: "utf-8", maxBuffer }
-  );
-  if (result.error) {
-    throw new CommandError(describePmReadFailure(result.error, maxBuffer));
-  }
-  if (result.status !== 0) {
-    throw new CommandError(result.stderr || "pm list failed");
-  }
+/**
+ * Certify an unknown whole-corpus result with the public SDK, then validate
+ * every field consumed by Jira payload construction and provenance matching.
+ * The SDK certificate validates identifiers and receipts; it does not validate
+ * the remaining item fields. No plan or write may consume an unchecked row.
+ *
+ * @param candidate - Complete-list answer to verify before using any item.
+ * @returns Full, intact item rows including terminal work.
+ */
+export async function certifyPmItems(candidate: unknown): Promise<PmItem[]> {
   try {
-    const parsed = JSON.parse(result.stdout);
-    const items = Array.isArray(parsed) ? parsed : parsed.items ?? parsed.results ?? [];
-    return items as PmItem[];
-  } catch {
-    throw new CommandError("Could not parse `pm list --json` output.");
+    const sdk = await importPmSdk();
+    const result = sdk.certifyCompleteListResult(candidate);
+    if (result.filters.include_body !== true) {
+      throw new Error("Local read did not prove that bodies were included.");
+    }
+    for (const item of result.items) {
+      const row: Record<string, unknown> = item;
+      for (const field of ["title", "status", "type"]) {
+        if (typeof row[field] !== "string" || !row[field].trim()) {
+          throw new Error(`Malformed local item: ${field} must be a non-empty string.`);
+        }
+      }
+      if (typeof row.body !== "string") {
+        throw new Error("Malformed local item: body must be a string.");
+      }
+      for (const field of ["description", "jira_key", "jira_url"]) {
+        if (row[field] !== undefined && typeof row[field] !== "string") {
+          throw new Error(`Malformed local item: ${field} must be a string.`);
+        }
+      }
+      if (row.tags !== undefined && (!Array.isArray(row.tags) || row.tags.some(tag => typeof tag !== "string"))) {
+        throw new Error("Malformed local item: tags must be a string array.");
+      }
+      if (row.priority !== undefined && (!Number.isInteger(row.priority) || Number(row.priority) < 0 || Number(row.priority) > 4)) {
+        throw new Error("Malformed local item: priority must be an integer from 0 to 4.");
+      }
+    }
+    return result.items;
+  } catch (error) {
+    throw new CommandError(`Cannot certify complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
   }
 }
 
+/**
+ * Read the full tracker in process, without extensions, page limits, rendered
+ * JSON transport, or implicit active-status selection. The public SDK enforces
+ * strict source reads and attaches a whole-corpus certificate; revalidation
+ * also checks the fields this integration consumes before any writes.
+ *
+ * @param pmRoot - Explicit tracker root supplied by the host.
+ * @returns Certified item rows with bodies and all lifecycle states.
+ */
+export async function readPmItems(pmRoot: string): Promise<PmItem[]> {
+  let candidate: unknown;
+  try {
+    const sdk = await importPmSdk();
+    const root = resolve(pmRoot);
+    candidate = await sdk.listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
+  } catch (error) {
+    throw new CommandError(`Cannot read complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
+  }
+  return certifyPmItems(candidate);
+}
+
+/**
+ * Index upstream browse URLs across every local lifecycle state. URLs include
+ * the Jira host, so equal keys on different Jira instances remain distinct.
+ *
+ * @param pmRoot - Tracker whose complete corpus must be certified first.
+ * @returns Existing Jira identities and their IDs, including recoverable atomic steps.
+ */
+async function existingJiraUrls(pmRoot: string): Promise<Map<string, Set<string>>> {
+  const items = await readPmItems(pmRoot);
+  const urls = new Map<string, Set<string>>();
+  for (const item of items) {
+    const url = item.jira_url ?? extractJiraKey(item.description)?.url ?? extractJiraKey(item.body)?.url;
+    if (url) {
+      const ids = urls.get(url) ?? new Set<string>();
+      ids.add(item.id!);
+      urls.set(url, ids);
+    }
+  }
+  return urls;
+}
+
+/** Jira issue fields emitted after the local corpus has passed certification. */
 export interface JiraCreatePayload {
   fields: {
     project?: { key: string };
@@ -2527,9 +2573,15 @@ export default defineExtension({
         );
       }
 
+      const existing = await existingJiraUrls(ctx.pm_root);
       let created = 0;
       for (const issue of issues) {
-        if (createPmItem(ctx.pm_root, issueToItem(issue, creds.baseUrl, { statusMap, fieldMap }))) created++;
+        const item = issueToItem(issue, creds.baseUrl, { statusMap, fieldMap });
+        if (existing.has(item.jiraUrl)) continue;
+        if (createPmItem(ctx.pm_root, item)) {
+          created++;
+          existing.set(item.jiraUrl, new Set());
+        }
       }
       console.error(`[jira-sync] Done. Imported ${created} issues.`);
       return { imported: created, total: issues.length };
@@ -2548,7 +2600,7 @@ export default defineExtension({
       const updateExistingFlag = readBooleanOption(options, "update-existing");
       const project = readStringOptionAliased(options, "project", "project-key");
       const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
-      const items = readPmItems(ctx.pm_root);
+      const items = await readPmItems(ctx.pm_root);
 
       // --dry-run: build and PRINT the exact Jira mutations that WOULD be made
       // from the current pm items, without resolving creds or hitting the
