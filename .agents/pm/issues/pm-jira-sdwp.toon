@@ -2,11 +2,13 @@ id: pm-jira-sdwp
 title: Certify complete local reads before Jira export and reconciliation
 description: "Track https://github.com/unbraind/pm-jira/issues/128. Replace the bounded local reader with the certified SDK whole-corpus read and verify refusal, terminal matching, large trackers and repeat imports with synthetic fixtures."
 type: Issue
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-07T11:48:08.234Z"
-updated_at: "2026-10-07T12:37:11.014Z"
+updated_at: "2026-10-07T13:09:35.856Z"
+closed_at: "2026-10-07T13:09:35.274Z"
+completed_at: "2026-10-07T13:09:35.274Z"
 author: codex-sol
 comments[8]{created_at,author,text}:
   "2026-10-07T11:48:44.087Z",codex-sol,"Issue #128 correction confirms the bounded reader is currently export-only. Plan: use listAllComplete with body, explicit tracker root and extensions disabled; certify receipts and validate payload fields before export or import writes. Add all-status import matching and real scratch-tracker regressions without live provider access."
@@ -32,4 +34,5 @@ tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
 docs[2]{path,scope}:
   docs/complete-local-reads.md,project
   README.md,project
+close_reason: "Merged in #130 (28f312b). The local reader now uses the public SDK listAllComplete + certifyCompleteListResult and refuses missing, partial, malformed, compacted or uncertified answers before any write. Orchestrator verification: reader-only behavioural revert fails 7 of 60 complete-read tests (>10,000 export, atomic, corrupt and uninitialized trackers); npm+Bun release:check at exact 100/100/100/100 (254 tests); CodeRabbit full review: no findings."
 body: ""
