@@ -47,6 +47,11 @@ test("HTTPS cursor traversal imports once and refuses incomplete page chains bef
   const server = https.createServer({ key, cert }, (req, res) => {
     requests.push(new URL(req.url!, "https://localhost"));
     res.setHeader("Content-Type", "application/json");
+    // Synchronous CLI setup between scenarios can outlive the server's idle
+    // keep-alive deadline before the client processes socket closure. Each
+    // fixture response closes its connection so cursor assertions never reuse
+    // a stale socket while running under coverage instrumentation.
+    res.setHeader("Connection", "close");
     res.end(JSON.stringify(pages.shift()));
   });
   server.listen(0, "127.0.0.1");
