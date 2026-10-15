@@ -1,0 +1,20 @@
+id: pm-jira-tls-idle-reuse
+title: Investigate resets when Jira reuses an idle HTTPS socket
+description: "Synthetic local TLS cursor scenarios repeatedly encountered ECONNRESET before a parser or HTTP response under full coverage execution, while isolated execution passed. The fixture performs synchronous PM CLI setup between requests and the client uses a keep-alive agent. Review transport retry policy for a reset on an explicitly reused socket, keeping read retries bounded and preserving fail-closed import/no-write guarantees. This client-hardening question is outside the gated-sync maintenance change; production code is unchanged."
+type: Issue
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-14T12:10:30.352Z"
+updated_at: "2026-10-14T12:10:44.665Z"
+author: codex-agent
+severity: medium
+repro_steps: Use a real synthetic TLS server and tracker; run the cursor scenarios with coverage and synchronous PM CLI setup between requests.
+expected_result: A safe bounded policy handles or clearly classifies a reset on a reused idle socket without retrying malformed payloads or duplicating tracker writes.
+actual_result: Full cursor fixture runs aborted before receiving the intended page response after idle socket reuse.
+comments[1]{created_at,author,text}:
+  "2026-10-14T12:10:44.663Z",codex-agent,"Node documents ECONNRESET when a keep-alive agent reuses a socket that the server closes at an unfortunate time: https://nodejs.org/docs/latest-v24.x/api/http.html#requestreusedsocket . The maintenance item stabilizes its synthetic fixture only; independently validate whether a production read retry should be added. No client behavior was changed."
+files[2]{path,scope}:
+  index.ts,project
+  test/cloud-search.test.ts,project
+body: ""
