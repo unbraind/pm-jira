@@ -2,13 +2,18 @@ id: pm-jira-maint1014
 title: Enable the gated GitHub issue sync
 description: Enable the SHA-pinned fail-closed issue sync caller. Keep existing thresholds and verify isolated npm and Bun release gates.
 type: Chore
-status: in_progress
+status: closed
 priority: 1
 tags[1]: changed
 created_at: "2026-10-14T10:21:30.910Z"
-updated_at: "2026-10-15T12:27:48.574Z"
+updated_at: "2026-10-21T18:55:58.647Z"
+closed_at: "2026-10-21T18:55:52.960Z"
+completed_at: "2026-10-21T18:55:52.960Z"
 author: codex-agent
-comments[8]{created_at,author,text}:
+resolution: Delivered by the audit-linked mainline implementation.
+expected_result: Enable the gated GitHub issue sync.
+actual_result: "Re-verified unchanged main 01fb41c66251: .github/workflows/pm-github-sync.yml retain immutable reusable-workflow pins; runtime scheduled-job success is outside this closure."
+comments[9]{created_at,author,text}:
   "2026-10-14T10:21:48.981Z",codex-agent,"Plan: author this package own thin caller, pin workflow SHA and pm-github to 2026.10.13, and verify isolated npm/Bun release gates without changing thresholds. No fast-glob listed; retain existing dependency pins. No workflow dispatch, bot requests, merges, or source function changes."
   "2026-10-14T10:22:03.772Z",codex-agent,"Audit before: full 0 vulnerabilities (0 high), production 0. After: full 0, production 0; npm ls braces is empty. The caller runs at 17 4 * * * UTC. It validates access, previews the complete plan, imports with --gate, verifies repeat-import idempotency and privacy, then checks strict health before commit/push/PR. SHA pin matches published pm-github 2026.10.13. Actionlint skipped: binary missing and offline npx registry metadata unavailable. GitHub Actions PR-creation setting verified enabled. No direct fast-glob imports in authored scripts. The package prepare contract will be checked independently."
   "2026-10-14T11:56:47.093Z",codex-agent,"Initial npm release gate passed 246/254 tests and failed the HTTPS cursor fixture family with ECONNRESET instead of expected HTTP/parser receipts. Fixture scenarios synchronously start PM CLI subprocesses while reusing the default HTTPS keep-alive agent, so idle-socket timing is a plausible cause. Caller maintenance changes no Jira runtime code. Run the existing TLS test in isolation before deciding on any fixture change or full-gate retry."
@@ -17,6 +22,7 @@ comments[8]{created_at,author,text}:
   "2026-10-14T12:10:48.708Z",codex-agent,"Recorded out-of-scope transport investigation as pm-jira-tls-idle-reuse. The focused revert under coverage passed, so it is not claimed as revert proof; validate the fixture change and its countercheck in the full coverage context that reproduced resets twice."
   "2026-10-14T12:18:19.996Z",codex-agent,"Patched full npm release:check passes 254/254 tests with no skips at unchanged thresholds. Removing only Connection: close from the fixture handler makes the full gate fail again with ECONNRESET in cloud-search.test.ts; fixed handler restored. The ordinary focused countercheck did not reproduce, so the full-gate countercheck is the behavioural revert proof. Run Bun release:check next before publication."
   "2026-10-14T12:26:41.176Z",codex-agent,"Validation complete: npm: 254/254 tests passed, 0 skipped; bun: 254/254 tests passed, 0 skipped. Both isolated release:check gates passed at unchanged thresholds. Full audit 0, production audit 0, npm ls braces empty. Caller identity check reports only unbraind/pm-github. Behavioural revert proof: fixed full npm gate passes 254/254; reverting only the fixture response header makes the full gate fail again with TLS resets. Changelog regenerated and checked. Actionlint unavailable offline as recorded above. Item stays in progress for orchestrator verification."
+  "2026-10-21T18:55:19.327Z",codex-agent,"Tracker reconciliation authorized for the audited verdict FIXED-STALE. Re-verified unchanged main 01fb41c66251: .github/workflows/pm-github-sync.yml retain immutable reusable-workflow pins; runtime scheduled-job success is outside this closure. Enable the gated GitHub issue sync. The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern. Scope: tracker state only; no new runtime certification or deployment claim."
 files[2]{path,scope}:
   .github/workflows/pm-github-sync.yml,project
   test/cloud-search.test.ts,project
@@ -25,4 +31,5 @@ tests[2]{command,scope,timeout_seconds,pm_context_mode,provenance{author,created
   "env -u PM_PATH -u PM_AUTHOR HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 bun run release:check",project,3600,tracker,codex-agent,"2026-10-14T10:22:21.182Z",local_mutation,chore/gated-issue-sync-and-braces-free-gates
 docs[1]{path,scope}:
   CHANGELOG.md,project
+close_reason: "Re-verified unchanged main 01fb41c66251: .github/workflows/pm-github-sync.yml retain immutable reusable-workflow pins; runtime scheduled-job success is outside this closure. Audit delivery: Enable the gated GitHub issue sync. The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern."
 body: ""
