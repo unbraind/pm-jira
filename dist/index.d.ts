@@ -415,6 +415,54 @@ export interface JiraCreds {
     authHeader: string;
 }
 export declare function resolveCreds(options: Record<string, unknown>, envLike?: NodeJS.ProcessEnv): JiraCreds;
+/** Canonical lifecycle targets supported by Jira transition planning. */
+export type JiraLifecycleTarget = PmStatus;
+/** Compact permitted edge; field values are deliberately omitted from output. */
+export interface JiraTransitionChoice {
+    id: string;
+    name: string;
+    to: string;
+    toId: string;
+    required: string[];
+}
+/** Explicit read-only result. A ready plan is advisory and must be rediscovered before execution. */
+export type JiraTransitionPlan = {
+    kind: "ready" | "noop";
+    issue: string;
+    target: JiraLifecycleTarget;
+    from: string;
+    steps: JiraTransitionChoice[];
+    writes: 0;
+} | {
+    kind: "refused";
+    code: "invalid_input" | "metadata_invalid" | "discovery_failed" | "no_permitted_transition" | "ambiguous_transition" | "fields_required" | "fields_invalid";
+    remedy: string;
+    choices: JiraTransitionChoice[];
+    writes: 0;
+};
+/** Caller intent and optional transition-screen values; no execution is performed. */
+export interface JiraTransitionIntent {
+    issue: string;
+    target: JiraLifecycleTarget;
+    transitionId?: string;
+    fields?: Record<string, unknown>;
+    statusMap?: Record<string, PmStatus>;
+}
+/**
+ * Translate a lifecycle intent using only transitions available to the current user now.
+ * Pass the issue GET response and GET transitions?expand=transitions.fields response.
+ * Missing metadata, ambiguous targets and indirect paths refuse before any write.
+ * Required values must be supplied explicitly, even when Jira advertises a default.
+ * This checks screen membership, set operations and allowed values, not server validators.
+ */
+export declare function planJiraTransition(intent: JiraTransitionIntent, issueResponse: unknown, transitionResponse: unknown): JiraTransitionPlan;
+/**
+ * Discover current status and permitted transitions using two authenticated GETs.
+ * Errors are redacted typed refusals. No tracker access, git subprocess or POST occurs.
+ */
+export declare function discoverJiraTransitionPlan(intent: JiraTransitionIntent, options?: Record<string, unknown>): Promise<JiraTransitionPlan>;
+/** Parse CLI intent once and let the host render the compact result as TOON or JSON. */
+export declare function runTransitionPlan(options: Record<string, unknown>): Promise<JiraTransitionPlan>;
 export interface CredDiagnostics {
     ready: boolean;
     baseUrlPresent: boolean;

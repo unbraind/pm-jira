@@ -919,6 +919,173 @@ export function resolveCreds(
   return { baseUrl: baseUrl!.replace(/\/$/, ""), email: email!, token: token!, authHeader };
 }
 
+/** Canonical lifecycle targets supported by Jira transition planning. */
+export type JiraLifecycleTarget = PmStatus;
+
+/** Compact permitted edge; field values are deliberately omitted from output. */
+export interface JiraTransitionChoice {
+  id: string;
+  name: string;
+  to: string;
+  toId: string;
+  required: string[];
+}
+
+/** Explicit read-only result. A ready plan is advisory and must be rediscovered before execution. */
+export type JiraTransitionPlan = {
+  kind: "ready" | "noop";
+  issue: string;
+  target: JiraLifecycleTarget;
+  from: string;
+  steps: JiraTransitionChoice[];
+  writes: 0;
+} | {
+  kind: "refused";
+  code: "invalid_input" | "metadata_invalid" | "discovery_failed" | "no_permitted_transition" | "ambiguous_transition" | "fields_required" | "fields_invalid";
+  remedy: string;
+  choices: JiraTransitionChoice[];
+  writes: 0;
+};
+
+/** Caller intent and optional transition-screen values; no execution is performed. */
+export interface JiraTransitionIntent {
+  issue: string;
+  target: JiraLifecycleTarget;
+  transitionId?: string;
+  fields?: Record<string, unknown>;
+  statusMap?: Record<string, PmStatus>;
+}
+
+/** Check untrusted REST values without asserting their shape. */
+function transitionRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Construct one stable refusal receipt without exposing remote bodies or credentials. */
+function transitionRefusal(code: Extract<JiraTransitionPlan, { kind: "refused" }>["code"], remedy: string, choices: JiraTransitionChoice[] = []): JiraTransitionPlan {
+  return { kind: "refused", code, remedy, choices, writes: 0 };
+}
+
+/** Resolve explicit workflow names first, then Jira's lifecycle category; blocked stays explicit. */
+function transitionLifecycle(status: Record<string, unknown>, map: Record<string, PmStatus> | undefined): PmStatus {
+  const name = String(status.name).toLowerCase();
+  if (map && Object.hasOwn(map, name)) return map[name]!;
+  if (name === "blocked") return "blocked";
+  return mapJiraStatusCategory((status.statusCategory as Record<string, string>).key);
+}
+
+/** Validate the status identity and category needed to avoid guessing from an unknown name. */
+function transitionStatus(value: unknown): value is Record<string, unknown> {
+  return transitionRecord(value) && typeof value.id === "string" && value.id.length > 0 &&
+    typeof value.name === "string" && value.name.length > 0 && transitionRecord(value.statusCategory) &&
+    ["new", "indeterminate", "done"].includes(String(value.statusCategory.key));
+}
+
+/**
+ * Translate a lifecycle intent using only transitions available to the current user now.
+ * Pass the issue GET response and GET transitions?expand=transitions.fields response.
+ * Missing metadata, ambiguous targets and indirect paths refuse before any write.
+ * Required values must be supplied explicitly, even when Jira advertises a default.
+ * This checks screen membership, set operations and allowed values, not server validators.
+ */
+export function planJiraTransition(intent: JiraTransitionIntent, issueResponse: unknown, transitionResponse: unknown): JiraTransitionPlan {
+  if (!/^[A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*$/.test(intent.issue) || !PM_STATUSES.includes(intent.target)) {
+    return transitionRefusal("invalid_input", "Supply an issue key and open|in_progress|closed|blocked target.");
+  }
+  if (!transitionRecord(issueResponse) || issueResponse.key !== intent.issue || !transitionRecord(issueResponse.fields) ||
+      !transitionStatus(issueResponse.fields.status) || !transitionRecord(transitionResponse) || !Array.isArray(transitionResponse.transitions)) {
+    return transitionRefusal("metadata_invalid", "Rediscover issue status and transitions with expand=transitions.fields.");
+  }
+  const current = issueResponse.fields.status;
+  const choices: JiraTransitionChoice[] = [];
+  const metadata = new Map<string, Record<string, unknown>>();
+  const targets = new Map<string, PmStatus>();
+  for (const edge of transitionResponse.transitions) {
+    if (!transitionRecord(edge) || typeof edge.id !== "string" || !edge.id || metadata.has(edge.id) ||
+        typeof edge.name !== "string" || !transitionStatus(edge.to) || !transitionRecord(edge.fields)) {
+      return transitionRefusal("metadata_invalid", "Rediscover complete, unique transition IDs and transition-screen fields.");
+    }
+    for (const field of Object.values(edge.fields)) {
+      if (!transitionRecord(field) || typeof field.required !== "boolean" || !Array.isArray(field.operations) ||
+          !field.operations.every((op: unknown) => typeof op === "string") ||
+          (field.allowedValues !== undefined && !Array.isArray(field.allowedValues))) {
+        return transitionRefusal("metadata_invalid", "Rediscover required flags, operations and allowed values for every screen field.");
+      }
+    }
+    metadata.set(edge.id, edge.fields);
+    // Jira can explicitly mark an unavailable edge; never propose it.
+    if (edge.isAvailable === false) continue;
+    choices.push({ id: edge.id, name: edge.name, to: String(edge.to.name), toId: String(edge.to.id),
+      required: Object.entries(edge.fields).filter(([, field]) => (field as Record<string, unknown>).required).map(([key]) => key) });
+    targets.set(edge.id, transitionLifecycle(edge.to, intent.statusMap));
+  }
+  if (transitionLifecycle(current, intent.statusMap) === intent.target && intent.transitionId === undefined) {
+    return { kind: "noop", issue: intent.issue, target: intent.target, from: String(current.id), steps: [], writes: 0 };
+  }
+  const matches = choices.filter(edge => targets.get(edge.id) === intent.target &&
+    (intent.transitionId === undefined || intent.transitionId === edge.id));
+  if (matches.length === 0) return transitionRefusal("no_permitted_transition",
+    "No permitted direct transition reaches this target. Check permissions and status mapping; execute an approved intermediate step separately, then rediscover. Future-state permissions are unknown.", choices);
+  if (matches.length > 1) return transitionRefusal("ambiguous_transition", "Select a transition ID explicitly; multiple permitted transitions reach this lifecycle target.", matches);
+  const selected = matches[0]!;
+  const fields = intent.fields ?? {};
+  const screen = metadata.get(selected.id)!;
+  const missing = selected.required.filter(key => !Object.hasOwn(fields, key) || fields[key] === null || fields[key] === undefined || fields[key] === "" || (Array.isArray(fields[key]) && fields[key].length === 0));
+  if (missing.length) return transitionRefusal("fields_required", `Supply explicit transition-screen values for: ${missing.join(", ")}.`, [selected]);
+  for (const [key, value] of Object.entries(fields)) {
+    const field = screen[key];
+    if (!Object.hasOwn(screen, key) || !transitionRecord(field) || !(field.operations as string[]).includes("set")) {
+      return transitionRefusal("fields_invalid", "Supply only fields supporting the set operation on the selected transition screen.", [selected]);
+    }
+    if (Array.isArray(field.allowedValues) && field.allowedValues.length > 0 &&
+        !field.allowedValues.some(allowed => JSON.stringify(allowed) === JSON.stringify(value))) {
+      return transitionRefusal("fields_invalid", "Use an advertised allowed value exactly; server-side validators still require execution-time validation.", [selected]);
+    }
+  }
+  return { kind: "ready", issue: intent.issue, target: intent.target, from: String(current.id), steps: [selected], writes: 0 };
+}
+
+/**
+ * Discover current status and permitted transitions using two authenticated GETs.
+ * Errors are redacted typed refusals. No tracker access, git subprocess or POST occurs.
+ */
+export async function discoverJiraTransitionPlan(intent: JiraTransitionIntent, options: Record<string, unknown> = {}): Promise<JiraTransitionPlan> {
+  if (!/^[A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*$/.test(intent.issue) || !PM_STATUSES.includes(intent.target)) {
+    return transitionRefusal("invalid_input", "Supply an issue key and open|in_progress|closed|blocked target.");
+  }
+  try {
+    const creds = resolveCreds(options);
+    const base = new URL(creds.baseUrl);
+    if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash) {
+      return transitionRefusal("invalid_input", "Use an HTTPS Jira base URL without credentials, query or fragment.");
+    }
+    const endpoint = `${creds.baseUrl}/rest/api/3/issue/${encodeURIComponent(intent.issue)}`;
+    const issue: unknown = JSON.parse(await httpsGet(`${endpoint}?fields=status`, creds.authHeader));
+    const transitions: unknown = JSON.parse(await httpsGet(`${endpoint}/transitions?expand=transitions.fields&includeUnavailableTransitions=false`, creds.authHeader));
+    return planJiraTransition(intent, issue, transitions);
+  } catch {
+    return transitionRefusal("discovery_failed", "Check Jira credentials, Browse Projects and Transition Issues permissions, issue visibility and connectivity; retry discovery. No writes were attempted.");
+  }
+}
+
+/** Parse CLI intent once and let the host render the compact result as TOON or JSON. */
+export async function runTransitionPlan(options: Record<string, unknown>): Promise<JiraTransitionPlan> {
+  const target = normalizePmStatusInput(readStringOption(options, "to"));
+  const issue = readStringOption(options, "issue");
+  if (!target || !issue) return transitionRefusal("invalid_input", "Pass --issue PROJECT-123 and --to open|in_progress|closed|blocked.");
+  let fields: unknown = {};
+  let statusMap: Record<string, PmStatus> | undefined;
+  try {
+    const raw = readStringOption(options, "fields");
+    if (raw !== undefined) fields = JSON.parse(raw);
+    statusMap = parseStatusMap(readStringOption(options, "status-map"));
+  } catch {
+    return transitionRefusal("invalid_input", "Use a JSON object for --fields and JiraStatus=pm_status pairs for --status-map.");
+  }
+  if (!transitionRecord(fields)) return transitionRefusal("invalid_input", "Use a JSON object for --fields.");
+  return discoverJiraTransitionPlan({ issue, target, fields, statusMap, transitionId: readStringOption(options, "transition") }, options);
+}
+
 // ---------------------------------------------------------------------------
 // Credential diagnostics — report readiness WITHOUT leaking any secret value.
 // Pure + offline-testable: never performs a network call, never echoes the
@@ -2489,6 +2656,26 @@ export default defineExtension({
         }
         // Success / not-applicable: silent pass-through (no decision delta).
         return {};
+      },
+    });
+
+    api.registerCommand({
+      name: "jira plan-transition",
+      description: "Plan a permitted Jira lifecycle transition without writes",
+      intent: "Discover current-user transitions and required fields, returning a plan or actionable refusal",
+      examples: ["pm jira plan-transition --issue PROJ-123 --to closed --json"],
+      flags: [
+        { long: "--issue", value_name: "key", description: "Jira issue key" },
+        { long: "--to", value_name: "status", description: "Desired pm lifecycle status" },
+        { long: "--transition", value_name: "id", description: "Disambiguate a permitted transition" },
+        { long: "--fields", value_name: "json", description: "Explicit transition-screen values (JSON object)" },
+        { long: "--status-map", value_name: "map", description: "JiraStatus=pm_status overrides" },
+        { long: "--host", value_name: "url", description: "HTTPS Jira base URL" },
+      ],
+      async run(ctx) {
+        const result = await runTransitionPlan(ctx.options);
+        if (result.kind === "refused") process.exitCode = EXIT_CODE.USAGE;
+        return result;
       },
     });
 
