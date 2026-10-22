@@ -8,7 +8,7 @@ const plan = await discoverJiraTransitionPlan({
   fields: { resolution: { id: '1' } },
 });
 if (plan.kind === 'refused') {
-  console.log(plan.code, plan.remedy);
+  console.log(plan.code, plan.remediation);
 } else {
   console.log(plan.kind, plan.steps); // advisory; no execution occurs
 }
@@ -57,7 +57,7 @@ edge, an intermediate Review edge, and completion requiring a resolution.
 The canceled item was counted but excluded from the four-state Jira adapter.
 **412 plans** produced 13 ready receipts, 26 no-permitted-transition refusals,
 13 required-field refusals and 360 no-ops. Largest compact JSON receipt:
-**347 bytes**. Tracker changes: **0**; Jira writes: **0**.
+**366 bytes**. Tracker changes: **0**; Jira writes: **0**.
 
 This validates real public tracker lifecycle data with synthetic Jira workflow
 metadata. It is not a live Jira tenant or execution validation. Separate HTTPS

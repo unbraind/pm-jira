@@ -73,8 +73,9 @@ test('CLI parser gives typed input refusals and host command uses SDK rendering'
   const harness = await createExtensionTestHarness(extension, { name: 'pm-jira', capabilities: ['commands', 'schema', 'importers', 'hooks', 'preflight'] });
   harness.assertCommandContract({ command: 'jira plan-transition' });
   const before = process.exitCode;
-  await harness.runCommand({ command: 'jira plan-transition', options: {}, pmRoot: '.' });
-  assert.equal(process.exitCode, 2); process.exitCode = before;
+  const handled = await harness.runCommand({ command: 'jira plan-transition', options: {}, pmRoot: '.' });
+  assert.equal(handled.exitCode, 2); assert.equal(handled.errorCode, 'invalid_input');
+  assert.match(handled.remediation!, /--issue/); assert.equal(process.exitCode, before);
 });
 
 test('HTTPS discovery and actual non-git CLI never write, even on permission failure', async t => {

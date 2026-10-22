@@ -465,7 +465,8 @@ mappings win, then Blocked, then Jira's status category. Existing import mapping
 are unchanged. The host renders compact TOON by default or JSON with `--json`.
 
 The result is `ready`, `noop`, or `refused`, always with `writes: 0`. Refusals
-include a stable code, a remedy and compact permitted choices; the CLI exits 2.
+include a stable code, `remediation`, compact permitted choices and the host-owned
+`exit_code: 2` contract; the CLI exits 2.
 Required fields need explicit nonempty values, even if Jira advertises a default.
 Supplied fields must support `set` on the selected screen and match an advertised
 allowed value exactly. Values are never echoed. This conservative check can

@@ -436,7 +436,8 @@ export type JiraTransitionPlan = {
 } | {
     kind: "refused";
     code: "invalid_input" | "metadata_invalid" | "discovery_failed" | "no_permitted_transition" | "ambiguous_transition" | "fields_required" | "fields_invalid";
-    remedy: string;
+    remediation: string;
+    exit_code: 2;
     choices: JiraTransitionChoice[];
     writes: 0;
 };

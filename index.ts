@@ -942,7 +942,8 @@ export type JiraTransitionPlan = {
 } | {
   kind: "refused";
   code: "invalid_input" | "metadata_invalid" | "discovery_failed" | "no_permitted_transition" | "ambiguous_transition" | "fields_required" | "fields_invalid";
-  remedy: string;
+  remediation: string;
+  exit_code: 2;
   choices: JiraTransitionChoice[];
   writes: 0;
 };
@@ -962,8 +963,8 @@ function transitionRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Construct one stable refusal receipt without exposing remote bodies or credentials. */
-function transitionRefusal(code: Extract<JiraTransitionPlan, { kind: "refused" }>["code"], remedy: string, choices: JiraTransitionChoice[] = []): JiraTransitionPlan {
-  return { kind: "refused", code, remedy, choices, writes: 0 };
+function transitionRefusal(code: Extract<JiraTransitionPlan, { kind: "refused" }>["code"], remediation: string, choices: JiraTransitionChoice[] = []): JiraTransitionPlan {
+  return { kind: "refused", code, remediation, choices, writes: 0, exit_code: 2 };
 }
 
 /** Resolve explicit workflow names first, then Jira's lifecycle category; blocked stays explicit. */
@@ -2673,9 +2674,7 @@ export default defineExtension({
         { long: "--host", value_name: "url", description: "HTTPS Jira base URL" },
       ],
       async run(ctx) {
-        const result = await runTransitionPlan(ctx.options);
-        if (result.kind === "refused") process.exitCode = EXIT_CODE.USAGE;
-        return result;
+        return runTransitionPlan(ctx.options);
       },
     });
 
