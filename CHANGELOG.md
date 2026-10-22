@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Adopt pm-github 2026.10.16: default-branch-safe gated sync and daily gated closeout PRs ([pm-jira-ub7o](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-ub7o.toon))
+- Enable the gated GitHub issue sync ([pm-jira-maint1014](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-maint1014.toon))
+
+### Fixed
+
+- Fix release publish ordering ahead of protected main push ([pm-jira-i3jb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-i3jb.toon))
+- The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-jira-7khk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-7khk.toon))
+- Certify pm-jira on CLI 2026.9.27 and pinned GitHub extension ([pm-jira-b0n8](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-b0n8.toon))
+- Jira Cloud imports still call removed offset search endpoint ([pm-jira-h5bm](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-h5bm.toon))
+- The release job authenticated with a stored npm token that expired, so publishing stopped while every other gate stayed green ([pm-jira-0thg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-0thg.toon))
+- A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-jira-otvo](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-otvo.toon))
+
+### Other
+
+- Certify pm-jira on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates ([pm-jira-gdlw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-gdlw.toon))
+
 ## 2026.10.8 - 2026-10-08
 
 ### Fixed
