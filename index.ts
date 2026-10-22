@@ -1038,8 +1038,16 @@ export function planJiraTransition(intent: JiraTransitionIntent, issueResponse: 
     if (!Object.hasOwn(screen, key) || !transitionRecord(field) || !(field.operations as string[]).includes("set")) {
       return transitionRefusal("fields_invalid", "Supply only fields supporting the set operation on the selected transition screen.", [selected]);
     }
-    if (Array.isArray(field.allowedValues) && field.allowedValues.length > 0 &&
-        !field.allowedValues.some(allowed => JSON.stringify(allowed) === JSON.stringify(value))) {
+    let candidates = [value];
+    if (transitionRecord(field.schema) && field.schema.type === "array") {
+      if (!Array.isArray(value)) {
+        return transitionRefusal("fields_invalid", "Supply a JSON array for a transition-screen field whose schema type is array.", [selected]);
+      }
+      candidates = value;
+    }
+    const allowedValues = field.allowedValues;
+    if (Array.isArray(allowedValues) && allowedValues.length > 0 &&
+        !candidates.every(candidate => allowedValues.some(allowed => JSON.stringify(allowed) === JSON.stringify(candidate)))) {
       return transitionRefusal("fields_invalid", "Use an advertised allowed value exactly; server-side validators still require execution-time validation.", [selected]);
     }
   }

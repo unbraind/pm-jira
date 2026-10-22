@@ -66,6 +66,32 @@ test('transition screens require explicit valid fields, without disclosing their
   assert.ok(!JSON.stringify(planJiraTransition({ ...intent, fields: { optional: 'secret' } }, issue(), response(edge()))).includes('secret'));
 });
 
+test('array transition fields validate individual allowed members and reject scalar payloads', () => {
+  const scalar = { required: false, operations: ['set'], allowedValues: ['red', 'blue'] };
+  const multi = { ...scalar, schema: { type: 'array', items: 'string' } };
+  const screen = response(edge('31', status('Done', 'done'), { colour: multi }));
+  for (const value of [['red'], ['red', 'blue'], []]) {
+    assert.equal(planJiraTransition({ ...intent, fields: { colour: value } }, issue(), screen).kind, 'ready');
+  }
+  for (const value of [['red', 'green'], ['green'], 'red', 1, null, { value: 'red' }]) {
+    refused(planJiraTransition({ ...intent, fields: { colour: value } }, issue(), screen), 'fields_invalid');
+  }
+  const objectScreen = response(edge('31', status('Done', 'done'), { resolution: { ...field, schema: { type: 'array', items: 'option' } } }));
+  assert.equal(planJiraTransition({ ...intent, fields: { resolution: [{ id: 'fixed' }] } }, issue(), objectScreen).kind, 'ready');
+  refused(planJiraTransition({ ...intent, fields: { resolution: [{ id: 'other' }] } }, issue(), objectScreen), 'fields_invalid');
+  refused(planJiraTransition({ ...intent, fields: { resolution: [] } }, issue(), objectScreen), 'fields_required');
+  for (const schema of [undefined, { type: 'string' }]) {
+    const scalarScreen = response(edge('31', status('Done', 'done'), { colour: { ...scalar, schema } }));
+    assert.equal(planJiraTransition({ ...intent, fields: { colour: 'red' } }, issue(), scalarScreen).kind, 'ready');
+    refused(planJiraTransition({ ...intent, fields: { colour: ['red'] } }, issue(), scalarScreen), 'fields_invalid');
+  }
+  for (const allowedValues of [undefined, []]) {
+    const unconstrained = response(edge('31', status('Done', 'done'), { colour: { ...multi, allowedValues } }));
+    assert.equal(planJiraTransition({ ...intent, fields: { colour: ['green'] } }, issue(), unconstrained).kind, 'ready');
+    refused(planJiraTransition({ ...intent, fields: { colour: 'green' } }, issue(), unconstrained), 'fields_invalid');
+  }
+});
+
 test('CLI parser gives typed input refusals and host command uses SDK rendering', async () => {
   for (const options of [{}, { issue: 'ONE-1', to: 'bad' }, { issue: 'ONE-1', to: 'closed', fields: '{' }, { issue: 'ONE-1', to: 'closed', fields: '[]' }, { issue: 'ONE-1', to: 'closed', statusMap: 'bad' }]) refused(await runTransitionPlan(options), 'invalid_input');
   refused(await discoverJiraTransitionPlan({ ...intent, issue: 'bad' }), 'invalid_input');
@@ -86,12 +112,15 @@ test('HTTPS discovery and actual non-git CLI never write, even on permission fai
   process.env.JIRA_EMAIL = 'fixture@example.invalid'; process.env.JIRA_API_TOKEN = 'synthetic';
   const { cert, private: key } = await generate([{ name: 'commonName', value: 'localhost' }], { keyType: 'ec', algorithm: 'sha256', extensions: [{ name: 'subjectAltName', altNames: [{ type: 7, ip: '127.0.0.1' }] }] });
   https.globalAgent.options.ca = cert;
+  const multiFields = { colour: { required: true, operations: ['set'], schema: { type: 'array', items: 'string' }, allowedValues: ['red', 'blue'] } };
   let mode = 'ready'; const methods: string[] = []; const urls: string[] = [];
   const server = https.createServer({ key, cert }, (req, res) => {
     methods.push(req.method!); urls.push(req.url!); res.setHeader('Connection', 'close');
     if (mode === '403') { res.writeHead(403); res.end('private response'); return; }
     if (mode === 'json') { res.end('{'); return; }
-    res.end(JSON.stringify(req.url!.includes('/transitions') ? response(edge()) : issue()));
+    const transitions = mode === 'mapped' ? response(edge('31', status('QA', 'indeterminate', '2'), multiFields), edge('32', status('QA', 'indeterminate', '2'), multiFields)) :
+      mode === 'array' ? response(edge('31', status('Done', 'done', '3'), multiFields)) : response(edge());
+    res.end(JSON.stringify(req.url!.includes('/transitions') ? transitions : issue()));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); server.close(); await once(server, 'close'); });
@@ -104,7 +133,13 @@ test('HTTPS discovery and actual non-git CLI never write, even on permission fai
   for (const host of ['http://example.invalid', 'https://user:pass@example.invalid', 'https://example.invalid/?query=1', 'https://example.invalid/#fragment']) refused(await discoverJiraTransitionPlan(intent, { host }), 'invalid_input');
   delete process.env.JIRA_EMAIL; refused(await discoverJiraTransitionPlan(intent), 'discovery_failed'); process.env.JIRA_EMAIL = 'fixture@example.invalid';
   const harness = await createExtensionTestHarness(extension, { name: 'pm-jira', capabilities: ['commands', 'schema', 'importers', 'hooks', 'preflight'] });
-  await harness.runCommand({ command: 'jira plan-transition', pmRoot: '.', options: { issue: 'ONE-1', to: 'done', fields: '{}', statusMap: 'Done=closed', transition: '31' } });
+  mode = 'mapped';
+  const handled = await harness.runCommand({ command: 'jira plan-transition', pmRoot: '.', options: { issue: 'ONE-1', to: 'done', fields: '{"colour":["red"]}', statusMap: 'QA=closed', transition: '31' } });
+  assert.equal(handled.handled, true); assert.equal(handled.exitCode, undefined);
+  assert.equal(handled.errorCode, undefined); assert.equal(handled.remediation, undefined);
+  assert.deepEqual(handled.warnings, []);
+  assert.deepEqual(handled.result, { kind: 'ready', issue: 'ONE-1', target: 'closed', from: '1', steps: [{ id: '31', name: 'Complete', to: 'QA', toId: '2', required: ['colour'] }], writes: 0 });
+  mode = 'array';
   const cli = resolve('node_modules/@unbrained/pm-cli/dist/cli.js');
   execFileSync(process.execPath, [cli, '--path', root, 'init', 'fixture'], { stdio: 'pipe', env: { ...process.env, GIT_CEILING_DIRECTORIES: dirname(root) } });
   const pkg = join(root, 'package'); mkdirSync(pkg);
@@ -117,7 +152,7 @@ test('HTTPS discovery and actual non-git CLI never write, even on permission fai
   for (const json of [true, false]) for (const invalid of [false, true]) {
     const args = [cli, '--path', root, 'jira', 'plan-transition', '--issue', 'ONE-1', '--to', 'closed'];
     if (json) args.push('--json');
-    if (invalid) args.push('--fields', '[]');
+    args.push('--fields', invalid ? '[]' : '{"colour":["red"]}');
     const child = spawn(process.execPath, args, { env: { ...process.env, PATH: bin, NODE_EXTRA_CA_CERTS: ca, GIT_CEILING_DIRECTORIES: dirname(root) } });
     let stdout = ''; let stderr = ''; child.stdout.on('data', chunk => { stdout += String(chunk); }); child.stderr.on('data', chunk => { stderr += String(chunk); });
     const [code] = await once(child, 'close'); assert.equal(code, invalid ? 2 : 0, stderr);

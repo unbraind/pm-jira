@@ -36,6 +36,12 @@ screen. Plans carry the issue key, observed source status ID, target lifecycle,
 and selected transition ID/name/destination plus required field names. Values
 remain in the caller's intent; this is a planning receipt, not a POST payload.
 
+Array screen fields (`schema.type: "array"`) require a JSON array; each member is
+checked against `allowedValues` independently. For example, allowed values
+`["red", "blue"]` accept a supplied value `["red"]` and refuse `["red", "green"]`.
+Required arrays must be nonempty; optional arrays can use `[]` to clear the field.
+Fields without an array schema retain exact matching of the full supplied value.
+
 Refusal codes: `invalid_input`, `metadata_invalid`, `discovery_failed`,
 `no_permitted_transition`, `ambiguous_transition`, `fields_required`,
 `fields_invalid`. A no-op needs no transition. Supplying an explicit transition

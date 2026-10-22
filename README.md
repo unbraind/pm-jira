@@ -468,9 +468,12 @@ The result is `ready`, `noop`, or `refused`, always with `writes: 0`. Refusals
 include a stable code, `remediation`, compact permitted choices and the host-owned
 `exit_code: 2` contract; the CLI exits 2.
 Required fields need explicit nonempty values, even if Jira advertises a default.
-Supplied fields must support `set` on the selected screen and match an advertised
-allowed value exactly. Values are never echoed. This conservative check can
-refuse equivalent values with a different JSON representation. It does not
+Supplied fields must support `set` on the selected screen. For `schema.type: array`
+fields, supply a JSON array: each member must match an advertised allowed value
+exactly. An optional empty array clears the selection; required arrays must be
+nonempty. Other fields match their entire supplied value against an allowed value.
+Values are never echoed. This conservative check can refuse equivalent values
+with a different JSON representation. It does not
 replace Jira's execution-time schema checks, validators or permission checks.
 
 Only a **direct currently permitted** transition can be ready. Multiple matching
