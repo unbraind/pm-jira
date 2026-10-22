@@ -10,7 +10,6 @@
 ### Fixed
 
 - Fix release publish ordering ahead of protected main push ([pm-jira-i3jb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-i3jb.toon))
-- Restore a successful Hound review for Jira Cloud cursor PR \#120 ([pm-jira-0571](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-0571.toon))
 - The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-jira-7khk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-7khk.toon))
 - Certify pm-jira on CLI 2026.9.27 and pinned GitHub extension ([pm-jira-b0n8](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-b0n8.toon))
 - Jira Cloud imports still call removed offset search endpoint ([pm-jira-h5bm](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-h5bm.toon))
