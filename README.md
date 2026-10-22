@@ -446,3 +446,54 @@ MIT
 ## Release Automation
 
 This package is release-ready for GitHub, npm, and Bun-compatible installs. CI runs type checking, build, production dependency audit, package packing, Bun install verification, and pm-changelog validation. The daily release workflow publishes only when commits exist after the latest release tag and uses pm-changelog to generate CHANGELOG.md and GitHub release notes.
+
+## Plan a lifecycle transition
+
+`pm jira plan-transition` discovers the issue's current status and the transitions
+permitted for the authenticated Jira user, including required screen fields:
+
+```sh
+pm jira plan-transition --issue DEMO-123 --to closed --json
+pm jira plan-transition --issue DEMO-123 --to closed --transition 31 \
+  --fields '{"resolution":{"id":"1"}}'
+```
+
+Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` as for sync. `--host`
+overrides the base URL. Targets accept the existing pm status aliases; use
+`--status-map 'QA=blocked,Shipped=closed'` for custom workflow meanings. Explicit
+mappings win, then Blocked, then Jira's status category. Existing import mappings
+are unchanged. The host renders compact TOON by default or JSON with `--json`.
+
+The result is `ready`, `noop`, or `refused`, always with `writes: 0`. Refusals
+include a stable code, `remediation`, compact permitted choices and the host-owned
+`exit_code: 2` contract; the CLI exits 2.
+Required fields need explicit nonempty values, even if Jira advertises a default.
+Supplied fields must support `set` on the selected screen. For `schema.type: array`
+fields, supply a JSON array: each member must match an advertised allowed value
+exactly. An optional empty array clears the selection; required arrays must be
+nonempty. Other fields match their entire supplied value against an allowed value.
+Values are never echoed. This conservative check can refuse equivalent values
+with a different JSON representation. It does not
+replace Jira's execution-time schema checks, validators or permission checks.
+
+Only a **direct currently permitted** transition can be ready. Multiple matching
+transitions require `--transition`. An indirect route returns
+`no_permitted_transition` with available next steps: have an authorized actor
+perform an approved intermediate transition separately, then rediscover. The
+API cannot certify future-state permissions. Rediscover immediately before any
+external execution; the plan is advisory, has no execution token, and performs
+neither Jira nor local tracker mutations. Authentication, permission and network
+failures return a redacted `discovery_failed` refusal.
+
+The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
+`discoverJiraTransitionPlan(intent, options?)`, and the offline
+`planJiraTransition(intent, issueResponse, transitionsResponse)` planner. See
+[the SDK example](docs/transition-plans.md) for an intermediate-state refusal.
+
+## Without git
+
+Transition planning, credential diagnostics and Jira import/export previews work
+in plain directories and non-git trackers. Import/sync and explicit export push
+also use the tracker and Jira APIs without requiring git. Changelog generation
+from release tags requires a git repository. Transition planning invokes no git
+subprocess and never writes a tracker.
