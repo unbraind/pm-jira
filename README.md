@@ -492,8 +492,77 @@ The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
 
 ## Without git
 
-Transition planning, credential diagnostics and Jira import/export previews work
-in plain directories and non-git trackers. Import/sync and explicit export push
+JQL selection comparison, transition planning, credential diagnostics and Jira
+import/export previews work in plain directories and non-git trackers. Import/sync and explicit export push
 also use the tracker and Jira APIs without requiring git. Changelog generation
 from release tags requires a git repository. Transition planning invokes no git
-subprocess and never writes a tracker.
+subprocess and never writes a tracker. Selection comparison also invokes no git
+subprocess; it reads only the two explicit JSON files and never reads or writes
+local items or calls Jira.
+
+## Explain JQL selection changes
+
+Compare two explicit snapshots of a synchronized selection without removing
+omitted local work:
+
+```sh
+pm jira explain-selection --before before.json --after after.json --limit 32 --json
+pm jira explain-selection --before before.json --after after.json --limit 32 --offset 32
+```
+
+The typed SDK exports `explainJqlSelectionChanges(before, after, options?)`,
+`JqlSelectionSnapshot`, `JqlVisibilityEvidence`, `JqlSelectionOptions`,
+`JqlSelectionResult`, and the related page, change, explanation and refusal types.
+See the [complete JSON/CLI/SDK example](docs/jql-selection-example.md) for the
+snapshot contract and evidence requirements, and the
+[public tracker validation](docs/jql-selection-validation.md) for measured data.
+
+The default output is compact TOON; `--json` uses the same typed result.
+`kind: explained` includes exact aggregate counts, a stable key-sorted page of
+entries/exits, `queryChanged`, and an omission/next-offset receipt. Only change
+keys and classifications are returned; queries, principals, tokens, issue bodies
+and summaries are not echoed. Defaults are 32 changes per page, maximum 256;
+offset is a nonnegative safe integer. Host output budgets also apply. If the
+host reports additional omissions, retry the same offset with
+`--output-budget unbounded --output-limit unbounded` before advancing.
+
+Exits are `query_excluded` only with explicit independently established
+nonmembership evidence, `permission_lost` only with explicit permission-loss
+evidence, and otherwise `unresolved`. Visibility alone or a 404 is insufficient.
+Entries mean selected now and absent before; they do not imply a newly created
+Jira issue. All rows carry `localAction: preserve`. Every result, including a
+refusal, has `writes: 0` and `deletionProposals: 0`.
+
+Both snapshots must have the same canonical site origin, principal and scope,
+and must be chronological. A changed principal refuses rather than guessing
+permission loss. The entire initial-to-terminal cursor chain must be present;
+empty intermediate pages may advance tokens. Missing, disconnected, repeated,
+cycling or premature-terminal pages and duplicate keys fail closed. Incomplete
+page chains produce no change rows or deletion proposals. A capped import is
+not a complete selection snapshot. No local tracker or Jira mutation is offered.
+
+Limits are 8 MiB per CLI file, 1,000 pages, 100 keys per page, 10,000 unique keys
+and 10,000 visibility observations per snapshot. Identifiers are bounded;
+JQL and opaque tokens have an 8,192-character limit. SDK callers supply parsed
+objects and receive the same structural limits. Narrow the entire synchronized
+scope when a limit is reached; never truncate a selection.
+
+Refusals have `kind: refused`, an empty `changes` array, stable `code`, actionable
+`remediation`, and `exit_code: 2` (the host exits 2):
+
+| Code | Remedy |
+| --- | --- |
+| `invalid_snapshot` | Supply valid v1 metadata, unique keys and valid observations. |
+| `incomplete_chain` | Recapture every page through the terminal response. |
+| `snapshot_limit` | Narrow the complete scope within file/page/key/evidence limits. |
+| `boundary_mismatch` | Compare the same site, principal and scope. |
+| `time_order` | Put the earlier snapshot first. |
+| `conflicting_evidence` | Recapture consistent visibility observations. |
+| `invalid_options` | Supply both files and valid limit/offset integers. |
+| `input_read` / `input_json` | Supply readable regular files containing valid JSON. |
+
+These are explanations of supplied membership and evidence. Jira's eventual
+consistency and caller assertions remain explicit limits; a complete chain does
+not prove atomic capture, live permissions, or why a query stopped matching.
+Core SDK complete reads/snapshots retain ownership of tracker capture and
+restore; pm-graph compares relationships rather than Jira query membership.

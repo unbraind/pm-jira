@@ -6,6 +6,8 @@
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 import { type PmSdkModule } from "./sdk-importer.ts";
+export { explainJqlSelectionChanges } from "./jql-selection.ts";
+export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions, JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
 /**
  * Semantic exit codes pm's command runtime propagates to the shell.
  *

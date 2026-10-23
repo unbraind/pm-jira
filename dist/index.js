@@ -31,6 +31,8 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { importPmSdk } from "./sdk-importer.js";
+import { registerJqlSelectionCommand } from "./jql-selection-command.js";
+export { explainJqlSelectionChanges } from "./jql-selection.js";
 // pm's extension command runtime only treats a thrown error as a cleanly
 // handled non-zero exit when the error carries a numeric `exitCode` property
 // (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
@@ -1957,6 +1959,7 @@ export default defineExtension({
     name: "pm-jira",
     version: "2026.10.23",
     activate(api) {
+        registerJqlSelectionCommand(api);
         // -----------------------------------------------------------------------
         // schema — declare Jira provenance fields so the workspace knows them
         // -----------------------------------------------------------------------
