@@ -50,7 +50,9 @@ The result has one retained key, one entry (`DEMO-5`), and three exits:
 Every change has `localAction: preserve`; both `writes` and `deletionProposals`
 are zero. Rows sort lexically by key. Counts always cover the entire comparison;
 `page` reports total, omitted rows and the next offset. The host may impose a
-further output budget with its own omission receipt.
+further output budget with its own omission receipt. If it does, retry the same
+offset with `--output-budget unbounded --output-limit unbounded` before following
+`nextOffset`. Keep both snapshot files unchanged while paging.
 
 SDK callers can pass parsed JSON directly:
 

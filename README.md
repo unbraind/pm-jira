@@ -522,7 +522,9 @@ The default output is compact TOON; `--json` uses the same typed result.
 entries/exits, `queryChanged`, and an omission/next-offset receipt. Only change
 keys and classifications are returned; queries, principals, tokens, issue bodies
 and summaries are not echoed. Defaults are 32 changes per page, maximum 256;
-offset is a nonnegative safe integer. Host output budgets also apply.
+offset is a nonnegative safe integer. Host output budgets also apply. If the
+host reports additional omissions, retry the same offset with
+`--output-budget unbounded --output-limit unbounded` before advancing.
 
 Exits are `query_excluded` only with explicit independently established
 nonmembership evidence, `permission_lost` only with explicit permission-loss
