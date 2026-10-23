@@ -92,3 +92,29 @@ errors. Tests import source, so these temporary source changes need no rebuild.
 The originals were restored before the release gates. The complete targeted
 SDK/adapter/installed-CLI suite has **12 tests** and includes the non-git
 JSON/TOON and durable-data preservation cases.
+
+## Release validation
+
+[CI run 40009578886](https://github.com/unbraind/pm-jira/actions/runs/40009578886)
+passed at review commit `910585184c134be75b372bfd737dcb2c981e516b`:
+
+| Node | Command | Passed | Failed / skipped / cancelled |
+| --- | --- | ---: | --- |
+| 22 | `npm run release:check` | 271 | 0 / 0 / 0 |
+| 22 | `bun run release:check` | 271 | 0 / 0 / 0 |
+| 26 | `npm run release:check` | 271 | 0 / 0 / 0 |
+| 26 | `bun run release:check` | 271 | 0 / 0 / 0 |
+
+Each gate reported all four source files at 100% lines, branches and functions,
+with unchanged thresholds and zero production audit vulnerabilities. Both jobs
+also passed strict tracker health, committed-dist equality, and Bun installation.
+The rebuild produced no committed-dist changes. Docstring coverage is 12 files
+and 69 declarations. Changelog full generation and verification passed locally.
+
+An additional local npm gate used an empty HOME with
+`GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1`. It made progress without a
+reported assertion failure, but shared-host integration tests took tens of
+seconds per case. After all four CI gates passed, that redundant local run was
+deliberately stopped; it is **not** counted as a passing gate or a timeout.
+The CI results above provide the complete release-gate evidence. The final
+handoff adds only documentation and tracker evidence; CI reruns on that head.
