@@ -46,6 +46,10 @@ import type {
   CommitItemMutationsResult,
 } from "@unbrained/pm-cli/sdk";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
+import { registerJqlSelectionCommand } from "./jql-selection-command.ts";
+export { explainJqlSelectionChanges } from "./jql-selection.ts";
+export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions,
+  JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
 
 
 // pm's extension command runtime only treats a thrown error as a cleanly
@@ -2621,6 +2625,7 @@ export default defineExtension({
   version: "2026.10.23",
 
   activate(api: ExtensionApi) {
+    registerJqlSelectionCommand(api);
     // -----------------------------------------------------------------------
     // schema — declare Jira provenance fields so the workspace knows them
     // -----------------------------------------------------------------------

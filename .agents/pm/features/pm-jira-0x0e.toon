@@ -1,0 +1,33 @@
+id: pm-jira-0x0e
+title: Explain entries and exits between explicit JQL selections
+description: Compare two explicit JQL selection snapshots for one synchronized scope without changing local work.
+type: Feature
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-23T16:43:29.687Z"
+updated_at: "2026-10-23T16:57:04.606Z"
+assignee: codex-agent
+claim_principal: codex-agent
+author: codex-agent
+acceptance_criteria: "Permission loss and actual query exclusion remain distinct; Incomplete page chains never produce deletion proposals; Typed SDK and CLI return bounded TOON/JSON, typed refusals and remedies; work without git; README and example, behavioral revert proof, public tracker validation and npm/Bun CI release gates"
+comments[5]{created_at,author,text}:
+  "2026-10-23T16:44:54.176Z",codex-agent,"Overlap check (2026.10.23 CLI, pinned 2026.10.20 SDK): core listAllComplete/certifyCompleteListResult own certified tracker reads, workspace snapshots own capture/restore, and generic query cursors own pagination. No Jira query-membership explanation surface found. Existing Jira enhanced-search importer validates cursor traversal but intentionally stops at caller limits; selection comparison must independently require a terminal page. pm-graph snapshot-impact compares relationships, reachability and evidence, not Jira membership. Reuse host command contracts, TOON/JSON rendering, read_output budgeting and semantic refusal envelopes; use SDK complete reads for public tracker validation. Design: explicit v1 site/principal/scope-bound page-chain snapshots; absence remains unresolved unless independent visibility or permission-loss evidence is supplied. No local or remote mutations or deletion proposals."
+  "2026-10-23T16:50:45.321Z",codex-agent,"Implemented typed snapshot validation, bounded deterministic change pages and host-registered jira explain-selection. Cursor chains require initial request, exact opaque continuations, unique keys and a final page; capped imports refuse. Added explicit query_excluded evidence rather than inferring exclusion from visibility alone, because Jira search is eventually consistent. Bare absence, visible-only, unknown and not_found observations stay unresolved. Same-site/principal/scope and chronological snapshots are mandatory. Pure comparison tests pass 8/8 with 100% lines/branches/functions for the comparison module. Installed CLI/no-git checks and public tracker projection are underway."
+  "2026-10-23T16:53:09.259Z",codex-agent,"Public main tracker validation: 105 certified unique items (5 active), full bodies and terminal states, no omissions. Read-only exported copy in a non-git scratch project with git absent from PATH remained byte-identical. Status-membership projection: before 102 keys/3 pages, after 5 keys/1 page, retained 2, entries 3, exits 100; 32 default rows use 3061 JSON bytes, all 103 changes recovered in seven-row pages. Removing evidence yields 100 unresolved exits; injected permission-loss assertions yield 100 permissionLost and zero queryExcluded. A truncated chain refuses. Zero writes/deletion proposals. Permission assertions are injected; this does not certify live Jira. Installed CLI no-git JSON/TOON and local-edit/closed-item byte-preservation tests pass. Host read_output requires an empty changes array on refusal envelopes; implemented that contract."
+  "2026-10-23T16:55:19.189Z",codex-agent,"Behavioral revert proof: changing only explainJqlSelectionChanges to treat every absent key as query_excluded makes the permission/absence regression FAIL (6 excluded versus expected 1 excluded, 1 permission loss, 4 unresolved). Restored the function. Separately removing only validateSnapshot terminal-position validation makes the truncated-chain regression FAIL by returning explained instead of refused. Restored the validator. Neither proof removes an export or relies on compilation failure; tests import source directly. Restored targeted suite: 12/12 pass with both new modules at 100% lines/branches/functions. Typecheck, test typecheck, docstring lint and diff whitespace checks pass; the repo has no separate lint script. Full npm and Bun release checks are reserved for CI per the shared-host constraint."
+  "2026-10-23T16:57:04.606Z",codex-agent,"Linked pm test run completed successfully: node --test test/jql-selection.test.ts test/jql-selection-command.test.ts, 12 passed / 0 failed / 0 skipped. Project test-result tracking is disabled, so this comment preserves the measured result without changing tracker policy. npm run typecheck, npm run build:test, npm run docstring (12 files/69 declarations), git diff --check, changelog:full and changelog:check pass. No separate lint executable/script is installed. Next: push ready-for-review PR and wait for both Node matrix jobs to pass npm and Bun release:check at unchanged 100% thresholds."
+files[6]{path,scope}:
+  index.ts,project
+  jql-selection-command.ts,project
+  jql-selection.ts,project
+  scripts/validate-jql-selection.ts,project
+  test/jql-selection-command.test.ts,project
+  test/jql-selection.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/jql-selection.test.ts test/jql-selection-command.test.ts,project,codex-agent,"2026-10-23T16:55:24.383Z",local_mutation,feat/jql-change-explanations
+docs[3]{path,scope}:
+  docs/jql-selection-example.md,project
+  docs/jql-selection-validation.md,project
+  README.md,project
+body: ""
