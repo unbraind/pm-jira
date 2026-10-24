@@ -2,13 +2,18 @@ id: pm-jira-0x0e
 title: Explain entries and exits between explicit JQL selections
 description: Compare two explicit JQL selection snapshots for one synchronized scope without changing local work.
 type: Feature
-status: in_progress
+status: closed
 priority: 1
 tags[1]: "gh:unbraind/pm-jira#157"
 created_at: "2026-10-23T16:43:29.687Z"
-updated_at: "2026-10-23T19:17:06.764Z"
+updated_at: "2026-10-24T23:11:36.268Z"
+closed_at: "2026-10-24T21:46:27.744Z"
+completed_at: "2026-10-23T19:25:51.000Z"
 author: codex-agent
 acceptance_criteria: "Permission loss and actual query exclusion remain distinct; Incomplete page chains never produce deletion proposals; Typed SDK and CLI return bounded TOON/JSON, typed refusals and remedies; work without git; README and example, behavioral revert proof, public tracker validation and npm/Bun CI release gates"
+resolution: "Separates permission loss from actual JQL exclusion, refuses deletion proposals from incomplete page chains and exposes documented compact no-git SDK/CLI with public-copy and npm/Bun CI evidence."
+expected_result: "Permission loss and actual query exclusion remain distinct; Incomplete page chains never produce deletion proposals; Typed SDK and CLI return bounded TOON/JSON, typed refusals and remedies; work without git; README and example, behavioral revert proof, public tracker validation and npm/Bun CI release gates"
+actual_result: "https://github.com/unbraind/pm-jira/pull/157, merged 2026-10-23T19:25:51Z, merge 7ceaabe20725a3d55e614cbc266742fc81d0847b: Separates permission loss from actual JQL exclusion, refuses deletion proposals from incomplete page chains and exposes documented compact no-git SDK/CLI with public-copy and npm/Bun CI evidence."
 comments[11]{created_at,author,text}:
   "2026-10-23T16:44:54.176Z",codex-agent,"Overlap check (2026.10.23 CLI, pinned 2026.10.20 SDK): core listAllComplete/certifyCompleteListResult own certified tracker reads, workspace snapshots own capture/restore, and generic query cursors own pagination. No Jira query-membership explanation surface found. Existing Jira enhanced-search importer validates cursor traversal but intentionally stops at caller limits; selection comparison must independently require a terminal page. pm-graph snapshot-impact compares relationships, reachability and evidence, not Jira membership. Reuse host command contracts, TOON/JSON rendering, read_output budgeting and semantic refusal envelopes; use SDK complete reads for public tracker validation. Design: explicit v1 site/principal/scope-bound page-chain snapshots; absence remains unresolved unless independent visibility or permission-loss evidence is supplied. No local or remote mutations or deletion proposals."
   "2026-10-23T16:50:45.321Z",codex-agent,"Implemented typed snapshot validation, bounded deterministic change pages and host-registered jira explain-selection. Cursor chains require initial request, exact opaque continuations, unique keys and a final page; capped imports refuse. Added explicit query_excluded evidence rather than inferring exclusion from visibility alone, because Jira search is eventually consistent. Bare absence, visible-only, unknown and not_found observations stay unresolved. Same-site/principal/scope and chronological snapshots are mandatory. Pure comparison tests pass 8/8 with 100% lines/branches/functions for the comparison module. Installed CLI/no-git checks and public tracker projection are underway."
@@ -39,4 +44,5 @@ docs[6]{path,scope}:
   "https://github.com/unbraind/pm-jira/actions/runs/40009578886",project
   "https://github.com/unbraind/pm-jira/pull/157",project
   README.md,project
+close_reason: "https://github.com/unbraind/pm-jira/pull/157, merged 2026-10-23T19:25:51Z, merge 7ceaabe20725a3d55e614cbc266742fc81d0847b: Separates permission loss from actual JQL exclusion, refuses deletion proposals from incomplete page chains and exposes documented compact no-git SDK/CLI with public-copy and npm/Bun CI evidence."
 body: ""
