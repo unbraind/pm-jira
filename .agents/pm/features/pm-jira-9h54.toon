@@ -6,9 +6,9 @@ status: closed
 priority: 1
 tags: []
 created_at: "2026-10-22T15:19:29.714Z"
-updated_at: "2026-10-24T21:46:27.922Z"
+updated_at: "2026-10-24T23:11:37.141Z"
 closed_at: "2026-10-24T21:46:27.911Z"
-completed_at: "2026-10-24T21:46:27.911Z"
+completed_at: "2026-10-22T19:11:31.000Z"
 author: codex-agent
 acceptance_criteria: "Synthetic workflows with intermediate states and permission failures refuse impossible plans before writes.; Typed SDK and CLI emit compact TOON/JSON; no-git tracker support, documentation and measured public tracker validation."
 resolution: "Plans lifecycle changes from permitted transitions, rejects impossible intermediate-state and permission paths before writes, and provides compact documented no-git SDK/CLI with measured validation."
