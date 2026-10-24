@@ -2,13 +2,18 @@ id: pm-jira-9h54
 title: Plan permitted Jira lifecycle transitions before writes
 description: Discover issue-scoped Jira transitions and required fields; produce a read-only explicit plan or typed refusal with remedies.
 type: Feature
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-22T15:19:29.714Z"
-updated_at: "2026-10-22T17:10:38.294Z"
+updated_at: "2026-10-24T21:46:27.922Z"
+closed_at: "2026-10-24T21:46:27.911Z"
+completed_at: "2026-10-24T21:46:27.911Z"
 author: codex-agent
 acceptance_criteria: "Synthetic workflows with intermediate states and permission failures refuse impossible plans before writes.; Typed SDK and CLI emit compact TOON/JSON; no-git tracker support, documentation and measured public tracker validation."
+resolution: "Plans lifecycle changes from permitted transitions, rejects impossible intermediate-state and permission paths before writes, and provides compact documented no-git SDK/CLI with measured validation."
+expected_result: "Synthetic workflows with intermediate states and permission failures refuse impossible plans before writes.; Typed SDK and CLI emit compact TOON/JSON; no-git tracker support, documentation and measured public tracker validation."
+actual_result: "https://github.com/unbraind/pm-jira/pull/155, merged 2026-10-22T19:11:31Z, merge 8f50c03615a3231677f90d148963ba218e97d61a: Plans lifecycle changes from permitted transitions, rejects impossible intermediate-state and permission paths before writes, and provides compact documented no-git SDK/CLI with measured validation."
 comments[7]{created_at,author,text}:
   "2026-10-22T15:19:48.550Z",codex-agent,"Overlap recheck: pinned pm SDK owns lifecycle status validation, certified complete tracker reads and command rendering; pm-jira owns status/category mapping, pm-linear resolves team workflow states, pm-ado maps Azure states. None discovers Jira issue-scoped transition permissions or transition-screen required fields. Keep this read-only planner provider-specific. Jira current-user transition discovery cannot certify future-state permissions: refuse indirect plans, list permitted next steps, and require rediscovery after each externally executed intermediate step. No transition execution or sibling/core changes."
   "2026-10-22T15:27:07.895Z",codex-agent,"Targeted tests passed 4/4 via pm test --run --progress (0 skipped). Typecheck, test typecheck and docstring lint pass. Public main corpus 01fb41c6625106f4f18f1927cd65367ef3dc374f: 104 items (90 closed, 6 open, 5 in_progress, 2 blocked, 1 canceled). Filesystem read-only non-git copy, SDK certified complete read; 103 supported items x 4 synthetic Jira workflow snapshots = 412 plans: 13 ready, 26 no_permitted_transition, 13 fields_required, 360 noop. Largest JSON 336 bytes; full copied tree hashes unchanged, no cache additions, 0 Jira writes. Canceled counted but excluded from existing four-state adapter. This is real public lifecycle data plus synthetic Jira metadata, not a live tenant test. Writable-copy preflight exposed SDK runtime cache creation; read-only-copy measurement passed without changes."
@@ -26,4 +31,5 @@ tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
 docs[2]{path,scope}:
   docs/transition-plans.md,project
   README.md,project
+close_reason: "https://github.com/unbraind/pm-jira/pull/155, merged 2026-10-22T19:11:31Z, merge 8f50c03615a3231677f90d148963ba218e97d61a: Plans lifecycle changes from permitted transitions, rejects impossible intermediate-state and permission paths before writes, and provides compact documented no-git SDK/CLI with measured validation."
 body: ""

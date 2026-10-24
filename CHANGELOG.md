@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Plan permitted Jira lifecycle transitions before writes ([pm-jira-9h54](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-9h54.toon))
+- Explain entries and exits between explicit JQL selections ([pm-jira-0x0e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-0x0e.toon))
+
 ## 2026.10.23 - 2026-10-23
 
 ### Changed
