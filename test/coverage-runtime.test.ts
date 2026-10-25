@@ -1,3 +1,4 @@
+import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /**
  * Runtime coverage for HTTP, spawn, command, importer, exporter, and atomic
  * resolution paths that the pure suite cannot reach.
@@ -20,7 +21,6 @@ import { createExtensionTestHarness, type ExtensionTestHarness } from "@unbraine
 import type { OnWriteHookContext, PreflightOverrideContext } from "@unbrained/pm-cli/sdk/authoring";
 
 import extension, {
-  CommandError,
   EXIT_CODE,
   buildExportPlan,
   importJiraAtomic,
@@ -274,7 +274,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     await assert.rejects(
       () => resolveCommitItemMutations(),
       (err: unknown) => {
-        assert.ok(err instanceof CommandError);
+        assert.ok(isPmCliExpectedError(err));
         assert.match(err.message, /could not be imported/);
         return true;
       },
@@ -282,7 +282,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     await assert.rejects(
       () => resolveCommitItemMutations(),
       (err: unknown) => {
-        assert.ok(err instanceof CommandError);
+        assert.ok(isPmCliExpectedError(err));
         assert.match(err.message, /prior attempt in this process failed/);
         return true;
       },
@@ -297,7 +297,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
     await assert.rejects(
       () => resolveCommitItemMutations(),
       (err: unknown) => {
-        assert.ok(err instanceof CommandError);
+        assert.ok(isPmCliExpectedError(err));
         assert.match(err.message, /does not export commitItemMutations as a function/);
         return true;
       },
@@ -511,7 +511,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         await assert.rejects(
           () => runImport({ project: "PROJ" }, "."),
           (err: unknown) => {
-            assert.ok(err instanceof CommandError);
+            assert.ok(isPmCliExpectedError(err));
             assert.equal(err.exitCode, EXIT_CODE.USAGE);
             assert.match(err.message, /authentication failed/);
             return true;
@@ -525,7 +525,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         await assert.rejects(
           () => runImport({ project: "PROJ" }, "."),
           (err: unknown) => {
-            assert.ok(err instanceof CommandError);
+            assert.ok(isPmCliExpectedError(err));
             assert.equal(err.exitCode, EXIT_CODE.NOT_FOUND);
             return true;
           },
@@ -538,7 +538,7 @@ describe("runtime coverage (serial mocks)", { concurrency: 1 }, () => {
         await assert.rejects(
           () => runImport({ project: "PROJ" }, "."),
           (err: unknown) => {
-            assert.ok(err instanceof CommandError);
+            assert.ok(isPmCliExpectedError(err));
             assert.equal(err.exitCode, EXIT_CODE.GENERIC_FAILURE);
             assert.match(err.message, /timed out/);
             return true;

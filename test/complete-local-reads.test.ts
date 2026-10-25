@@ -1,3 +1,4 @@
+import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /** Real SDK/tracker regressions for complete reads; no SDK replacement or mock. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -10,7 +11,7 @@ import {
   nowIso, serializeItemDocument, writeFileAtomic, commitItemMutations, WorkspaceTransactionInterruptedError,
 } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
-import extension, { CommandError, certifyPmItems, jiraProvenance, readPmItems, runImport } from "../index.ts";
+import extension, { certifyPmItems, jiraProvenance, readPmItems, runImport } from "../index.ts";
 import type { JiraIssue } from "../index.ts";
 
 /** Initialize a real disposable tracker with the installed CLI, outside the package tracker. */
@@ -159,7 +160,7 @@ test("every incomplete or malformed answer is refused using a real SDK envelope"
   const before = await durableSnapshot(root);
   for (const [name, candidate] of cases) await t.test(name, async () => {
     await assert.rejects(() => certifyPmItems(candidate), (error: unknown) => {
-      assert.ok(error instanceof CommandError);
+      assert.ok(isPmCliExpectedError(error));
       assert.equal(error.exitCode, 1);
       assert.match(error.message, /Cannot certify complete local items/);
       assert.match(error.message, /strict-read.*no-truncate.*unbounded/);

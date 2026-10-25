@@ -8,33 +8,20 @@ import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMuta
 import { type PmSdkModule } from "./sdk-importer.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions, JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
-/**
- * Semantic exit codes pm's command runtime propagates to the shell.
- *
- * Mirrored here rather than imported because a standalone-installed extension
- * loads only its own `dist/`, so `@unbrained/pm-cli` is not resolvable at
- * runtime. {@link CommandError} carries one of these so a handled failure exits
- * cleanly once instead of re-invoking the handler.
- */
-export declare const EXIT_CODE: {
+/** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
+declare const EXIT_CODE: {
+    readonly SUCCESS: 0;
     readonly GENERIC_FAILURE: 1;
     readonly USAGE: 2;
     readonly NOT_FOUND: 3;
+    readonly CONFLICT: 4;
+    readonly DEPENDENCY_FAILED: 5;
+    readonly NO_EFFECT: 6;
+    readonly PARTIAL_EFFECT: 7;
 };
-/**
- * Error that carries a semantic process exit code.
- *
- * pm's command runtime treats a thrown error as a cleanly handled non-zero exit
- * only when it exposes a numeric `exitCode`; a plain `Error` instead falls
- * through to the "unhandled" path, which re-invokes the handler (doubling side
- * effects such as a second Jira fetch) and exits with a generic code. Throwing
- * this routes a failure to a clean, single exit at the chosen code.
- */
-export declare class CommandError extends Error {
-    /** Numeric exit code the runtime propagates to the shell (one of {@link EXIT_CODE}). */
-    exitCode: number;
-    constructor(message: string, exitCode?: number);
-}
+export { EXIT_CODE };
+/** Create a host-recognized expected failure, retaining the package's default exit code. */
+export declare function createCommandError(message: string, exitCode?: number): import("@unbrained/pm-cli/sdk").PmCliExpectedError;
 /**
  * One Jira issue as returned by the REST search endpoint.
  *
@@ -173,7 +160,7 @@ export type FieldMap = Record<string, string>;
 /**
  * Parse a `--map` value into a jiraField→pmField lookup.
  *
- * Accepts comma-separated `jiraField=pmField` pairs. Throws {@link CommandError}
+ * Accepts comma-separated `jiraField=pmField` pairs. Throws {@link createCommandError}
  * (USAGE) on a malformed pair or an unknown jira-side source field. Returns
  * `undefined` when no usable mapping was supplied so callers keep defaults.
  *
@@ -186,7 +173,7 @@ export declare function parseFieldMap(raw: string | undefined): FieldMap | undef
  *
  * Accepts comma-separated `JiraStatus=pm_status` pairs; targets accept canonical
  * pm statuses plus common aliases (done → closed, wip → in_progress). Throws
- * {@link CommandError} (USAGE) on a malformed entry or unrecognized target.
+ * {@link createCommandError} (USAGE) on a malformed entry or unrecognized target.
  *
  * @param raw - The raw `--status-map` string.
  * @returns The parsed lookup, or `undefined`.
@@ -515,7 +502,7 @@ type CommitItemMutations = (options: CommitItemMutationsOptions) => Promise<Comm
 export declare function __resetCommitItemMutationsCacheForTests(): void;
 /**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
- * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
+ * actionable {@link createCommandError} when the installed @unbrained/pm-cli is too
  * old to export it (requires >=2026.7.20). Mirrors pm-csv's
  * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
  * module scope so repeated --atomic calls don't re-import the SDK.
@@ -562,9 +549,9 @@ export declare function buildAtomicCreateMutation(item: IssueToItem, jiraKey: st
  * Commit every imported create in one atomic, crash-recoverable transaction
  * via the official `commitItemMutations` SDK helper. On failure every applied
  * create is compensated (deleted) so no committed items remain, and a clear
- * {@link CommandError} is thrown. Returns the count of items committed by
+ * {@link createCommandError} is thrown. Returns the count of items committed by
  * this attempt (already-applied steps from a prior interrupted run are
- * resumed, not double-counted). Throws CommandError (USAGE) when the SDK
+ * resumed, not double-counted). Throws createCommandError (USAGE) when the SDK
  * cannot be resolved.
  */
 export declare function importJiraAtomic(pmRoot: string, jql: string, filtered: readonly {

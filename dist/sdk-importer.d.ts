@@ -14,7 +14,7 @@
  * `dist/index.d.ts`, so nothing here appears in the published API surface or
  * its declarations. The package's own tests import this module directly.
  */
-/** Default loader for `@unbrained/pm-cli/sdk` (dynamic so a missing peer is a CommandError). */
+/** Default loader for the peer SDK, shared by expected errors, ordinary creates and atomic imports. */
 declare const defaultImportPmSdk: () => Promise<typeof import("@unbrained/pm-cli/sdk")>;
 /** The resolved SDK module, or a rejection recorded for the rest of the process. */
 export type PmSdkModule = Awaited<ReturnType<typeof defaultImportPmSdk>>;
