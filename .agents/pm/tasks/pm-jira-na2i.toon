@@ -1,0 +1,28 @@
+id: pm-jira-na2i
+title: Use the pm SDK for ordinary Jira imports and expected failures
+description: Replace both unused SDK findings from the 2026-10-25 audit; retain atomic imports and integrity boundaries.
+type: Task
+status: in_progress
+priority: 2
+tags[2]: refactor,sdk
+created_at: "2026-10-25T16:58:03.078Z"
+updated_at: "2026-10-25T17:14:55.484Z"
+author: codex-agent
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-jira-27sk,related,"2026-10-25T16:58:03.078Z",codex-agent,"cli:create:dep",detected
+comments[6]{created_at,author,text}:
+  "2026-10-25T16:58:36.873Z",codex-agent,"Plan: replace per-item create subprocesses in ordinary and legacy imports with PmClient.create; replace the handwritten expected-error class with the SDK factory through the existing loader. Retain commitItemMutations and certified complete reads. Compare origin/main and branch builds on copies of public tracker data in non-git scratch directories; prove each replacement by behavioral reversion. Neither replacement adds remote writes or multi-step item updates; Jira search remains read-only."
+  "2026-10-25T17:06:41.354Z",codex-agent,"Differential proof: origin/main e4e94d1171bda594b23296f08cebf7b5275dfb6f versus branch build; immutable snapshots of pm-jira (108 public items) and pm-csv origin/main 7b609b1df4519165539c5c0a199a07ef97871fea (126 items), with writes restricted to fresh non-git copies. All 15 comparisons passed: rich/bare ordinary creates, partial failure, atomic create/retry, two command previews per tracker, plus three expected-error cases. Fields, counts, diagnostics, messages and exit codes match; intentional SDK difference is error name PmCliError and structural isPmCliExpectedError instead of the removed CommandError class."
+  "2026-10-25T17:07:43.322Z",codex-agent,"Revert proof, createPmItem: in an isolated source copy restored only the origin/main subprocess implementation and its child_process import; node --test --test-name-pattern=\"ordinary imports work\" test/sdk-adoption.test.ts exited 1 (imported 0 instead of 1 with no pm executable on PATH). Restored SDK implementation passes. Revert proof, expected errors: restored only the adapter body to the old Error/name/exitCode behavior; node --test --test-name-pattern=\"expected failures use the SDK\" test/sdk-adoption.test.ts exited 1 at isPmCliExpectedError. Restored SDK factory passes. Four new real-SDK tests pass, including authoritative-history corruption after priming listMutationEvents. No history/cursor read was replaced and atomic commitItemMutations is unchanged."
+  "2026-10-25T17:09:21.890Z",codex-agent,"Local verification: npm run coverage passed 275 tests with 0 failures, skips or cancellations; all four shipped source files measured 100% lines, branches and functions at unchanged thresholds. npm run typecheck, npm run build:test, npm run docstring and git diff --check pass; no separate lint script is configured. Linked regression execution via pm test --run --progress passed 4 tests. Strict local tracker health passes after restoring the CI-pinned pm-github installation. Both audit findings are replaced; no missing SDK API or adoption blocker remains. index.ts removes 85 lines and adds 57 (net 28 fewer); no remote mutation implementation was changed."
+  "2026-10-25T17:10:43.650Z",codex-agent,"Extended differential proof now passes 17 comparisons, adding the legacy jira-sync importer against a real local TLS Jira fixture on both public trackers. Each importer creates exactly one local item then zero on retry; the fake remote server observes eight GETs and zero remote mutations. Deterministic field comparison also includes author and terminal metadata. The current CI workflow runs the same before/after harness against its base commit before the unchanged npm and Bun release gates."
+  "2026-10-25T17:14:54.175Z",codex-agent,"PR https://github.com/unbraind/pm-jira/pull/165 is ready for review. Source commit 1b94da2c023b48ab6a84d44cfa1b03ca13db76e5 passed CI https://github.com/unbraind/pm-jira/actions/runs/40215278306: Node 22 and 26 each passed npm run release:check and bun run release:check, 275 tests per gate (1100 executions total), zero failures/skips/cancellations and 100% lines/branches/functions. Each CI job also passed 10 base-build differential comparisons. CodeQL passed. DeepScan found four unused test imports; removed in the validation follow-up. Hound reports seven ES6/module-parser findings in generated output, matching existing pm-jira-92cf; its green status is not an approval. Greptile trial ended, Sourcery/Cubic quota-limited, CodeRabbit skipped manual-only review: all remain missing review evidence. No merge or release."
+files[3]{path,scope,note}:
+  index.ts,project,Both audited SDK replacements
+  scripts/sdk-adoption-differential.ts,project,Before and after public tracker comparison
+  test/sdk-adoption.test.ts,project,Real SDK regression and cache-integrity proof
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/sdk-adoption.test.ts,project,codex-agent,"2026-10-25T17:07:45.699Z",local_mutation,refactor/sdk-adoption-1025
+docs[1]{path,scope,note}:
+  README.md,project,Expected-error and no-git contracts
+body: ""

@@ -1,3 +1,4 @@
+import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
@@ -10,7 +11,6 @@ import {
   deriveAtomicTransactionId,
   buildAtomicCreateMutation,
   resolveCommitItemMutations,
-  CommandError,
   EXIT_CODE,
 } from "../index.ts";
 import type { JiraIssue } from "../index.ts";
@@ -255,7 +255,7 @@ test("atomic rollback: a failing mutation leaves ZERO committed items", async ()
           "throws the rolled-back error",
         );
         assert.match((err as Error).message, /compensated \(deleted\)/);
-        assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.GENERIC_FAILURE);
+        assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.GENERIC_FAILURE);
         return true;
       },
     );
@@ -319,8 +319,8 @@ test("resolveCommitItemMutations: missing export throws the USAGE upgrade guard"
   await assert.rejects(
     async () => resolveCommitItemMutations(async () => ({}) as never),
     (err: unknown) => {
-      assert.ok(err instanceof CommandError);
-      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.ok(isPmCliExpectedError(err));
+      assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
       assert.match((err as Error).message, /does not export commitItemMutations as a function/);
       assert.match((err as Error).message, />=2026\.7\.20/);
       return true;
@@ -335,8 +335,8 @@ test("resolveCommitItemMutations: an import failure throws the USAGE could-not-i
         throw new Error("Cannot find module '@unbrained/pm-cli/sdk'");
       }),
     (err: unknown) => {
-      assert.ok(err instanceof CommandError);
-      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.ok(isPmCliExpectedError(err));
+      assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
       assert.match((err as Error).message, /could not be imported/);
       return true;
     },

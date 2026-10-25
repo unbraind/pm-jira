@@ -15,7 +15,7 @@
  * its declarations. The package's own tests import this module directly.
  */
 
-/** Default loader for `@unbrained/pm-cli/sdk` (dynamic so a missing peer is a CommandError). */
+/** Default loader for the peer SDK, shared by expected errors, ordinary creates and atomic imports. */
 const defaultImportPmSdk = (): Promise<typeof import("@unbrained/pm-cli/sdk")> =>
   import("@unbrained/pm-cli/sdk");
 

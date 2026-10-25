@@ -89,6 +89,11 @@ jobs:
           fi
           echo "Committed dist/ matches a fresh build."
 
+      - name: Compare SDK adoption with the base build
+        env:
+          PM_JIRA_BASELINE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/sdk-adoption-differential.ts
+
       - name: Verify complete docstring coverage
         run: npm run docstring
 

@@ -1,3 +1,4 @@
+import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
@@ -8,7 +9,6 @@ import path from "node:path";
 import { createExtensionTestHarness, type ExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
 import extension, {
-  CommandError,
   EXIT_CODE,
   optionString,
   optionEnabled,
@@ -271,7 +271,7 @@ test("parseStatusMap rejects invalid targets and malformed entries", () => {
     "in review": "in_progress",
   });
   assert.throws(() => parseStatusMap("QA=nonsense"), (e: unknown) => {
-    assert.strictEqual((e as CommandError).exitCode, EXIT_CODE.USAGE);
+    assert.strictEqual((e as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
     return true;
   });
   assert.throws(() => parseStatusMap("noEqualsSign"), /status-map/);
@@ -361,7 +361,7 @@ test("resolveCreds throws a USAGE CommandError when creds are missing", () => {
     (err: unknown) => {
       assert.match((err as Error).message, /JIRA_BASE_URL/);
       assert.match((err as Error).message, /JIRA_API_TOKEN/);
-      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
       return true;
     }
   );
@@ -402,7 +402,7 @@ test("jira sync throws a USAGE CommandError when credentials are missing", async
       async () => ext.runCommand({ command: "jira sync", options: { project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
         assert.match((err as Error).message, /JIRA_BASE_URL/);
-        assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+        assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
         return true;
       }
     );
@@ -415,7 +415,7 @@ test("pm jira import (importer) throws a USAGE CommandError when credentials are
     await assert.rejects(
       async () => ext.runImporter({ importer: "jira", options: { project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
-        assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+        assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
         return true;
       }
     );
@@ -428,7 +428,7 @@ test("pm jira export --push throws a USAGE CommandError when credentials are mis
     await assert.rejects(
       async () => ext.runExporter({ exporter: "jira", options: { push: true, project: "PROJ" }, pmRoot: ".agents/pm" }),
       (err: unknown) => {
-        assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+        assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
         return true;
       }
     );
@@ -564,7 +564,7 @@ test("parseFieldMap parses pairs and rejects unknown / malformed", () => {
   });
   assert.strictEqual(parseFieldMap(undefined), undefined);
   assert.throws(() => parseFieldMap("bogus=x"), (e: unknown) => {
-    assert.strictEqual((e as CommandError).exitCode, EXIT_CODE.USAGE);
+    assert.strictEqual((e as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
     return true;
   });
   assert.throws(() => parseFieldMap("noequals"), /--map/);
@@ -989,7 +989,7 @@ test("parseFieldMap is reached via --field-map alias in runImport dry-run", asyn
         pmRoot: ".agents/pm",
       }),
     (err: unknown) => {
-      assert.strictEqual((err as CommandError).exitCode, EXIT_CODE.USAGE);
+      assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.USAGE);
       return true;
     }
   );

@@ -494,7 +494,9 @@ The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
 
 JQL selection comparison, transition planning, credential diagnostics and Jira
 import/export previews work in plain directories and non-git trackers. Import/sync and explicit export push
-also use the tracker and Jira APIs without requiring git. Changelog generation
+also use the tracker and Jira APIs without requiring git. Ordinary imports create
+items through the pm SDK in process, so they do not need a separate `pm` executable
+on `PATH`. Atomic imports continue to use `commitItemMutations`. Changelog generation
 from release tags requires a git repository. Transition planning invokes no git
 subprocess and never writes a tracker. Selection comparison also invokes no git
 subprocess; it reads only the two explicit JSON files and never reads or writes
@@ -566,3 +568,27 @@ consistency and caller assertions remain explicit limits; a complete chain does
 not prove atomic capture, live permissions, or why a query stopped matching.
 Core SDK complete reads/snapshots retain ownership of tracker capture and
 restore; pm-graph compares relationships rather than Jira query membership.
+
+## SDK adoption verification
+
+Expected failures use the SDK `createPmCliExpectedError` contract. Error messages
+and semantic exit codes are retained; the error name is now the SDK's
+`PmCliError`. SDK callers should use `isPmCliExpectedError` rather than the
+removed package-specific `CommandError` class.
+
+Run `node scripts/sdk-adoption-differential.ts` after building to compare the
+current build with an `origin/main` build against copies of the public tracker.
+Additional public package checkouts may be passed as arguments. Override the
+baseline with `PM_JIRA_BASELINE_REF`. The harness leaves the source checkouts and
+snapshots unchanged, exercises writes only in disposable non-git copies, and
+compares create fields, counts, repeat imports, diagnostics, command previews,
+and expected failures. Generated item IDs and timestamps are excluded from
+field comparison. The expected error name is an intentional SDK difference.
+
+Certified complete local reads remain mandatory before import matching and
+export planning. Neither SDK replacement substitutes the cached event index for
+verified history. The regression suite also primes the event cache, corrupts
+authoritative SDK-created history, and checks that `verifyHistoryEntries` still
+detects the corruption. No Jira create, link or comment call is introduced by
+these replacements; imports only read Jira and create local items in one commit
+per item.

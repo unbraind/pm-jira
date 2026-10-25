@@ -36,7 +36,6 @@ import type {
 import https from "node:https";
 import { URL } from "node:url";
 import { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 import type {
@@ -52,45 +51,13 @@ export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, Jql
   JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
 
 
-// pm's extension command runtime only treats a thrown error as a cleanly
-// handled non-zero exit when the error carries a numeric `exitCode` property
-// (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
-// fall through to its "unhandled" path, which RE-INVOKES the command handler a
-// second time — doubling side effects (e.g. a second Jira fetch) and exiting
-// with a generic code instead of a semantic one. We mirror the SDK's EXIT_CODE
-// contract here rather than importing it: standalone-installed extensions load
-// only their own `dist/`, so `@unbrained/pm-cli` is not resolvable at runtime.
-/**
- * Semantic exit codes pm's command runtime propagates to the shell.
- *
- * Mirrored here rather than imported because a standalone-installed extension
- * loads only its own `dist/`, so `@unbrained/pm-cli` is not resolvable at
- * runtime. {@link CommandError} carries one of these so a handled failure exits
- * cleanly once instead of re-invoking the handler.
- */
-export const EXIT_CODE = {
-  GENERIC_FAILURE: 1,
-  USAGE: 2,
-  NOT_FOUND: 3,
-} as const;
+/** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
+const { createPmCliExpectedError, EXIT_CODE } = await importPmSdk();
+export { EXIT_CODE };
 
-/**
- * Error that carries a semantic process exit code.
- *
- * pm's command runtime treats a thrown error as a cleanly handled non-zero exit
- * only when it exposes a numeric `exitCode`; a plain `Error` instead falls
- * through to the "unhandled" path, which re-invokes the handler (doubling side
- * effects such as a second Jira fetch) and exits with a generic code. Throwing
- * this routes a failure to a clean, single exit at the chosen code.
- */
-export class CommandError extends Error {
-  /** Numeric exit code the runtime propagates to the shell (one of {@link EXIT_CODE}). */
-  exitCode: number;
-  constructor(message: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE) {
-    super(message);
-    this.name = "CommandError";
-    this.exitCode = exitCode;
-  }
+/** Create a host-recognized expected failure, retaining the package's default exit code. */
+export function createCommandError(message: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE) {
+  return createPmCliExpectedError(message, { exitCode });
 }
 
 // ---------------------------------------------------------------------------
@@ -389,7 +356,7 @@ function fieldMapSkips(fieldMap: FieldMap | undefined, ...keys: string[]): boole
 /**
  * Parse a `--map` value into a jiraField→pmField lookup.
  *
- * Accepts comma-separated `jiraField=pmField` pairs. Throws {@link CommandError}
+ * Accepts comma-separated `jiraField=pmField` pairs. Throws {@link createCommandError}
  * (USAGE) on a malformed pair or an unknown jira-side source field. Returns
  * `undefined` when no usable mapping was supplied so callers keep defaults.
  *
@@ -404,7 +371,7 @@ export function parseFieldMap(raw: string | undefined): FieldMap | undefined {
     if (!trimmed) continue;
     const eq = trimmed.indexOf("=");
     if (eq < 0) {
-      throw new CommandError(
+      throw createCommandError(
         `Invalid --map entry "${trimmed}" (expected "jiraField=pmField").`,
         EXIT_CODE.USAGE
       );
@@ -412,13 +379,13 @@ export function parseFieldMap(raw: string | undefined): FieldMap | undefined {
     const from = trimmed.slice(0, eq).trim().toLowerCase();
     const to = trimmed.slice(eq + 1).trim();
     if (!from || !to) {
-      throw new CommandError(
+      throw createCommandError(
         `Invalid --map entry "${trimmed}" (empty field name).`,
         EXIT_CODE.USAGE
       );
     }
     if (!KNOWN_MAP_KEYS.has(from)) {
-      throw new CommandError(
+      throw createCommandError(
         `Unknown --map source field "${from}" (expected one of ${[...KNOWN_MAP_KEYS].join("|")}).`,
         EXIT_CODE.USAGE
       );
@@ -433,7 +400,7 @@ export function parseFieldMap(raw: string | undefined): FieldMap | undefined {
  *
  * Accepts comma-separated `JiraStatus=pm_status` pairs; targets accept canonical
  * pm statuses plus common aliases (done → closed, wip → in_progress). Throws
- * {@link CommandError} (USAGE) on a malformed entry or unrecognized target.
+ * {@link createCommandError} (USAGE) on a malformed entry or unrecognized target.
  *
  * @param raw - The raw `--status-map` string.
  * @returns The parsed lookup, or `undefined`.
@@ -446,7 +413,7 @@ export function parseStatusMap(raw: string | undefined): Record<string, PmStatus
     if (!trimmed) continue;
     const eq = trimmed.indexOf("=");
     if (eq < 0) {
-      throw new CommandError(
+      throw createCommandError(
         `Invalid --status-map entry "${trimmed}" (expected "JiraStatus=pm_status").`,
         EXIT_CODE.USAGE
       );
@@ -454,14 +421,14 @@ export function parseStatusMap(raw: string | undefined): Record<string, PmStatus
     const from = trimmed.slice(0, eq).trim().toLowerCase();
     const toRaw = trimmed.slice(eq + 1).trim();
     if (!from) {
-      throw new CommandError(
+      throw createCommandError(
         `Invalid --status-map entry "${trimmed}" (empty Jira status).`,
         EXIT_CODE.USAGE
       );
     }
     const to = normalizePmStatusInput(toRaw);
     if (!to) {
-      throw new CommandError(
+      throw createCommandError(
         `Invalid --status-map target "${toRaw}" (expected one of ${PM_STATUSES.join("|")} ` +
           `or aliases like todo/wip/done/on-hold).`,
         EXIT_CODE.USAGE
@@ -893,7 +860,7 @@ export interface JiraCreds {
 }
 
 // Resolve Jira credentials from options (--host) + env. Returns a structured
-// CommandError (numeric exitCode) when anything is missing rather than throwing
+// createCommandError (numeric exitCode) when anything is missing rather than throwing
 // a bare Error, so the CLI exits non-zero exactly once with a helpful message.
 export function resolveCreds(
   options: Record<string, unknown>,
@@ -911,7 +878,7 @@ export function resolveCreds(
   if (!token) missing.push("JIRA_API_TOKEN");
 
   if (missing.length > 0) {
-    throw new CommandError(
+    throw createCommandError(
       `Missing Jira credentials: ${missing.join(", ")}. ` +
         `Set JIRA_BASE_URL (or pass --host), JIRA_EMAIL, and JIRA_API_TOKEN. ` +
         `Create a token at https://id.atlassian.com/manage-profile/security/api-tokens`,
@@ -1549,21 +1516,26 @@ export function issueToItem(
   };
 }
 
-function createPmItem(pmRoot: string, item: IssueToItem): boolean {
-  const args = [
-    "--path", pmRoot,
-    "create",
-    "--title", item.title,
-    "--status", item.status,
-    "--type", item.type,
-    "--priority", String(item.priority),
-    "--description", item.description,
-    ...(item.body ? ["--body", item.body] : []),
-    ...(item.deadline ? ["--deadline", item.deadline] : []),
-    ...(item.tags.length > 0 ? ["--tags", item.tags.join(",")] : []),
-  ];
-  const result = spawnSync("pm", args, { encoding: "utf-8" });
-  return result.status === 0;
+/** Create one ordinary import in process; preserve per-item failure and partial-success reporting. */
+async function createPmItem(pmRoot: string, item: IssueToItem): Promise<boolean> {
+  try {
+    const { PmClient } = await importPmSdk();
+    const root = resolve(pmRoot);
+    const client = new PmClient({ pmRoot: root, cwd: root });
+    await client.create({
+      title: item.title,
+      status: item.status,
+      type: item.type,
+      priority: item.priority,
+      description: item.description,
+      ...(item.body ? { body: item.body } : {}),
+      ...(item.deadline ? { deadline: item.deadline } : {}),
+      ...(item.tags.length > 0 ? { tags: item.tags.join(",") } : {}),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1614,7 +1586,7 @@ export function __resetCommitItemMutationsCacheForTests(): void {
 
 /**
  * Assert a dynamically-resolved `@unbrained/pm-cli/sdk` export is callable,
- * throwing the shared, friendly {@link CommandError} (USAGE) when the installed
+ * throwing the shared, friendly {@link createCommandError} (USAGE) when the installed
  * SDK is too old to provide it. Centralizing this guard keeps the check and the
  * upgrade message identical across every --atomic SDK dependency
  * (`commitItemMutations`, `normalizeItemId`, `readSettings`) so the copies can
@@ -1622,7 +1594,7 @@ export function __resetCommitItemMutationsCacheForTests(): void {
  */
 function assertSdkFunction<F>(fn: unknown, exportName: string): F {
   if (typeof fn !== "function") {
-    throw new CommandError(
+    throw createCommandError(
       `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the installed SDK does not export ${exportName} as a function. Upgrade @unbrained/pm-cli to >=2026.7.20.`,
       EXIT_CODE.USAGE,
     );
@@ -1632,7 +1604,7 @@ function assertSdkFunction<F>(fn: unknown, exportName: string): F {
 
 /**
  * Dynamically resolve the SDK `commitItemMutations` helper, throwing a clear,
- * actionable {@link CommandError} when the installed @unbrained/pm-cli is too
+ * actionable {@link createCommandError} when the installed @unbrained/pm-cli is too
  * old to export it (requires >=2026.7.20). Mirrors pm-csv's
  * `resolveCommitWorkspaceTransaction` UX. The resolved function is cached at
  * module scope so repeated --atomic calls don't re-import the SDK.
@@ -1652,7 +1624,7 @@ export async function resolveCommitItemMutations(
       mod = await importSdk();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new CommandError(
+      throw createCommandError(
         `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`,
         EXIT_CODE.USAGE,
       );
@@ -1663,7 +1635,7 @@ export async function resolveCommitItemMutations(
     );
   }
   if (cachedCommitItemMutations === null) {
-    throw new CommandError(
+    throw createCommandError(
       "--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but it could not be resolved (a prior attempt in this process failed). Ensure @unbrained/pm-cli is installed and up to date.",
       EXIT_CODE.USAGE,
     );
@@ -1675,7 +1647,7 @@ export async function resolveCommitItemMutations(
   } catch (err: unknown) {
     cachedCommitItemMutations = null;
     const msg = err instanceof Error ? err.message : String(err);
-    throw new CommandError(
+    throw createCommandError(
       `--atomic requires @unbrained/pm-cli>=2026.7.20 with the commitItemMutations SDK primitive, but the SDK could not be imported: ${msg}. Install or upgrade @unbrained/pm-cli.`,
       EXIT_CODE.USAGE,
     );
@@ -1779,9 +1751,9 @@ export function buildAtomicCreateMutation(
  * Commit every imported create in one atomic, crash-recoverable transaction
  * via the official `commitItemMutations` SDK helper. On failure every applied
  * create is compensated (deleted) so no committed items remain, and a clear
- * {@link CommandError} is thrown. Returns the count of items committed by
+ * {@link createCommandError} is thrown. Returns the count of items committed by
  * this attempt (already-applied steps from a prior interrupted run are
- * resumed, not double-counted). Throws CommandError (USAGE) when the SDK
+ * resumed, not double-counted). Throws createCommandError (USAGE) when the SDK
  * cannot be resolved.
  */
 export async function importJiraAtomic(
@@ -1845,7 +1817,7 @@ export async function importJiraAtomic(
     const msg = err instanceof Error ? err.message : String(err);
     // Every applied create has been compensated (deleted) by the helper; no
     // committed items from this import remain in the tracker.
-    throw new CommandError(
+    throw createCommandError(
       `Atomic Jira import failed and was rolled back — every applied create was compensated (deleted); the tracker has no committed items from this import. Transaction id: ${transactionId}. Underlying error: ${msg}`,
       EXIT_CODE.GENERIC_FAILURE,
     );
@@ -1858,7 +1830,7 @@ export async function importJiraAtomic(
 }
 
 // Shared import core for both `pm jira sync`, `pm jira import` and the
-// `jira-sync` importer. Throws CommandError (semantic exitCode) on failure.
+// `jira-sync` importer. Throws createCommandError (semantic exitCode) on failure.
 // Build the exact Jira search GET request that an import WOULD issue. Pure +
 // offline-testable; used both by the live fetch and by --dry-run preview.
 /**
@@ -1983,7 +1955,7 @@ export async function runImport(
   const statusFilter = resolveStatusFilter(opts.statusFilter ?? readStringOption(options, "status"));
 
   if (!project && !customJql) {
-    throw new CommandError(
+    throw createCommandError(
       "Provide either --project <KEY> or --jql <query> to specify which issues to import.",
       EXIT_CODE.USAGE
     );
@@ -2020,7 +1992,7 @@ export async function runImport(
     };
   }
 
-  // Live import: resolve creds now (throws a structured CommandError if any are
+  // Live import: resolve creds now (throws a structured createCommandError if any are
   // missing). The preflight gate normally aborts earlier with a clearer message,
   // but resolveCreds remains the authoritative guard for direct/importer entry.
   // When a pre-fetched issue set is injected (test seam), skip cred resolution
@@ -2060,7 +2032,7 @@ export async function runImport(
       } else {
         exitCode = EXIT_CODE.GENERIC_FAILURE;
       }
-      throw new CommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
+      throw createCommandError(`Failed to fetch issues from Jira: ${msg}`, exitCode);
     }
   }
 
@@ -2145,7 +2117,7 @@ export async function runImport(
     }
   } else {
     for (const { issue, item } of pending) {
-      if (createPmItem(pmRoot, item)) created++;
+      if (await createPmItem(pmRoot, item)) created++;
       else console.error(`Failed to create item for ${issue.key}`);
     }
   }
@@ -2233,7 +2205,7 @@ export async function certifyPmItems(candidate: unknown): Promise<PmItem[]> {
     }
     return result.items;
   } catch (error) {
-    throw new CommandError(`Cannot certify complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
+    throw createCommandError(`Cannot certify complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
   }
 }
 
@@ -2253,7 +2225,7 @@ export async function readPmItems(pmRoot: string): Promise<PmItem[]> {
     const root = resolve(pmRoot);
     candidate = await sdk.listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
   } catch (error) {
-    throw new CommandError(`Cannot read complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
+    throw createCommandError(`Cannot read complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
   }
   return certifyPmItems(candidate);
 }
@@ -2746,7 +2718,7 @@ export default defineExtension({
       const fieldMap = parseFieldMap(readStringOptionAliased(options, "map", "field-map"));
 
       if (!project && !customJql) {
-        throw new CommandError(
+        throw createCommandError(
           "jira-sync importer requires either options.project or options.jql",
           EXIT_CODE.USAGE
         );
@@ -2777,7 +2749,7 @@ export default defineExtension({
       for (const issue of issues) {
         const item = issueToItem(issue, creds.baseUrl, { statusMap, fieldMap });
         if (existing.has(item.jiraUrl)) continue;
-        if (createPmItem(ctx.pm_root, item)) {
+        if (await createPmItem(ctx.pm_root, item)) {
           created++;
           existing.set(item.jiraUrl, new Set());
         }
@@ -2845,10 +2817,10 @@ export default defineExtension({
 
       if (push) {
         // Resolve creds first so the missing-creds path returns a structured
-        // CommandError before we ever build payloads or hit the network.
+        // createCommandError before we ever build payloads or hit the network.
         const creds = resolveCreds(options);
         if (!project) {
-          throw new CommandError(
+          throw createCommandError(
             "--push requires --project <KEY> (the target Jira project for new issues).",
             EXIT_CODE.USAGE
           );
@@ -2882,7 +2854,7 @@ export default defineExtension({
         if (failed > 0 && created === 0 && updated === 0) {
           // Nothing landed at all — surface a non-zero exit so callers/CI notice,
           // but only after the whole batch was attempted and reported.
-          throw new CommandError(
+          throw createCommandError(
             `pm jira export --push failed: all ${failed} item(s) errored (see above).`
           );
         }

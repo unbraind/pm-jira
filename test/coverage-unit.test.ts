@@ -1,3 +1,4 @@
+import { isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /**
  * Behavioural tests for previously unreached branches in the public surface.
  *
@@ -9,8 +10,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CommandError,
   EXIT_CODE,
+  createCommandError,
   adfToPlainText,
   buildJql,
   decidePushOnWrite,
@@ -86,7 +87,7 @@ test("normalizePmStatusInput treats empty and whitespace as missing", () => {
 
 test("parseFieldMap rejects empty names, skips blank pairs, and collapses an empty map", () => {
   assert.throws(() => parseFieldMap("=Task"), (err: unknown) => {
-    assert.ok(err instanceof CommandError);
+    assert.ok(isPmCliExpectedError(err));
     assert.equal(err.exitCode, EXIT_CODE.USAGE);
     assert.match(err.message, /empty field name/);
     return true;
@@ -101,7 +102,7 @@ test("parseFieldMap rejects empty names, skips blank pairs, and collapses an emp
 
 test("parseStatusMap rejects an empty Jira status and collapses an empty map", () => {
   assert.throws(() => parseStatusMap("=open"), (err: unknown) => {
-    assert.ok(err instanceof CommandError);
+    assert.ok(isPmCliExpectedError(err));
     assert.match(err.message, /empty Jira status/);
     return true;
   });
@@ -292,8 +293,8 @@ test("optionsOrEmpty returns the bag when present and {} when falsy", () => {
   assert.deepEqual(optionsOrEmpty(false), {});
 });
 
-test("CommandError defaults to GENERIC_FAILURE", () => {
-  const err = new CommandError("nope");
+test("SDK error adapter defaults to GENERIC_FAILURE", () => {
+  const err = createCommandError("nope");
   assert.equal(err.exitCode, EXIT_CODE.GENERIC_FAILURE);
-  assert.equal(err.name, "CommandError");
+  assert.equal(err.name, "PmCliError");
 });
