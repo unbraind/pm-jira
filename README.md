@@ -492,7 +492,7 @@ The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
 
 ## Without git
 
-JQL selection comparison, transition planning, credential diagnostics and Jira
+Create-field completion previews, JQL selection comparison, transition planning, credential diagnostics and Jira
 import/export previews work in plain directories and non-git trackers. Import/sync and explicit export push
 also use the tracker and Jira APIs without requiring git. Ordinary imports create
 items through the pm SDK in process, so they do not need a separate `pm` executable
@@ -592,3 +592,21 @@ authoritative SDK-created history, and checks that `verifyHistoryEntries` still
 detects the corruption. No Jira create, link or comment call is introduced by
 these replacements; imports only read Jira and create local items in one commit
 per item.
+
+## Create-field completion previews
+
+Preview the required bindings and missing answers for an explicitly selected
+Jira project/type, using revisioned create metadata:
+
+```bash
+pm jira preview-create --contract docs/examples/create-contract.json --json
+# Add the required Team answer, then protect the complete create batch:
+pm jira export --project DEMO --create-contract create.json --push --json
+```
+
+The SDK exports `previewJiraCreate` and typed `JiraCreate*` contracts. Custom
+required fields and exact allowed values are checked before any guarded POST.
+Diagnostics fit a declared JSON byte budget and expose `page.nextOffset`.
+See [the contract, limits and export guarantees](docs/create-preview.md) and
+[the example fixture](docs/examples/create-contract.json). The preview is read-only
+and validates supplied metadata; it does not establish live Jira permissions.

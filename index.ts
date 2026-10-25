@@ -45,6 +45,11 @@ import type {
   CommitItemMutationsResult,
 } from "@unbrained/pm-cli/sdk";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
+import { previewJiraCreate } from "./create-preview.ts";
+import type { JiraCreatePreviewInput } from "./create-preview.ts";
+import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
+export { previewJiraCreate } from "./create-preview.ts";
+export type { JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
 import { registerJqlSelectionCommand } from "./jql-selection-command.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions,
@@ -2400,9 +2405,32 @@ export interface ExportPushResult {
 
 export async function runExportPush(
   plan: ExportPlan,
-  opts: { authHeader: string; updateExisting: boolean },
+  opts: { authHeader: string; updateExisting: boolean; createContract?: unknown },
   deps: ExportPushDeps = { post: httpsPost, put: httpsPut }
 ): Promise<ExportPushResult> {
+  // Prevalidate the complete batch before any POST/PUT. Recompile on each call;
+  // a prior ready preview is never trusted as a durable execution plan.
+  if (opts.createContract !== undefined) {
+    const checked = previewJiraCreate(opts.createContract);
+    if (checked.kind === "refused") throw createCommandError(checked.remediation, EXIT_CODE.USAGE);
+    const contract = structuredClone(opts.createContract) as JiraCreatePreviewInput;
+    const guarded: ExportPlanEntry[] = [];
+    for (const entry of plan.entries) {
+      if (entry.op !== "create") { guarded.push(entry); continue; }
+      if (entry.payload.fields.project?.key !== contract.project || entry.payload.fields.issuetype.name !== contract.issueType) {
+        throw createCommandError("Create contract scope differs from export project/type; select matching metadata.", EXIT_CODE.USAGE);
+      }
+      // Only declared fields are adapted. Description remains Jira ADF and must
+      // be validated by Jira; this v1 scalar contract deliberately excludes ADF.
+      const declared = new Set(contract.metadata.fields.map(field => field.id));
+      const answers = { ...contract.answers };
+      for (const [key, value] of Object.entries(entry.payload.fields)) if (declared.has(key)) Object.assign(answers, { [key]: value });
+      const preview = previewJiraCreate({ ...contract, answers });
+      if (preview.kind !== "ready") throw createCommandError("Create answers are missing or invalid; run jira preview-create and supply required allowed values. No writes attempted.", EXIT_CODE.USAGE);
+      guarded.push({ ...entry, payload: { fields: { ...entry.payload.fields, ...answers } } });
+    }
+    plan = structuredClone({ ...plan, entries: guarded });
+  }
   const toCreate = plan.entries.filter((e) => e.op === "create");
   const toUpdate = plan.entries.filter((e) => e.op === "update");
   const logError = deps.logError ?? ((message: string) => console.error(message));
@@ -2575,6 +2603,7 @@ const EXPORT_FLAGS = [
   { long: "--rich", description: "Derive Jira issuetype + priority from pm item type/priority" },
   { long: "--update-existing", description: "PUT changed fields to issues that already carry a Jira key (else they are skipped)" },
   { long: "--dry-run", description: "Print the Jira mutations that would be made, without any network call" },
+  { long: "--create-contract", value_name: "file", description: "Validate every create against a revisioned JSON contract before any POST" },
   { long: "--push", description: "POST the payloads to Jira (requires creds + --project)" },
 ];
 
@@ -2598,6 +2627,7 @@ export default defineExtension({
 
   activate(api: ExtensionApi) {
     registerJqlSelectionCommand(api);
+    registerCreatePreviewCommand(api);
     // -----------------------------------------------------------------------
     // schema — declare Jira provenance fields so the workspace knows them
     // -----------------------------------------------------------------------
@@ -2836,9 +2866,16 @@ export default defineExtension({
         // required custom field, a 4xx, ...) is caught + counted + logged and
         // the batch CONTINUES, instead of a mid-batch throw that abandons every
         // remaining item. Errors are streamed to stderr by runExportPush.
+        let createContract: unknown;
+        const contractFile = readStringOption(options, "create-contract");
+        if (contractFile !== undefined) {
+          const input = readCreateContract(contractFile);
+          if ("kind" in input) throw createCommandError(input.remediation, EXIT_CODE.USAGE);
+          createContract = input.value;
+        }
         const { created, updated, skipped, failed, failures } = await runExportPush(
           plan,
-          { authHeader: creds.authHeader, updateExisting }
+          { authHeader: creds.authHeader, updateExisting, createContract }
         );
 
         console.error(

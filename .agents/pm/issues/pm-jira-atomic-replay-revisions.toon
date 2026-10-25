@@ -1,0 +1,14 @@
+id: pm-jira-atomic-replay-revisions
+title: Bind atomic import replay identity to current target revisions
+description: "Seeded older-input replays of an atomic-imported issue can reuse a key-only transaction identity with a different plan and fail the SDK journal-plan comparison. Preserve the SDK fail-closed guard; redesign recovery identity around current SDK target revisions and transaction ownership, skip foreign records, and report unchanged only after reading current state. The create-field preview is read-only and introduces no journals."
+type: Issue
+status: open
+priority: 1
+tags: []
+created_at: "2026-10-25T23:23:20.390Z"
+updated_at: "2026-10-25T23:23:21.283Z"
+author: codex-agent
+acceptance_criteria: Revalidate expected target revisions through SDK reads on every retry and recovery; Older-input replay never overwrites local edits or relationships and does not reuse mismatched journals; Seeded replay tests compare all native fields read back through the SDK
+files[1]{path,scope}:
+  test/create-preview-model.test.ts,project
+body: ""

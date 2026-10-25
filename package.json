@@ -17,7 +17,9 @@
     "dist/",
     "manifest.json",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs/create-preview.md",
+    "docs/examples/create-contract.json"
   ],
   "scripts": {
     "build": "tsc",
