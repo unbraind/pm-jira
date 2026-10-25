@@ -1,4 +1,4 @@
-import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+import { isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /**
  * Behavioural tests for previously unreached branches in the public surface.
  *

@@ -1,4 +1,4 @@
-import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+import { isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /** Real SDK/tracker regressions for complete reads; no SDK replacement or mock. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

@@ -1,4 +1,4 @@
-import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+import { isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 /**
  * Runtime coverage for HTTP, spawn, command, importer, exporter, and atomic
  * resolution paths that the pure suite cannot reach.

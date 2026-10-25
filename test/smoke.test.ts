@@ -1,4 +1,4 @@
-import { isPmCliExpectedError, type PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
