@@ -20,8 +20,9 @@ function random(seed: number): () => number {
   return () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state >>> 8; };
 }
 /** Read the complete native field state through the SDK; timestamps are independent clocks. */
-async function state(root: string) {
+async function state(root: string, excludeClocks = true) {
   const result = await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
+  if (!excludeClocks) return result.items.sort((a, b) => a.id.localeCompare(b.id));
   return result.items.map(({ created_at: _created, updated_at: _updated, ...item }) => ({ ...item,
     ...(item.dependencies ? { dependencies: item.dependencies.map(({ created_at: _clock, ...edge }) => edge) } : {})
   })).sort((a, b) => a.id.localeCompare(b.id));
@@ -80,6 +81,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
   }
   const nativeIds = (await state(roots[0]!)).filter(row => row.type === "Task").map(row => row.id);
   t.mock.method(console, "error", () => {});
+  const importedReference = new PmClient({ pmRoot: roots[1]!, cwd: roots[1]!, noExtensions: true });
   for (const path of paths) for (const atomic of [false, true]) {
     const number = 100 + nativeIds.length;
     const issue: JiraIssue = { key: `DEMO-${number}`, fields: { summary: ` Fresh ${number} `,
@@ -91,7 +93,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
     } };
     const imported = await importing(path, [issue], atomic) as { imported: number }; assert.equal(imported.imported, 1);
     const actual = (await state(roots[0]!)).find(item => item.description?.includes(`Jira DEMO-${number}:`)); assert.ok(actual);
-    await clients[1]!.create({ author: atomic && path !== "jira-sync" ? "pm-jira" : "harness:codex", id: actual.id, title: `[DEMO-${number}] ${issue.fields.summary}`, body: "Body\r\nline",
+    await importedReference.create({ ...(atomic && path !== "jira-sync" ? { author: "pm-jira" } : {}), id: actual.id, title: `[DEMO-${number}] ${issue.fields.summary}`, body: "Body\r\nline",
       description: `Jira DEMO-${number}: ${host}/browse/DEMO-${number}`, status: "open", priority: 2,
       type: "Task", deadline: "2026-12-01", tags: "first,second,v1,component:core,sprint:s1,assignee:Fixture" });
     nativeIds.push(actual.id);
@@ -111,7 +113,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
       tags: `tag-${rand() % 9},shared`, priority: rand() % 5, deadline: `2026-12-${String(1 + rand() % 28).padStart(2, "0")}`,
       status: statuses[rand() % statuses.length] };
     for (const client of clients) await client.update(id, options);
-    const before = await state(roots[0]!);
+    const before = await state(roots[0]!, false);
     const path = paths[rand() % paths.length]!; const atomic = Boolean(rand() % 2);
     try {
       const imported = await importing(path, [originals[index]!], atomic) as { imported: number };
@@ -133,7 +135,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
     await assert.rejects(runExportPush(creates, { authHeader: "synthetic", updateExisting: false, createContract: input }, {
       post: async () => { posts++; return "{}"; }, put: async () => { throw new Error("unexpected PUT"); },
     }));
-    assert.deepEqual(await state(roots[0]!), before, `sequence ${sequence}: read/export paths preserve all native fields and relationships`);
+    assert.deepEqual(await state(roots[0]!, false), before, `sequence ${sequence}: read/export paths preserve all native fields and relationships`);
     assert.deepEqual(await state(roots[0]!), await state(roots[1]!), `sequence ${sequence}: SDK reference model`);
   }
   assert.equal(posts, 0);

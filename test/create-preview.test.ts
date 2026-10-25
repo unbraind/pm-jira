@@ -84,6 +84,10 @@ test("UTF-8 output budget exposes continuation with no lost diagnostics", () => 
     assert.ok(page.page.nextOffset > (input.offset ?? 0)); input.offset = page.page.nextOffset;
   } while (pages < 200);
   assert.equal(collected.length, 16 + 31 + 32); assert.ok(pages > 1);
+  assert.deepEqual(collected.filter(row => row.state === "missing").map(row => row.field), Array.from({ length: 31 }, (_, i) => `f${i + 1}`));
+  assert.deepEqual(collected.filter(row => row.state === "allowed").map(row => row.field), Array.from({ length: 32 }, (_, i) => `f${i}`));
+  const bindings = collected.filter(row => row.state === "bound"); assert.equal(bindings.length, 16);
+  assert.ok(bindings.every(row => row.field === "f0" && row.value === "雪".repeat(512)));
   input.offset = 1000000; const tail = previewJiraCreate(input); assert.ok(tail.kind !== "refused"); assert.deepEqual(tail.diagnostics, []);
   input.budget = 65536; input.offset = 0; assert.ok(previewJiraCreate(input).kind !== "refused");
 });
