@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Use the pm SDK for ordinary Jira imports and expected failures ([pm-jira-na2i](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-na2i.toon))
+
 ## 2026.10.25 - 2026-10-25
 
 ### Added
