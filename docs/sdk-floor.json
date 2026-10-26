@@ -1,0 +1,293 @@
+{
+  "package": "pm-jira",
+  "auditedMain": "84d1cde6211d9330ed659c39a756259e58c2f9c8",
+  "requiredFloor": "2026.8.18",
+  "previousFloors": {
+    "manifest": "2026.10.4",
+    "peer": ">=2026.10.4",
+    "dependency": null
+  },
+  "scope": "Published stable artifact API availability; no package runtime or lifecycle scripts executed. Purely erased types are excluded; function and constructor types used by runtime SDK loaders are included.",
+  "apis": [
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "certifyCompleteListResult",
+      "uses": [
+        "index.ts:2180"
+      ],
+      "first": "2026.8.18",
+      "previous": "2026.8.17",
+      "sha256": "b00374f0e32c98ccec03a5893d8bfbbae45650f44bd04292ceafd8d9aac059f7",
+      "previousSha256": "fda330eb4887031751889ef85b510d52886fa5f70b4813f3951d7eed705023f2"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "commitItemMutations",
+      "uses": [
+        "index.ts:1658"
+      ],
+      "first": "2026.7.20",
+      "previous": "2026.7.19",
+      "sha256": "6fbc1d789477491e007d03396dbf1dd2f09376220059887faf6f9d50668a6b08",
+      "previousSha256": "513e0aead42767a113a26b8b2e2cbb8a22879d0cb0500d4d3cdd16d21d9f7a39"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "createPmCliExpectedError",
+      "uses": [
+        "index.ts:55"
+      ],
+      "first": "2026.6.5",
+      "previous": "2026.5.31",
+      "sha256": "bb47c85bb2ce1a8ba858651af8d1f4ca6888bc731d0aaaa63a4b97427219cd89",
+      "previousSha256": "d3b4a795704588e414070a22a4034d7fbd7a290a050509cc4852e0051c0969a7"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "EXIT_CODE",
+      "uses": [
+        "index.ts:55"
+      ],
+      "first": "2026.5.14",
+      "previous": "2026.5.12",
+      "sha256": "7f7e9131afadb891344bf2fb93b15bc157d18c532a5da4ec31677957d37b7260",
+      "previousSha256": "42dcaef84dc441b7792aeffa059bfe10a86ae8b12b1084472229bba03fb29910"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "listAllComplete",
+      "uses": [
+        "index.ts:2226"
+      ],
+      "first": "2026.8.18",
+      "previous": "2026.8.17",
+      "sha256": "b00374f0e32c98ccec03a5893d8bfbbae45650f44bd04292ceafd8d9aac059f7",
+      "previousSha256": "fda330eb4887031751889ef85b510d52886fa5f70b4813f3951d7eed705023f2"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "normalizeItemId",
+      "uses": [
+        "index.ts:1784",
+        "index.ts:2098"
+      ],
+      "first": "2026.5.14",
+      "previous": "2026.5.12",
+      "sha256": "7f7e9131afadb891344bf2fb93b15bc157d18c532a5da4ec31677957d37b7260",
+      "previousSha256": "42dcaef84dc441b7792aeffa059bfe10a86ae8b12b1084472229bba03fb29910"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "PmClient",
+      "uses": [
+        "index.ts:1522"
+      ],
+      "first": "2026.7.6",
+      "previous": "2026.7.5",
+      "sha256": "0d6e446cf93a0f0660ce4e21943adf1e0c21381010ef67369f40cc9834b8d158",
+      "previousSha256": "4a6664f68120cace5648faf48d51b08c14e969d9c7e185e592f1a0fceae57274"
+    },
+    {
+      "kind": "export",
+      "module": "/sdk",
+      "name": "readSettings",
+      "uses": [
+        "index.ts:1790",
+        "index.ts:2094"
+      ],
+      "first": "2026.5.14",
+      "previous": "2026.5.12",
+      "sha256": "7f7e9131afadb891344bf2fb93b15bc157d18c532a5da4ec31677957d37b7260",
+      "previousSha256": "42dcaef84dc441b7792aeffa059bfe10a86ae8b12b1084472229bba03fb29910"
+    },
+    {
+      "kind": "member",
+      "module": "CommandHandlerContext",
+      "name": "command",
+      "uses": [
+        "index.ts:2636"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "CommandHandlerContext",
+      "name": "global",
+      "uses": [
+        "index.ts:2900"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "CommandHandlerContext",
+      "name": "options",
+      "uses": [
+        "jql-selection-command.ts:65",
+        "index.ts:2637",
+        "index.ts:2662",
+        "index.ts:2685",
+        "index.ts:2899"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "CommandHandlerContext",
+      "name": "pm_root",
+      "uses": [
+        "index.ts:2685"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "hooks",
+      "uses": [
+        "index.ts:2925"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerCommand",
+      "uses": [
+        "jql-selection-command.ts:53",
+        "index.ts:2648",
+        "index.ts:2669",
+        "index.ts:2892"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerExporter",
+      "uses": [
+        "index.ts:2766"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerFlags",
+      "uses": [
+        "index.ts:2692",
+        "index.ts:2693"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerImporter",
+      "uses": [
+        "index.ts:2695",
+        "index.ts:2703"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerItemFields",
+      "uses": [
+        "index.ts:2604"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ExtensionApi",
+      "name": "registerPreflight",
+      "uses": [
+        "index.ts:2629"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ImportExportContext",
+      "name": "options",
+      "uses": [
+        "index.ts:2696",
+        "index.ts:2704",
+        "index.ts:2767"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "ImportExportContext",
+      "name": "pm_root",
+      "uses": [
+        "index.ts:2696",
+        "index.ts:2747",
+        "index.ts:2752",
+        "index.ts:2774"
+      ],
+      "first": "2026.5.1",
+      "previous": "2026.3.12",
+      "sha256": "730de8b79aa0074dc2ca81a54ce37f9aaa0a4167b690c9a62b87d2121a8b37f7",
+      "previousSha256": "4e4e6a33cb45d665f072120e9e1ce25d2e5773e738cbc914b29e8f54367747fb"
+    },
+    {
+      "kind": "member",
+      "module": "PmClient",
+      "name": "create",
+      "uses": [
+        "index.ts:1525"
+      ],
+      "first": "2026.7.6",
+      "previous": "2026.7.5",
+      "sha256": "0d6e446cf93a0f0660ce4e21943adf1e0c21381010ef67369f40cc9834b8d158",
+      "previousSha256": "4a6664f68120cace5648faf48d51b08c14e969d9c7e185e592f1a0fceae57274"
+    }
+  ]
+}
