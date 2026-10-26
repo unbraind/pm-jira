@@ -102,6 +102,7 @@ test("export guard validates every create before any POST/PUT and recompiles eac
   delete input.answers.customfield_10001;
   await assert.rejects(runExportPush(plan, opts, deps), /missing or invalid/); assert.equal(posts + puts, 0);
   input.answers.customfield_10001 = { id: "10" };
+  delete input.answers.summary;
   const invalid = structuredClone(plan); invalid.entries[1]!.payload.fields.summary = " ";
   await assert.rejects(runExportPush(invalid, opts, deps), /missing or invalid/); assert.equal(posts + puts, 0);
   const mismatch = structuredClone(plan); delete mismatch.entries[0]!.payload.fields.project;
@@ -119,7 +120,7 @@ test("export guard validates every create before any POST/PUT and recompiles eac
 });
 
 test("validated export values are isolated from caller mutation between POST awaits", async () => {
-  const input = contract(); const plan = buildExportPlan([{ title: "One" }, { title: "Two" }], "https://example.invalid", { projectKey: "DEMO" });
+  const input = contract(); delete input.answers.summary; const plan = buildExportPlan([{ title: "One" }, { title: "Two" }], "https://example.invalid", { projectKey: "DEMO" });
   const observed: unknown[] = [];
   await runExportPush(plan, { authHeader: "synthetic", updateExisting: false, createContract: input }, {
     post: async (_url, _auth, body) => {

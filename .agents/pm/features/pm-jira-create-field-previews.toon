@@ -6,10 +6,10 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-10-25T23:12:19.246Z"
-updated_at: "2026-10-26T03:57:02.644Z"
+updated_at: "2026-10-26T23:50:26.638Z"
 author: codex-agent
 acceptance_criteria: Custom required fields and allowed values validated against revisioned metadata fixtures; Missing answers produce zero POSTs; Diagnostics fit declared byte budget or expose continuation
-comments[15]{created_at,author,text}:
+comments[18]{created_at,author,text}:
   "2026-10-25T23:12:21.477Z",codex-agent,"Overlap check: searched core CLI and pm-jira, pm-linear and pm-github source/docs for createmeta, create-contract and completion previews. Existing Jira transition planning adapts existing-issue transitions only; core schemas describe pm fields. No duplicate create-contract implementation found. Plan: strict revisioned normalized fixture, pure typed compiler, SDK command registration/rendering, optional all-batch export guard, byte-budget continuation, no-git SDK state validation. No new journal or shared mutable state."
   "2026-10-25T23:21:41.223Z",codex-agent,"Implemented strict v1 metadata/answer compiler, typed result/remedy envelopes, SDK-registered preview-create command and opt-in all-create-batch export guard. Targeted tests prove missing answers and a later invalid item cause zero POST/PUT calls. Installed CLI passes JSON/TOON in a real non-git tracker with git absent from PATH. Both new modules measured 100% lines/branches/functions in targeted coverage. Seeded SDK reference-model validation is expanding across direct import, sync, native importer and config importer with replayed older inputs and CRLF/native relationships. No new shared mutable state or journal is introduced."
   "2026-10-25T23:25:40.322Z",codex-agent,"Revert proof: disabling only required-field handling in previewJiraCreate makes the targeted revisioned-field test fail (0 pass / 1 fail); disabling only the runExportPush contract guard makes its batch-validation test fail (0 pass / 1 fail). Both functions restored, rebuilt, and the linked pm test run passes all 11 targeted tests. Typecheck, test typecheck, docstring gate (15 files / 76 declarations) and diff whitespace check pass. Seed 0x4a495241 passes 500 sequences / 2000 operations across direct import, sync and both importer adapters, including 40 exact SDK journal-plan refusals with state unchanged. Follow-up pm-jira-atomic-replay-revisions and existing diagnostic item pm-jira-d3tp record that separate limitation."
@@ -25,7 +25,10 @@ comments[15]{created_at,author,text}:
   "2026-10-26T03:56:33.972Z",codex-agent,"Corrected scopes implemented: CLI flag values alone use invalid_option blank rejection; payload shape validation permits empty inputs, and required/optional completeness comes solely from metadata.required. Preview and export share compileJiraCreate; optional absent/undefined/null/empty strings/whitespace/arrays are omitted from prepared POST fields, including native labels []. Required empties report missing answers and stop the entire batch. Nonempty values preserve exact contents and choices; zero/false remain meaningful. Added user/accountId and user-array schemas without field-name inference. Prepared wire payload types allow optional omissions while original export plans remain immutable."
   "2026-10-26T03:56:35.097Z",codex-agent,"Both MUST-REFUSE and MUST-ALLOW corpora pass. Seed 0x454d5054 runs 512 random metadata sequences over eight types (string/number/boolean/strings/options/option/user/users), including labels/components/versions and random required flags. 1024 generated MUST-ALLOW POSTs plus the fixed optional-labels untagged export are accepted by an independent recording TLS schema oracle. 512 required-empty and 512 random blank-CLI cases produce zero requests; original blank create-contract fixed case remains covered. All optional empty modes and both roles for each field are covered; SDK readback is unchanged. Targeted suite: 16 tests pass, including the retained 564-case option matrix. Targeted compiler coverage 100% lines/branches/functions; typecheck, test typecheck, docstring gate (16 files / 82 declarations) and whitespace checks pass. No standalone lint script is configured."
   "2026-10-26T03:56:36.620Z",codex-agent,"New revert proof: reverting only compileJiraCreate optional-empty handling to the previous nonempty-value rule makes the seeded property fail immediately on the fixed optional-labels untagged-item MUST-ALLOW case. The fake server records 0 POSTs where 1 successful POST is required. Restoring metadata-aware optional omission gives 1 schema-accepted fixed-case POST. The previous boundary revert proof still demonstrates that bypassing CLI validation permits the whitespace create-contract POST. Both classes now have separate refuse/allow coverage; no live Jira tenant was contacted."
-files[9]{path,scope}:
+  "2026-10-26T23:40:12.392Z",codex-agent,"Re-review: close preview/apply disagreement with one final create-body builder, explicit answers over mapped fields over generated values, schema-specific Jira reference forms and a previewed body digest. Keep the existing blank-option and optional-empty corpora; add a seeded preview/apply law and a generated-priority revert proof."
+  "2026-10-26T23:49:03.526Z",codex-agent,"Implemented one final-body builder shared by standalone previews, export-plan previews and guarded apply. Precedence is explicit answers over mapped item values over generated rich/default values. Final bodies contain selected scope plus metadata-declared validated fields; undeclared native mappings and optional empties are reported omitted. Schema referenceBy retains applicable id/name/value forms and advertised aliases; Cloud users use accountId. Ready results include bodyDigest of the exact serialized POST string. Seed 0x424f4459 covers 512 random metadata/item sequences, 512 digest-equal schema-accepted POSTs plus the fixed rich-priority case, 1024 same-code/remedy refusals with zero HTTP, and 26 schema/role/reference cells. Recording fake rejects undeclared emitted fields; SDK readback is unchanged."
+  "2026-10-26T23:49:10.644Z",codex-agent,"Behavioral revert proof: changed only guarded apply to let generated rich priority overwrite the explicit answer before calling the shared builder. The standalone/export-plan preview remained ready for id 3; the fixed rich-priority law failed because apply refused the generated High reference instead of sending the previewed body. Reverted test exited 1 with the typed missing/invalid-answer refusal and zero POSTs. Restoring the builder call passes both new tests. Existing blank-CLI and optional-label regressions remain in the 18-test targeted corpus, all passing; create-preview runtime line/branch/function coverage is 100/100/100. Typecheck, build:test and docstring gate pass (16 files, 86 declarations); no separate lint script exists."
+files[10]{path,scope}:
   create-preview-command.ts,project
   create-preview.ts,project
   index.ts,project
@@ -35,11 +38,47 @@ files[9]{path,scope}:
   test/create-preview.test.ts,project
   test/option-boundary.test.ts,project
   test/payload-completeness.test.ts,project
-tests[4]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
-  node --test test/create-preview.test.ts test/create-preview-command.test.ts,project,180,codex-agent,"2026-10-25T23:21:49.358Z",local_mutation,feat/create-field-completion-previews
-  node --test test/create-preview-model.test.ts,project,300,codex-agent,"2026-10-25T23:27:25.734Z",local_mutation,feat/create-field-completion-previews
-  node --test test/option-boundary.test.ts,project,180,codex-agent,"2026-10-26T03:14:51.818Z",local_mutation,feat/create-field-completion-previews
-  node --test test/payload-completeness.test.ts,project,180,codex-agent,"2026-10-26T03:56:38.523Z",local_mutation,feat/create-field-completion-previews
+  test/preview-apply-law.test.ts,project
+tests[5]:
+  - command: node --test test/create-preview.test.ts test/create-preview-command.test.ts
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T23:21:49.358Z"
+      source_kind: local_mutation
+      source_ref: feat/create-field-completion-previews
+  - command: node --test test/create-preview-model.test.ts
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T23:27:25.734Z"
+      source_kind: local_mutation
+      source_ref: feat/create-field-completion-previews
+  - command: node --test test/option-boundary.test.ts
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-26T03:14:51.818Z"
+      source_kind: local_mutation
+      source_ref: feat/create-field-completion-previews
+  - command: node --test test/payload-completeness.test.ts
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-26T03:56:38.523Z"
+      source_kind: local_mutation
+      source_ref: feat/create-field-completion-previews
+  - command: node --test --test-concurrency=2 test/preview-apply-law.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-26T23:49:08.396Z"
+      source_kind: local_mutation
+      source_ref: feat/create-field-completion-previews
 docs[2]{path,scope}:
   docs/create-preview.md,project
   docs/examples/create-contract.json,project

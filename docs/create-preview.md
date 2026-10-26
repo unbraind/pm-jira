@@ -3,8 +3,8 @@
 `pm jira preview-create --contract create.json --json` compiles a supplied create
 contract before export. The same command without `--json` uses the host's compact
 TOON renderer. It performs no network requests or tracker writes and needs no
-credentials or git repository. The SDK exports `previewJiraCreate(unknown)` and
-all `JiraCreate*` input/result types from `pm-jira`.
+credentials or git repository. The SDK exports `previewJiraCreate(unknown)`, `buildJiraCreateBody(unknown)`,
+`previewJiraExport(plan, contract)` and all `JiraCreate*` input/result types from `pm-jira`.
 
 Start with [the revisioned fixture](examples/create-contract.json). It intentionally
 omits the required Team answer. The command returns `kind: incomplete`,
@@ -37,16 +37,26 @@ The v1 contract is an explicit normalized projection, not the raw Jira page:
 - Project and issue type are bound by the contract scope rather than field rows.
 - Project each supported field's `fieldId`/`key`, `name`, `required` and schema to
   `id`, `name`, `required`, `type`. Include every supported required custom field.
-  `string`, `number`, `boolean`, `option` (an exact `{id}` object), `user`
-  (an exact `{accountId}` object), `strings`, `options` and `users` are supported. Project allowed option objects to `{id}` and users to `{accountId}`; simple
-  string/number/boolean choices keep their scalar value.
+  `string`, `number`, `boolean`, `option`, `user`, `strings`, `options` and
+  `users` are supported. Option references accept `id`, `name` and `value`;
+  use `referenceBy` to retain exactly the forms supported by the captured Jira
+  schema. Priority, version and component references use `["id", "name"]`;
+  custom select references use `["id", "value"]`. Jira Cloud user references
+  use `accountId`, including user arrays. Preserve all advertised aliases on
+  each allowed choice, such as `{ "id": "3", "name": "Medium" }` or
+  `{ "id": "10", "value": "Team A" }`. A supplied name/value must be advertised
+  on that same choice; the compiler never guesses an alias from an id-only fixture.
+  Simple string/number/boolean choices retain their scalar value.
 - Preserve `allowedValues` whenever advertised; an empty list permits no answer.
   Absence means no enumerated restriction was supplied. Do not replace a paged
   or autocomplete-only set with a partial list and claim completeness.
 - ADF/textarea, dates with semantic validators, cascading selects, parent
   objects and other compound schemas need explicit adaptation outside v1. Do not
   omit unsupported required fields to manufacture readiness. The scalar preview
-  does not validate the exporter's generated ADF description or server defaults.
+  omits undeclared native fields, including an ADF description, rather than
+  sending values the captured contract cannot validate. Unsupported required
+  schemas must be adapted before using this version; Jira server validators
+  remain authoritative.
 
 The compiler returns both the supplied revision and SHA-256 digest of the exact
 validated metadata JSON representation. Capture revisions consistently and
@@ -65,15 +75,30 @@ pm jira export --project DEMO --create-contract create.json --push --json
 Export protection is opt-in with `--create-contract`; ordinary exports retain
 their historical behavior. The guarded push reads the file on each invocation
 and recompiles **every create before any POST or PUT**. Missing or invalid
-answers anywhere abort the batch with usage exit 2 and zero writes. Payload
-values for declared native fields (such as summary) override the standalone
-preview answer, so a valid example summary cannot hide an invalid actual title.
-Explicit valid answers add custom fields to each create payload. Existing-issue
+answers anywhere abort the batch with usage exit 2 and zero writes. One builder
+merges **explicit answers > item mapped fields > generated rich/default fields**,
+then validates that final body against the captured metadata. Explicit summary
+answers override mapped item titles as well as generated priority values.
+Only declared fields and the selected project/type scope are sent. Undeclared
+native mappings are reported as `omitted`; unknown explicit answers refuse.
+Optional empty fields are omitted after the merge. A rich `{name:"High"}` can
+never replace an explicit priority `{id:"3"}`. Existing-issue
 updates retain their existing behavior after the full create batch passes.
 For mixed issue types, split exports by explicitly selected type/contract.
 
 `runExportPush(plan, { authHeader, updateExisting, createContract })` provides the
-same guard to SDK callers. It never mutates the caller's plan or contract. The
+same guard to SDK callers. It never mutates the caller's plan or contract. Use `previewJiraExport(plan, contract)` to preview the actual current plan:
+its per-create bounded results contain `bodyDigest`, the SHA-256 of the exact
+UTF-8 JSON POST string. `runExportPush` recompiles through that same builder and
+sends that exact string; it does not reconstruct a second body. `digest` remains
+the metadata digest. Incomplete/refused previews have no body digest and apply
+uses the same refusal code and remedy before any write.
+
+The standalone command can include `mappedFields` and `generatedFields` in its
+JSON contract to preview a complete body offline. These inputs describe the
+current item mapping/defaults, rather than a saved execution authorization.
+`buildJiraCreateBody` returns the bounded preview plus complete `body` string
+for SDK consumers; do not use the complete body as bounded agent output. The
 standalone preview and guard do not persist or replay ready plans. Rebuild a
 plan from current SDK reads for each retry; a supplied old plan remains old
 input. Export dry runs do not execute this push guard; use `preview-create` for
@@ -86,11 +111,14 @@ The SDK and file command share one strict schema. Unknown object keys, unsupport
 schemas, sparse arrays and invalid numbers are rejected at that boundary with a
 typed remedy. The CLI reads regular JSON files up to 1 MiB using a bounded read.
 Limits are 256 fields/answers, 128 advertised choices per field, 16 array answers,
-512 UTF-16 code units per scalar string, 64 per option/field ID, 128 per account ID and display
+512 UTF-16 code units per scalar string/reference name/value, 64 per option/field ID, 128 per account ID and display
 name and 64 per revision/project/type. Nonempty text may contain tabs/CR/LF;
 other control characters are rejected. Numbers must be finite in `[-1e12, 1e12]`.
 Required arrays need at least one valid element. Optional empty arrays are omitted. All emitted counters
-are finite, bounded nonnegative integers.
+are finite, bounded nonnegative integers. Native source bags are bounded plain
+JSON: 256 keys/elements per container, depth 8, 8192 nodes, 65536 code units per
+string and 1048576 total string code units per bag. Every emitted field passes
+its declared schema; unsupported native values are not sent.
 
 `budget` is an integer UTF-8 JSON byte budget (two-space indentation plus newline), default 8192, range 4096..65536.
 `offset` is an integer diagnostic offset, default 0, range 0..1000000. The JSON
@@ -192,3 +220,28 @@ schema-accepted POSTs, plus the fixed optional-labels POST; 512 required-empty
 cases and 512 blank-CLI cases produce zero requests. Nonblank CLI values and
 padded meaningful payload strings remain accepted. SDK state is read back and
 compared unchanged after the complete corpus.
+
+## Preview/apply agreement example
+
+```ts
+import { buildExportPlan, previewJiraExport, runExportPush } from "pm-jira";
+
+const plan = buildExportPlan(items, host, { projectKey: "DEMO", richMapping: true });
+// The captured priority row uses type: "option", referenceBy: ["id", "name"],
+// allowedValues: [{ id: "3", name: "Medium" }].
+contract.answers.priority = { id: "3" };
+const previews = previewJiraExport(plan, contract);
+// A ready preview hashes the id-3 body, even if the item generated name: High.
+const result = await runExportPush(plan, { authHeader, updateExisting: false, createContract: contract });
+```
+
+`test/preview-apply-law.test.ts` seeds `0x424f4459` across 512 metadata/item
+sequences with all eight supported schema types, random required flags, id/name/
+value option references, account IDs, version/component references, and rich
+mapping on/off. A recording TLS fake checks every emitted field against an
+independent schema oracle. All 512 ready previews hash exactly the POST body;
+1024 missing/invalid cases refuse with the same code/remedy and zero HTTP.
+The fixed rich-priority, optional empty-label and blank CLI-option cases remain.
+The existing 512-sequence optional-empty corpus and whole CLI option-table
+corpus run separately. These are offline contract-adaptation laws, not evidence
+of live Jira permissions or tenant-side validators.

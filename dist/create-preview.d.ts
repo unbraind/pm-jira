@@ -1,24 +1,21 @@
 /** Supported Jira create value shapes; unsupported schemas must be adapted explicitly. */
-export type JiraCreateValue = string | number | boolean | null | undefined | {
-    id: string;
-} | {
-    accountId: string;
-} | string[] | {
-    id: string;
-}[] | {
-    accountId: string;
-}[];
+export type JiraCreateReference = {
+    id?: string;
+    name?: string;
+    value?: string;
+    accountId?: string;
+};
+/** Payload scalar and collection values accepted at the strict contract boundary. */
+export type JiraCreateValue = string | number | boolean | null | undefined | JiraCreateReference | string[] | JiraCreateReference[];
 /** Normalized projection of one field from complete Jira create metadata. */
 export interface JiraCreateField {
     id: string;
     name: string;
     required: boolean;
     type: "string" | "number" | "boolean" | "option" | "user" | "strings" | "options" | "users";
-    allowedValues?: (string | number | boolean | {
-        id: string;
-    } | {
-        accountId: string;
-    })[];
+    allowedValues?: (string | number | boolean | JiraCreateReference)[];
+    /** Override reference keys for this Jira schema; users always use accountId. */
+    referenceBy?: ("id" | "name" | "value")[];
 }
 /** Versioned caller-supplied metadata, scoped to exactly one project/type. */
 export interface JiraCreateMetadata {
@@ -34,6 +31,9 @@ export interface JiraCreatePreviewInput {
     project: string;
     issueType: string;
     answers: Record<string, JiraCreateValue>;
+    /** Item mappings and generated defaults; answers always take precedence. */
+    mappedFields?: Record<string, unknown>;
+    generatedFields?: Record<string, unknown>;
     budget?: number;
     offset?: number;
 }
@@ -57,6 +57,8 @@ export interface JiraCreatePreview {
     kind: "ready" | "incomplete";
     revision: string;
     digest: string;
+    /** SHA-256 of the exact JSON POST body, present only when ready. */
+    bodyDigest?: string;
     project: string;
     issueType: string;
     counts: {
@@ -76,11 +78,18 @@ export interface JiraCreatePreview {
     code?: "answers_required";
     remediation?: string;
 }
+/** Native sources supplied by the exporter; both are validated at the same boundary as contracts. */
+export interface JiraCreateSources {
+    mappedFields: Record<string, unknown>;
+    generatedFields: Record<string, unknown>;
+}
 /** Internal complete bindings for export; only ready compilations carry values. */
 export interface JiraCreateCompilation {
     preview: JiraCreatePreviewResult;
     bindings: Record<string, JiraCreateValue>;
     omitted: string[];
+    /** Exact immutable JSON wire representation; empty unless ready. */
+    body: string;
 }
 /** Public SDK result, also used verbatim by the host command renderer. */
 export type JiraCreatePreviewResult = JiraCreatePreview | JiraCreateRefusal;
@@ -91,7 +100,7 @@ export declare function createPreviewRefusal(code: JiraCreateRefusal["code"]): J
  * The byte budget covers pretty JSON UTF-8 plus newline; TOON also uses the host budget.
  * A ready preview is evidence about supplied metadata, never execution authorization.
  */
-export declare function compileJiraCreate(input: unknown): JiraCreateCompilation;
+export declare function compileJiraCreate(input: unknown, sources?: JiraCreateSources): JiraCreateCompilation;
 /** Return only the bounded agent-facing preview; export consumes the same compiled semantics. */
 export declare function previewJiraCreate(input: unknown): JiraCreatePreviewResult;
 //# sourceMappingURL=create-preview.d.ts.map

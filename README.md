@@ -623,3 +623,12 @@ values (including native `labels: []` for untagged items) are omitted from guard
 POST bodies. Required empty values stop the complete batch. The CLI blank-option
 rule applies to option values, while JSON payload fields follow their schemas;
 see [the refuse/allow corpora](docs/create-preview.md#cli-values-and-payload-completeness-have-different-scopes).
+
+Create previews and guarded exports share one final-body builder: explicit
+contract answers win over mapped item fields, which win over generated `--rich`
+and default values. `previewJiraExport(plan, contract)` reports each exact POST
+`bodyDigest`; `runExportPush` validates and sends that same JSON representation.
+Optional empty fields and native mappings absent from the captured create screen
+are omitted. Option references preserve schema-supported `id`/`name`/`value`
+forms; Jira Cloud users use `accountId`. See the
+[agreement example and schema projection rules](docs/create-preview.md#previewapply-agreement-example).

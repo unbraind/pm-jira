@@ -46,11 +46,11 @@ import type {
 } from "@unbrained/pm-cli/sdk";
 import { parseJiraOptions } from "./option-boundary.ts";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
-import { previewJiraCreate, compileJiraCreate } from "./create-preview.ts";
-import type { JiraCreatePreviewInput } from "./create-preview.ts";
+import { compileJiraCreate } from "./create-preview.ts";
+import type { JiraCreateCompilation, JiraCreatePreviewResult } from "./create-preview.ts";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
-export { previewJiraCreate } from "./create-preview.ts";
-export type { JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
+export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
+export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
 import { registerJqlSelectionCommand } from "./jql-selection-command.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions,
@@ -2409,7 +2409,20 @@ export interface ExportPushResult {
 }
 
 /** Prepared wire payloads may omit metadata-optional fields from the original export plan. */
-type ExportPushEntry = Omit<ExportPlanEntry, "payload"> & { payload: { fields: Record<string, unknown> } };
+type ExportPushEntry = Omit<ExportPlanEntry, "payload"> & { payload: { fields: Record<string, unknown> }; body?: string };
+
+/** Compile one actual export entry using the same final-body builder as standalone previews. */
+function compileExportCreate(entry: ExportPlanEntry, input: unknown): JiraCreateCompilation {
+  const { priority, issuetype, project, ...mapped } = entry.payload.fields;
+  return compileJiraCreate(input, {
+    generatedFields: { project, issuetype, ...(priority === undefined ? {} : { priority }) }, mappedFields: mapped,
+  });
+}
+
+/** Preview each create in an export plan; each bounded result hashes the exact body apply will send. */
+export function previewJiraExport(plan: ExportPlan, contract: unknown): JiraCreatePreviewResult[] {
+  return plan.entries.filter(entry => entry.op === "create").map(entry => compileExportCreate(entry, contract).preview);
+}
 
 /** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export async function runExportPush(
@@ -2421,25 +2434,19 @@ export async function runExportPush(
   // Prevalidate the complete batch before any POST/PUT. Recompile on each call;
   // a prior ready preview is never trusted as a durable execution plan.
   if (opts.createContract !== undefined) {
-    const checked = previewJiraCreate(opts.createContract);
-    if (checked.kind === "refused") throw createCommandError(checked.remediation, EXIT_CODE.USAGE);
-    const contract = structuredClone(opts.createContract) as JiraCreatePreviewInput;
+    if (!plan.entries.some(entry => entry.op === "create")) {
+      const checked = compileJiraCreate(opts.createContract).preview;
+      if (checked.kind === "refused") throw createPmCliExpectedError(checked.remediation, { exitCode: EXIT_CODE.USAGE,
+        context: { code: checked.code, recovery: { suggested_retry: checked.remediation } } });
+    }
     const guarded: ExportPushEntry[] = [];
     for (const entry of plan.entries) {
       if (entry.op !== "create") { guarded.push(entry); continue; }
-      if (entry.payload.fields.project?.key !== contract.project || entry.payload.fields.issuetype.name !== contract.issueType) {
-        throw createCommandError("Create contract scope differs from export project/type; select matching metadata.", EXIT_CODE.USAGE);
-      }
-      // Only declared fields are adapted. Description remains Jira ADF and must
-      // be validated by Jira; this v1 scalar contract deliberately excludes ADF.
-      const declared = new Set(contract.metadata.fields.map(field => field.id));
-      const answers = { ...contract.answers };
-      for (const [key, value] of Object.entries(entry.payload.fields)) if (declared.has(key)) Object.assign(answers, { [key]: value });
-      const compiled = compileJiraCreate({ ...contract, answers });
-      if (compiled.preview.kind !== "ready") throw createCommandError("Create answers are missing or invalid; run jira preview-create and supply required allowed values. No writes attempted.", EXIT_CODE.USAGE);
-      const fields: Record<string, unknown> = { ...entry.payload.fields, ...compiled.bindings };
-      for (const id of compiled.omitted) delete fields[id];
-      guarded.push({ ...entry, payload: { fields } });
+      const compiled = compileExportCreate(entry, opts.createContract);
+      if (compiled.preview.kind !== "ready") throw createPmCliExpectedError(compiled.preview.remediation!, {
+        exitCode: EXIT_CODE.USAGE, context: { code: compiled.preview.code!, recovery: { suggested_retry: compiled.preview.remediation! } },
+      });
+      guarded.push({ ...entry, payload: JSON.parse(compiled.body) as { fields: Record<string, unknown> }, body: compiled.body });
     }
     entries = structuredClone(guarded);
   }
@@ -2456,7 +2463,7 @@ export async function runExportPush(
     const ref = entry.itemId ?? entry.endpoint;
     try {
       if (!entry.payload) throw new Error("export entry has no payload");
-      await deps.post(entry.endpoint, opts.authHeader, JSON.stringify(entry.payload));
+      await deps.post(entry.endpoint, opts.authHeader, entry.body ?? JSON.stringify(entry.payload));
       created++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

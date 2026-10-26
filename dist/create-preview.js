@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 export function createPreviewRefusal(code) {
     const remedies = {
         invalid_input: "Supply the strict v1 create contract: unique fields, supported types, bounded dense arrays, finite numbers, explicit answers; budget 4096..65536 and offset 0..1000000. See docs/create-preview.md.",
-        scope_mismatch: "Select the exact project and issueType recorded in the metadata; recapture metadata for another selection.",
+        scope_mismatch: "Create contract scope differs; select the exact project and issueType recorded in the metadata; recapture metadata for another selection.",
         budget_too_small: "Increase budget up to 65536 bytes to fit the next diagnostic row; keep the same revision, answers and offset.",
         input_read: "Supply a readable regular JSON contract file of at most 1 MiB; see docs/create-preview.md.",
     };
@@ -42,9 +42,8 @@ function scalar(value, type) {
         return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1e12;
     if (type === "boolean")
         return typeof value === "boolean";
-    if (type === "user")
-        return record(value) && keys(value, ["accountId"]) && text(value.accountId, 128);
-    return record(value) && keys(value, ["id"]) && text(value.id, 64);
+    const permitted = type === "user" ? ["accountId"] : ["id", "name", "value"];
+    return record(value) && Object.keys(value).length > 0 && Object.entries(value).every(([key, entry]) => permitted.includes(key) && text(entry, key === "id" ? 64 : key === "accountId" ? 128 : 512));
 }
 /** Validate one declared field value, including nonempty multi-value answers. */
 function validValue(value, type) {
@@ -59,9 +58,11 @@ function answer(value) {
 }
 /** Single strict schema for SDK and CLI; no coercion or normalization of answers. */
 function validate(value) {
-    if (!record(value) || !keys(value, ["metadata", "project", "issueType", "answers"], ["budget", "offset"]) ||
+    if (!record(value) || !keys(value, ["metadata", "project", "issueType", "answers"], ["budget", "offset", "mappedFields", "generatedFields"]) ||
         !text(value.project, 64) || !text(value.issueType, 64) || !record(value.answers) || Object.keys(value.answers).length > 256 ||
         !Object.entries(value.answers).every(([key, v]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && answer(v)))
+        return false;
+    if (![value.mappedFields, value.generatedFields].every(fields => fields === undefined || fieldSource(fields)))
         return false;
     const { budget = 8192, offset = 0, metadata: meta } = value;
     if (!Number.isSafeInteger(budget) || budget < 4096 || budget > 65536 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1000000)
@@ -71,38 +72,71 @@ function validate(value) {
         return false;
     const ids = new Set();
     for (const field of meta.fields) {
-        if (!record(field) || !keys(field, ["id", "name", "required", "type"], ["allowedValues"]) ||
+        if (!record(field) || !keys(field, ["id", "name", "required", "type"], ["allowedValues", "referenceBy"]) ||
             typeof field.id !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(field.id) || ["project", "issuetype"].includes(field.id) || ids.has(field.id) ||
             !text(field.name, 128) || typeof field.required !== "boolean" || typeof field.type !== "string" ||
             !["string", "number", "boolean", "option", "user", "strings", "options", "users"].includes(field.type))
             return false;
         ids.add(field.id);
+        if (field.referenceBy !== undefined && (!["option", "options"].includes(field.type) || !dense(field.referenceBy, 3) || field.referenceBy.length === 0 || new Set(field.referenceBy).size !== field.referenceBy.length || !field.referenceBy.every(key => ["id", "name", "value"].includes(String(key)))))
+            return false;
         if (field.allowedValues !== undefined && (!dense(field.allowedValues, 128) || !field.allowedValues.every(entry => scalar(entry, field.type === "strings" ? "string" : field.type === "options" ? "option" : field.type === "users" ? "user" : field.type))))
             return false;
     }
     return true;
 }
-/** Compare exact scalar contract choices independent of object key order. */
-function same(left, right) {
-    return record(left) && record(right) ? (left.id === undefined ? left.accountId === right.accountId : left.id === right.id) : left === right;
+/** Bound complete native source fields, including the exporter's ADF description, once. */
+function fieldSource(value) {
+    if (!record(value) || Object.keys(value).length > 256)
+        return false;
+    let remaining = 8192;
+    let textRemaining = 1048576;
+    const json = (entry, depth) => {
+        if (--remaining < 0 || depth > 8)
+            return false;
+        if (entry === undefined || entry === null || typeof entry === "boolean")
+            return true;
+        if (typeof entry === "string") {
+            textRemaining -= entry.length;
+            return textRemaining >= 0 && payloadText(entry, 65536);
+        }
+        if (typeof entry === "number")
+            return Number.isFinite(entry) && Math.abs(entry) <= 1e12;
+        if (Array.isArray(entry))
+            return dense(entry, 256) && entry.every(child => json(child, depth + 1));
+        return record(entry) && Object.keys(entry).length <= 256 && Object.entries(entry).every(([key, child]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && json(child, depth + 1));
+    };
+    return json(value, 0);
 }
-/** Match all supplied elements against advertised choices without inventing defaults. */
+/** Match a supplied reference against all of its advertised attributes on one choice. */
+function same(left, right) {
+    return record(left) && record(right) ? Object.entries(left).every(([key, value]) => right[key] === value) : left === right;
+}
+/** Match every element and schema-specific reference key without guessing aliases. */
 function allowed(value, field) {
-    return field.allowedValues === undefined || (Array.isArray(value) ? value : [value]).every(entry => field.allowedValues.some(choice => same(entry, choice)));
+    return (Array.isArray(value) ? value : [value]).every(entry => (!field.referenceBy || !record(entry) || Object.keys(entry).every(key => field.referenceBy.includes(key))) &&
+        (field.allowedValues === undefined || field.allowedValues.some(choice => same(entry, choice))));
 }
 /**
  * Compile bindings/checklist from a complete, revisioned normalized metadata fixture.
  * The byte budget covers pretty JSON UTF-8 plus newline; TOON also uses the host budget.
  * A ready preview is evidence about supplied metadata, never execution authorization.
  */
-export function compileJiraCreate(input) {
+export function compileJiraCreate(input, sources) {
     const bindings = {};
     const omitted = [];
+    let body = "";
     const finish = (preview) => ({ preview,
-        bindings: preview.kind === "ready" ? bindings : {}, omitted: preview.kind === "ready" ? omitted : [] });
-    if (!validate(input))
+        bindings: preview.kind === "ready" ? bindings : {}, omitted: preview.kind === "ready" ? omitted : [], body: preview.kind === "ready" ? body : "" });
+    if (!validate(input) || (sources !== undefined && (!record(sources) || !keys(sources, ["mappedFields", "generatedFields"]) || !fieldSource(sources.mappedFields) || !fieldSource(sources.generatedFields))))
         return finish(createPreviewRefusal("invalid_input"));
-    const { metadata, answers, project, issueType, budget = 8192, offset = 0 } = input;
+    const { metadata, project, issueType, budget = 8192, offset = 0 } = input;
+    // This is the sole payload merge: explicit answers > item mappings > generated defaults.
+    const answers = { ...input.generatedFields, ...sources?.generatedFields, ...sources?.mappedFields, ...input.mappedFields, ...input.answers };
+    const scope = { project: { key: project }, issuetype: { name: issueType }, ...answers };
+    const fields = { project: scope.project, issuetype: scope.issuetype };
+    if (!record(scope.project) || !keys(scope.project, ["key"]) || scope.project.key !== project || !record(scope.issuetype) || !keys(scope.issuetype, ["name"]) || scope.issuetype.name !== issueType)
+        return finish(createPreviewRefusal("scope_mismatch"));
     if (metadata.project !== project || metadata.issueType !== issueType)
         return finish(createPreviewRefusal("scope_mismatch"));
     const rows = [];
@@ -122,6 +156,7 @@ export function compileJiraCreate(input) {
                     counts.missing++;
                 }
                 else {
+                    delete fields[field.id];
                     omitted.push(field.id);
                     rows.push({ field: field.id, state: "omitted", required: false });
                 }
@@ -129,8 +164,10 @@ export function compileJiraCreate(input) {
             else {
                 const state = validValue(value, field.type) && allowed(value, field) ? "bound" : "invalid";
                 counts[state]++;
-                if (state === "bound")
+                if (state === "bound") {
                     bindings[field.id] = value;
+                    fields[field.id] = value;
+                }
                 // Values are paged separately so even the largest legal array fits a minimal budget.
                 if (state === "bound" && Array.isArray(value))
                     for (const entry of value)
@@ -143,15 +180,22 @@ export function compileJiraCreate(input) {
             rows.push({ field: field.id, state: "allowed", required: field.required, value });
     }
     const known = new Set(metadata.fields.map(field => field.id));
-    for (const id of Object.keys(answers))
+    for (const id of Object.keys(input.answers))
         if (!known.has(id)) {
             counts.invalid++;
             rows.push({ field: id, state: "invalid", required: false });
         }
+    // Native mappings absent from the captured create screen are omitted, never sent unvalidated.
+    for (const id of Object.keys(answers))
+        if (!known.has(id) && id !== "project" && id !== "issuetype" && !Object.hasOwn(input.answers, id)) {
+            omitted.push(id);
+            rows.push({ field: id, state: "omitted", required: false });
+        }
     const ready = counts.missing === 0 && counts.invalid === 0;
+    body = JSON.stringify({ fields });
     const result = { kind: ready ? "ready" : "incomplete", revision: metadata.revision,
-        digest: createHash("sha256").update(JSON.stringify(metadata)).digest("hex"), project, issueType, counts, diagnostics: [],
-        page: { offset, total: rows.length, nextOffset: null }, budget, posts: 0, ...(ready ? {} : { exit_code: 2, code: "answers_required", remediation: "Supply missing fields and replace invalid answers with advertised choices, then preview again. Follow page.nextOffset for remaining diagnostics." }) };
+        digest: createHash("sha256").update(JSON.stringify(metadata)).digest("hex"), project, issueType, ...(ready ? { bodyDigest: createHash("sha256").update(body).digest("hex") } : {}), counts, diagnostics: [],
+        page: { offset, total: rows.length, nextOffset: null }, budget, posts: 0, ...(ready ? {} : { exit_code: 2, code: "answers_required", remediation: "Create answers are missing or invalid; supply missing fields and replace invalid answers with advertised choices, then preview again. Follow page.nextOffset for remaining diagnostics." }) };
     for (let index = offset; index < rows.length; index++) {
         result.diagnostics.push(rows[index]);
         result.page.nextOffset = index + 1 < rows.length ? index + 1 : null;

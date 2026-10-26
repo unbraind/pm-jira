@@ -6,8 +6,9 @@
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 import { type PmSdkModule } from "./sdk-importer.ts";
-export { previewJiraCreate } from "./create-preview.ts";
-export type { JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
+import type { JiraCreatePreviewResult } from "./create-preview.ts";
+export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
+export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions, JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
@@ -748,6 +749,8 @@ export interface ExportPushResult {
     failed: number;
     failures: ExportPushFailure[];
 }
+/** Preview each create in an export plan; each bounded result hashes the exact body apply will send. */
+export declare function previewJiraExport(plan: ExportPlan, contract: unknown): JiraCreatePreviewResult[];
 /** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export declare function runExportPush(plan: ExportPlan, opts: {
     authHeader: string;
