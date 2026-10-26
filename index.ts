@@ -46,7 +46,7 @@ import type {
 } from "@unbrained/pm-cli/sdk";
 import { parseJiraOptions } from "./option-boundary.ts";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
-import { previewJiraCreate } from "./create-preview.ts";
+import { previewJiraCreate, compileJiraCreate } from "./create-preview.ts";
 import type { JiraCreatePreviewInput } from "./create-preview.ts";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
 export { previewJiraCreate } from "./create-preview.ts";
@@ -2408,18 +2408,23 @@ export interface ExportPushResult {
   failures: ExportPushFailure[];
 }
 
+/** Prepared wire payloads may omit metadata-optional fields from the original export plan. */
+type ExportPushEntry = Omit<ExportPlanEntry, "payload"> & { payload: { fields: Record<string, unknown> } };
+
+/** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export async function runExportPush(
   plan: ExportPlan,
   opts: { authHeader: string; updateExisting: boolean; createContract?: unknown },
   deps: ExportPushDeps = { post: httpsPost, put: httpsPut }
 ): Promise<ExportPushResult> {
+  let entries: ExportPushEntry[] = plan.entries;
   // Prevalidate the complete batch before any POST/PUT. Recompile on each call;
   // a prior ready preview is never trusted as a durable execution plan.
   if (opts.createContract !== undefined) {
     const checked = previewJiraCreate(opts.createContract);
     if (checked.kind === "refused") throw createCommandError(checked.remediation, EXIT_CODE.USAGE);
     const contract = structuredClone(opts.createContract) as JiraCreatePreviewInput;
-    const guarded: ExportPlanEntry[] = [];
+    const guarded: ExportPushEntry[] = [];
     for (const entry of plan.entries) {
       if (entry.op !== "create") { guarded.push(entry); continue; }
       if (entry.payload.fields.project?.key !== contract.project || entry.payload.fields.issuetype.name !== contract.issueType) {
@@ -2430,14 +2435,16 @@ export async function runExportPush(
       const declared = new Set(contract.metadata.fields.map(field => field.id));
       const answers = { ...contract.answers };
       for (const [key, value] of Object.entries(entry.payload.fields)) if (declared.has(key)) Object.assign(answers, { [key]: value });
-      const preview = previewJiraCreate({ ...contract, answers });
-      if (preview.kind !== "ready") throw createCommandError("Create answers are missing or invalid; run jira preview-create and supply required allowed values. No writes attempted.", EXIT_CODE.USAGE);
-      guarded.push({ ...entry, payload: { fields: { ...entry.payload.fields, ...answers } } });
+      const compiled = compileJiraCreate({ ...contract, answers });
+      if (compiled.preview.kind !== "ready") throw createCommandError("Create answers are missing or invalid; run jira preview-create and supply required allowed values. No writes attempted.", EXIT_CODE.USAGE);
+      const fields: Record<string, unknown> = { ...entry.payload.fields, ...compiled.bindings };
+      for (const id of compiled.omitted) delete fields[id];
+      guarded.push({ ...entry, payload: { fields } });
     }
-    plan = structuredClone({ ...plan, entries: guarded });
+    entries = structuredClone(guarded);
   }
-  const toCreate = plan.entries.filter((e) => e.op === "create");
-  const toUpdate = plan.entries.filter((e) => e.op === "update");
+  const toCreate = entries.filter((e) => e.op === "create");
+  const toUpdate = entries.filter((e) => e.op === "update");
   const logError = deps.logError ?? ((message: string) => console.error(message));
 
   let created = 0;
@@ -2500,6 +2507,7 @@ export async function runExportPush(
 // hook a strict no-op by default and trivially unit-testable.
 // ---------------------------------------------------------------------------
 
+/** Read-only decision describing whether the configured write mirror would act. */
 export interface PushOnWriteDecision {
   shouldPush: boolean;
   reason: string;

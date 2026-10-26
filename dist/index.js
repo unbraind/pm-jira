@@ -31,7 +31,7 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { parseJiraOptions } from "./option-boundary.js";
 import { importPmSdk } from "./sdk-importer.js";
-import { previewJiraCreate } from "./create-preview.js";
+import { previewJiraCreate, compileJiraCreate } from "./create-preview.js";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.js";
 export { previewJiraCreate } from "./create-preview.js";
 import { registerJqlSelectionCommand } from "./jql-selection-command.js";
@@ -1777,7 +1777,9 @@ export function buildExportPlan(items, baseUrl, opts = {}) {
     });
     return { baseUrl: cleanBase, project: opts.projectKey, entries };
 }
+/** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export async function runExportPush(plan, opts, deps = { post: httpsPost, put: httpsPut }) {
+    let entries = plan.entries;
     // Prevalidate the complete batch before any POST/PUT. Recompile on each call;
     // a prior ready preview is never trusted as a durable execution plan.
     if (opts.createContract !== undefined) {
@@ -1801,15 +1803,18 @@ export async function runExportPush(plan, opts, deps = { post: httpsPost, put: h
             for (const [key, value] of Object.entries(entry.payload.fields))
                 if (declared.has(key))
                     Object.assign(answers, { [key]: value });
-            const preview = previewJiraCreate({ ...contract, answers });
-            if (preview.kind !== "ready")
+            const compiled = compileJiraCreate({ ...contract, answers });
+            if (compiled.preview.kind !== "ready")
                 throw createCommandError("Create answers are missing or invalid; run jira preview-create and supply required allowed values. No writes attempted.", EXIT_CODE.USAGE);
-            guarded.push({ ...entry, payload: { fields: { ...entry.payload.fields, ...answers } } });
+            const fields = { ...entry.payload.fields, ...compiled.bindings };
+            for (const id of compiled.omitted)
+                delete fields[id];
+            guarded.push({ ...entry, payload: { fields } });
         }
-        plan = structuredClone({ ...plan, entries: guarded });
+        entries = structuredClone(guarded);
     }
-    const toCreate = plan.entries.filter((e) => e.op === "create");
-    const toUpdate = plan.entries.filter((e) => e.op === "update");
+    const toCreate = entries.filter((e) => e.op === "create");
+    const toUpdate = entries.filter((e) => e.op === "update");
     const logError = deps.logError ?? ((message) => console.error(message));
     let created = 0;
     let updated = 0;

@@ -616,3 +616,10 @@ All Jira commands reject supplied blank option values with `invalid_option`
 contracts and other guards. The shared boundary checks the whole bag, including
 secondary aliases and legacy importer credential options. See
 [the option contract and table-driven validation](docs/create-preview.md#supplied-option-values).
+
+
+Payload completeness follows each Jira metadata `required` flag. Optional empty
+values (including native `labels: []` for untagged items) are omitted from guarded
+POST bodies. Required empty values stop the complete batch. The CLI blank-option
+rule applies to option values, while JSON payload fields follow their schemas;
+see [the refuse/allow corpora](docs/create-preview.md#cli-values-and-payload-completeness-have-different-scopes).

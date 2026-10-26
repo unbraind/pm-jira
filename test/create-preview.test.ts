@@ -44,7 +44,8 @@ test("all supported value shapes validate exact choices without coercion", () =>
   input.answers = { s: "a", n: 0, b: false, ss: ["a", "b"], oo: [{ id: "a" }] };
   assert.equal(previewJiraCreate(input).kind, "ready");
   input.answers.ss = ["x"]; input.answers.oo = []; input.answers.b = true;
-  const bad = previewJiraCreate(input); assert.ok(bad.kind === "incomplete"); assert.equal(bad.counts.invalid, 3);
+  const bad = previewJiraCreate(input); assert.ok(bad.kind === "incomplete"); assert.equal(bad.counts.invalid, 2);
+  assert.ok(bad.diagnostics.some(row => row.field === "oo" && row.state === "omitted"));
   input.answers.ss = "a"; input.answers.n = "2"; input.answers.s = 1; assert.equal(previewJiraCreate(input).kind, "incomplete");
 });
 
@@ -56,7 +57,7 @@ test("one strict schema rejects unknown keys, sparse arrays, malformed types and
   for (const bad of ["", " ", "\u0000", "x".repeat(513), 1, null]) mutate(input => { input.project = bad; });
   for (const bad of [NaN, Infinity, -Infinity, -1, 1.5, "4096", 4095, 65537, Number.MAX_VALUE]) mutate(input => { input.budget = bad; });
   for (const bad of [NaN, Infinity, -1, 0.5, "0", 1000001]) mutate(input => { input.offset = bad; });
-  for (const bad of [null, [], { x: Infinity }, { x: -Infinity }, { x: NaN }, { x: 1e12 + 1 }, { x: -1e12 - 1 }, { x: {} }, { x: null }, { x: [1] }, { x: Array(1) }, { x: Array(17).fill("x") }, { x: { id: "" } }, { "bad-id": true }, Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`f${i}`, 1]))]) mutate(input => { input.answers = bad; });
+  for (const bad of [null, [], { x: Infinity }, { x: -Infinity }, { x: NaN }, { x: 1e12 + 1 }, { x: -1e12 - 1 }, { x: {} }, { x: [1] }, { x: Array(1) }, { x: Array(17).fill("x") }, { x: { id: "" } }, { "bad-id": true }, Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`f${i}`, 1]))]) mutate(input => { input.answers = bad; });
   for (const bad of [null, [], {}, { ...contract().metadata, version: 2 }, { ...contract().metadata, revision: "" }, { ...contract().metadata, project: "" }, { ...contract().metadata, issueType: "" }, { ...contract().metadata, unknown: 1 }]) mutate(input => { input.metadata = bad; });
   for (const fields of [Array(1), Array(257).fill(contract().metadata.fields[0]), [null], [1], [{}], [contract().metadata.fields[0], contract().metadata.fields[0]]]) {
     const input = contract(); input.metadata.fields = fields as typeof input.metadata.fields; refused(previewJiraCreate(input));
@@ -65,7 +66,7 @@ test("one strict schema rejects unknown keys, sparse arrays, malformed types and
   for (const field of [{ ...base, extra: true }, { ...base, id: "" }, { ...base, id: "bad-id" }, { ...base, id: 1 }, { ...base, id: "project" }, { ...base, id: "issuetype" }, { ...base, name: "" }, { ...base, required: 1 }, { ...base, type: null }, { ...base, type: "unsupported" }, { ...base, allowedValues: Array(1) }, { ...base, allowedValues: Array(129).fill("a") }, { ...base, allowedValues: [1] }]) {
     const input = contract(); input.metadata.fields = [field] as typeof input.metadata.fields; refused(previewJiraCreate(input));
   }
-  for (const value of [1e12, -1e12, 0, false, " a\r\nb ", { id: "a" }, ["a"], [{ id: "b" }]]) {
+  for (const value of [null, 1e12, -1e12, 0, false, " a\r\nb ", { id: "a" }, ["a"], [{ id: "b" }]]) {
     const input = contract(); input.answers.other = value; assert.equal(previewJiraCreate(input).kind, "incomplete");
   }
 });

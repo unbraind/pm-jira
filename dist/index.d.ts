@@ -748,11 +748,13 @@ export interface ExportPushResult {
     failed: number;
     failures: ExportPushFailure[];
 }
+/** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export declare function runExportPush(plan: ExportPlan, opts: {
     authHeader: string;
     updateExisting: boolean;
     createContract?: unknown;
 }, deps?: ExportPushDeps): Promise<ExportPushResult>;
+/** Read-only decision describing whether the configured write mirror would act. */
 export interface PushOnWriteDecision {
     shouldPush: boolean;
     reason: string;

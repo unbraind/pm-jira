@@ -14,9 +14,17 @@ export function createPreviewRefusal(code) {
 function record(value) {
     return value !== null && typeof value === "object" && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 }
-/** Bound identifiers and scalar strings, rejecting control characters except body whitespace. */
+/** Bound payload text without imposing required-field completeness. */
+function payloadText(value, max) {
+    return typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
+}
+/** Require meaningful metadata identifiers and nonempty scalar choices. */
 function text(value, max) {
-    return typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
+    return payloadText(value, max) && value.trim().length > 0;
+}
+/** Empty payload inputs are interpreted using required metadata, never CLI option rules. */
+function emptyValue(value) {
+    return value === undefined || value === null || (typeof value === "string" && value.trim().length === 0) || (Array.isArray(value) && value.length === 0);
 }
 /** Require exact object keys at the one public input boundary. */
 function keys(value, required, optional = []) {
@@ -34,18 +42,20 @@ function scalar(value, type) {
         return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1e12;
     if (type === "boolean")
         return typeof value === "boolean";
+    if (type === "user")
+        return record(value) && keys(value, ["accountId"]) && text(value.accountId, 128);
     return record(value) && keys(value, ["id"]) && text(value.id, 64);
 }
 /** Validate one declared field value, including nonempty multi-value answers. */
 function validValue(value, type) {
-    if (type === "strings" || type === "options")
-        return dense(value, 16) && value.length > 0 && value.every(entry => scalar(entry, type === "strings" ? "string" : "option"));
+    if (type === "strings" || type === "options" || type === "users")
+        return dense(value, 16) && value.length > 0 && value.every(entry => scalar(entry, type === "strings" ? "string" : type === "users" ? "user" : "option"));
     return scalar(value, type);
 }
 /** Bound arbitrary answer values before classifying schema/value mismatches as diagnostics. */
 function answer(value) {
-    return scalar(value, "string") || scalar(value, "number") || scalar(value, "boolean") || scalar(value, "option") ||
-        (dense(value, 16) && value.every(entry => scalar(entry, "string") || scalar(entry, "option")));
+    return value === undefined || value === null || payloadText(value, 512) || scalar(value, "number") || scalar(value, "boolean") || scalar(value, "option") || scalar(value, "user") ||
+        (dense(value, 16) && value.every(entry => payloadText(entry, 512) || scalar(entry, "option") || scalar(entry, "user")));
 }
 /** Single strict schema for SDK and CLI; no coercion or normalization of answers. */
 function validate(value) {
@@ -64,17 +74,17 @@ function validate(value) {
         if (!record(field) || !keys(field, ["id", "name", "required", "type"], ["allowedValues"]) ||
             typeof field.id !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(field.id) || ["project", "issuetype"].includes(field.id) || ids.has(field.id) ||
             !text(field.name, 128) || typeof field.required !== "boolean" || typeof field.type !== "string" ||
-            !["string", "number", "boolean", "option", "strings", "options"].includes(field.type))
+            !["string", "number", "boolean", "option", "user", "strings", "options", "users"].includes(field.type))
             return false;
         ids.add(field.id);
-        if (field.allowedValues !== undefined && (!dense(field.allowedValues, 128) || !field.allowedValues.every(entry => scalar(entry, field.type === "strings" ? "string" : field.type === "options" ? "option" : field.type))))
+        if (field.allowedValues !== undefined && (!dense(field.allowedValues, 128) || !field.allowedValues.every(entry => scalar(entry, field.type === "strings" ? "string" : field.type === "options" ? "option" : field.type === "users" ? "user" : field.type))))
             return false;
     }
     return true;
 }
 /** Compare exact scalar contract choices independent of object key order. */
 function same(left, right) {
-    return record(left) && record(right) ? left.id === right.id : left === right;
+    return record(left) && record(right) ? (left.id === undefined ? left.accountId === right.accountId : left.id === right.id) : left === right;
 }
 /** Match all supplied elements against advertised choices without inventing defaults. */
 function allowed(value, field) {
@@ -85,12 +95,16 @@ function allowed(value, field) {
  * The byte budget covers pretty JSON UTF-8 plus newline; TOON also uses the host budget.
  * A ready preview is evidence about supplied metadata, never execution authorization.
  */
-export function previewJiraCreate(input) {
+export function compileJiraCreate(input) {
+    const bindings = {};
+    const omitted = [];
+    const finish = (preview) => ({ preview,
+        bindings: preview.kind === "ready" ? bindings : {}, omitted: preview.kind === "ready" ? omitted : [] });
     if (!validate(input))
-        return createPreviewRefusal("invalid_input");
+        return finish(createPreviewRefusal("invalid_input"));
     const { metadata, answers, project, issueType, budget = 8192, offset = 0 } = input;
     if (metadata.project !== project || metadata.issueType !== issueType)
-        return createPreviewRefusal("scope_mismatch");
+        return finish(createPreviewRefusal("scope_mismatch"));
     const rows = [];
     const counts = { bound: 0, missing: 0, invalid: 0 };
     for (const field of metadata.fields) {
@@ -102,14 +116,28 @@ export function previewJiraCreate(input) {
         }
         else {
             const value = answers[field.id];
-            const state = validValue(value, field.type) && allowed(value, field) ? "bound" : "invalid";
-            counts[state]++;
-            // Values are paged separately so even the largest legal array fits a minimal budget.
-            if (state === "bound" && Array.isArray(value))
-                for (const entry of value)
-                    rows.push({ field: field.id, state, required: field.required, value: entry });
-            else
-                rows.push({ field: field.id, state, required: field.required, ...(state === "bound" ? { value } : {}) });
+            if (emptyValue(value)) {
+                if (field.required) {
+                    rows.push({ field: field.id, state: "missing", required: true });
+                    counts.missing++;
+                }
+                else {
+                    omitted.push(field.id);
+                    rows.push({ field: field.id, state: "omitted", required: false });
+                }
+            }
+            else {
+                const state = validValue(value, field.type) && allowed(value, field) ? "bound" : "invalid";
+                counts[state]++;
+                if (state === "bound")
+                    bindings[field.id] = value;
+                // Values are paged separately so even the largest legal array fits a minimal budget.
+                if (state === "bound" && Array.isArray(value))
+                    for (const entry of value)
+                        rows.push({ field: field.id, state, required: field.required, value: entry });
+                else
+                    rows.push({ field: field.id, state, required: field.required, ...(state === "bound" ? { value } : {}) });
+            }
         }
         for (const value of field.allowedValues ?? [])
             rows.push({ field: field.id, state: "allowed", required: field.required, value });
@@ -130,11 +158,15 @@ export function previewJiraCreate(input) {
         if (Buffer.byteLength(JSON.stringify(result, null, 2)) + 1 > budget) {
             result.diagnostics.pop();
             if (result.diagnostics.length === 0)
-                return createPreviewRefusal("budget_too_small");
+                return finish(createPreviewRefusal("budget_too_small"));
             result.page.nextOffset = index;
             break;
         }
     }
-    return result;
+    return finish(result);
+}
+/** Return only the bounded agent-facing preview; export consumes the same compiled semantics. */
+export function previewJiraCreate(input) {
+    return compileJiraCreate(input).preview;
 }
 //# sourceMappingURL=create-preview.js.map

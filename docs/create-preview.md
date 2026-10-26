@@ -11,8 +11,7 @@ omits the required Team answer. The command returns `kind: incomplete`,
 `code: answers_required`, `exit_code: 2`, a `missing` row and two `allowed` rows.
 Set `answers.customfield_10001` to `{ "id": "10" }` and rerun for `kind: ready`.
 Unknown fields, incompatible types and unadvertised choices produce `invalid`
-rows. Required fields never silently accept Jira defaults. Supplied strings and
-option IDs are compared exactly; no trimming or value coercion is performed.
+rows. Required fields never silently accept Jira defaults. Supplied nonempty strings, option IDs and account IDs are compared exactly; their contents are preserved. Metadata-optional empty values are omitted from create requests.
 
 ```ts
 import { previewJiraCreate } from "pm-jira";
@@ -38,13 +37,13 @@ The v1 contract is an explicit normalized projection, not the raw Jira page:
 - Project and issue type are bound by the contract scope rather than field rows.
 - Project each supported field's `fieldId`/`key`, `name`, `required` and schema to
   `id`, `name`, `required`, `type`. Include every supported required custom field.
-  `string`, `number`, `boolean`, `option` (an exact `{id}` object), `strings` and
-  `options` are supported. Project allowed option objects to `{id}`; simple
+  `string`, `number`, `boolean`, `option` (an exact `{id}` object), `user`
+  (an exact `{accountId}` object), `strings`, `options` and `users` are supported. Project allowed option objects to `{id}` and users to `{accountId}`; simple
   string/number/boolean choices keep their scalar value.
 - Preserve `allowedValues` whenever advertised; an empty list permits no answer.
   Absence means no enumerated restriction was supplied. Do not replace a paged
   or autocomplete-only set with a partial list and claim completeness.
-- ADF/textarea, dates with semantic validators, users, cascading selects, parent
+- ADF/textarea, dates with semantic validators, cascading selects, parent
   objects and other compound schemas need explicit adaptation outside v1. Do not
   omit unsupported required fields to manufacture readiness. The scalar preview
   does not validate the exporter's generated ADF description or server defaults.
@@ -87,10 +86,10 @@ The SDK and file command share one strict schema. Unknown object keys, unsupport
 schemas, sparse arrays and invalid numbers are rejected at that boundary with a
 typed remedy. The CLI reads regular JSON files up to 1 MiB using a bounded read.
 Limits are 256 fields/answers, 128 advertised choices per field, 16 array answers,
-512 UTF-16 code units per scalar string, 64 per option/field ID, 128 per display
+512 UTF-16 code units per scalar string, 64 per option/field ID, 128 per account ID and display
 name and 64 per revision/project/type. Nonempty text may contain tabs/CR/LF;
 other control characters are rejected. Numbers must be finite in `[-1e12, 1e12]`.
-Array answers are nonempty when matched against a field. All emitted counters
+Required arrays need at least one valid element. Optional empty arrays are omitted. All emitted counters
 are finite, bounded nonnegative integers.
 
 `budget` is an integer UTF-8 JSON byte budget (two-space indentation plus newline), default 8192, range 4096..65536.
@@ -158,3 +157,38 @@ cases. Every blank produces typed usage refusal and zero calls to a recording
 TLS Jira server. Fixed SDK and installed non-git CLI cases cover
 `--create-contract ' ' --push`; positive GET/POST/PUT controls reach the fake
 server. GET, POST and PUT preserve an explicitly configured URL port.
+
+
+## CLI values and payload completeness have different scopes
+
+The blank-value usage rule applies to user-supplied CLI option/flag values. It
+never runs on exporter payload field values or values inside the contract JSON.
+For example, `--create-contract ' '` refuses before HTTP, while optional
+`labels: []` from an untagged SDK item is valid create input.
+
+The create compiler interprets each field using the captured metadata's `required`
+flag and declared type, independent of its name. A required field needs a meaningful
+string after trimming, at least one valid array element, a finite number (including
+zero), a boolean (including false), or a valid advertised option/account identity.
+Absent, undefined, null, empty string/whitespace or empty-array required answers
+produce a missing-answer checklist and stop the complete batch before POST.
+
+For optional fields, absent/undefined/null, `[]`, `''` and whitespace-only values
+mean no value to send. The shared preview/export compiler omits these fields from
+the POST body and emits `omitted` diagnostics for explicitly supplied empties.
+This also removes native defaults such as `labels: []`. Null is omitted rather
+than assuming that every Jira field accepts explicit JSON null. Optional fields
+with nonempty values still require the correct schema and allowed choice.
+No field is inferred required/optional from names such as labels, components,
+versions or assignee. Preview diagnostics stay paginated; export consumes complete
+internal bindings and omissions from that same compiler.
+
+`test/payload-completeness.test.ts` has separate MUST-REFUSE and MUST-ALLOW corpora.
+Its independent recording TLS server checks every emitted body against generated
+schemas. Seed `0x454d5054` exercises 512 metadata sequences over string, number,
+boolean, label/component/version arrays, option, user and user-array fields, with
+random required flags and empty/valid payload values. It produces 1024 successful
+schema-accepted POSTs, plus the fixed optional-labels POST; 512 required-empty
+cases and 512 blank-CLI cases produce zero requests. Nonblank CLI values and
+padded meaningful payload strings remain accepted. SDK state is read back and
+compared unchanged after the complete corpus.
