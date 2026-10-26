@@ -18,7 +18,8 @@ function input() { return { metadata: { version: 1, revision: "r1", project: "DE
 
 test("bounded file adapter rejects missing, invalid, nonregular and oversized input", t => {
   const root = mkdtempSync(join(tmpdir(), "create-files-")); t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const contract of [undefined, "", " ", false]) assert.equal(runCreatePreview({ contract }, root).kind, "refused");
+  assert.equal(runCreatePreview({}, root).kind, "refused");
+  for (const contract of ["", " ", false]) assert.throws(() => runCreatePreview({ contract }, root), /nonblank/);
   for (const file of ["missing", "."]) assert.equal(runCreatePreview({ contract: file }, root).kind, "refused");
   writeFileSync(join(root, "bad"), "{"); assert.equal(runCreatePreview({ contract: "bad" }, root).kind, "refused");
   writeFileSync(join(root, "big"), Buffer.alloc(1024 * 1024 + 1, 32)); assert.equal(runCreatePreview({ contract: "big" }, root).kind, "refused");

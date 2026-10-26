@@ -212,12 +212,12 @@ test("optionInt reads camelCase key and coerces string values", () => {
   assert.strictEqual(optionInt({ maxResults: "200" }, 500, "max-results", "maxResults"), 200);
   assert.strictEqual(optionInt({ "max-results": "200" }, 500, "max-results", "maxResults"), 200);
   assert.strictEqual(optionInt({}, 500, "max-results", "maxResults"), 500);
-  assert.strictEqual(optionInt({ maxResults: "nope" }, 500, "max-results", "maxResults"), 500);
+  assert.throws(() => optionInt({ maxResults: "nope" }, 500, "max-results", "maxResults"), /nonblank/);
 });
 
-test("optionString trims and ignores empty values", () => {
+test("optionString trims meaningful values and refuses blanks", () => {
   assert.strictEqual(optionString({ project: "  PROJ " }, "project"), "PROJ");
-  assert.strictEqual(optionString({ project: "   " }, "project"), undefined);
+  assert.throws(() => optionString({ project: "   " }, "project"), /nonblank/);
   assert.strictEqual(optionString({}, "project"), undefined);
 });
 

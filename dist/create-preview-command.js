@@ -1,6 +1,7 @@
 /** File adapter and host-owned command registration for create previews. */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseJiraOptions } from "./option-boundary.js";
 import { createPreviewRefusal, previewJiraCreate } from "./create-preview.js";
 /** Read bounded regular JSON input without trusting file size or blocking on FIFOs. */
 export function readCreateContract(file) {
@@ -37,7 +38,8 @@ export function readCreateContract(file) {
 }
 /** Compile exactly the supplied contract; SDK and CLI share the same strict input boundary. */
 export function runCreatePreview(options, cwd) {
-    if (typeof options.contract !== "string" || !options.contract.trim())
+    options = parseJiraOptions(options);
+    if (typeof options.contract !== "string")
         return createPreviewRefusal("invalid_input");
     const input = readCreateContract(resolve(cwd, options.contract));
     return "kind" in input ? input : previewJiraCreate(input.value);

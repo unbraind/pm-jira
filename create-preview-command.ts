@@ -1,6 +1,7 @@
 /** File adapter and host-owned command registration for create previews. */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseJiraOptions } from "./option-boundary.ts";
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import { createPreviewRefusal, previewJiraCreate } from "./create-preview.ts";
 import type { JiraCreatePreviewResult, JiraCreateRefusal } from "./create-preview.ts";
@@ -28,7 +29,8 @@ export function readCreateContract(file: string): { value: unknown } | JiraCreat
 }
 /** Compile exactly the supplied contract; SDK and CLI share the same strict input boundary. */
 export function runCreatePreview(options: Record<string, unknown>, cwd: string): JiraCreatePreviewResult {
-  if (typeof options.contract !== "string" || !options.contract.trim()) return createPreviewRefusal("invalid_input");
+  options = parseJiraOptions(options);
+  if (typeof options.contract !== "string") return createPreviewRefusal("invalid_input");
   const input = readCreateContract(resolve(cwd, options.contract));
   return "kind" in input ? input : previewJiraCreate(input.value);
 }

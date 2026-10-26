@@ -610,3 +610,9 @@ Diagnostics fit a declared JSON byte budget and expose `page.nextOffset`.
 See [the contract, limits and export guarantees](docs/create-preview.md) and
 [the example fixture](docs/examples/create-contract.json). The preview is read-only
 and validates supplied metadata; it does not establish live Jira permissions.
+
+All Jira commands reject supplied blank option values with `invalid_option`
+(exit 2) before I/O. Leave unused options omitted, and supply nonblank values for
+contracts and other guards. The shared boundary checks the whole bag, including
+secondary aliases and legacy importer credential options. See
+[the option contract and table-driven validation](docs/create-preview.md#supplied-option-values).

@@ -29,6 +29,7 @@ import https from "node:https";
 import { URL } from "node:url";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { parseJiraOptions } from "./option-boundary.js";
 import { importPmSdk } from "./sdk-importer.js";
 import { previewJiraCreate } from "./create-preview.js";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.js";
@@ -416,6 +417,7 @@ export function buildJql(filters) {
  * @returns The resolved JQL filters.
  */
 export function readJqlFilters(options) {
+    options = parseJiraOptions(options);
     return {
         jql: readStringOption(options, "jql"),
         project: readStringOptionAliased(options, "project", "project-key"),
@@ -514,12 +516,13 @@ function camelKey(kebab) {
     return kebab.replace(/-([a-z0-9])/g, (_m, c) => c.toUpperCase());
 }
 function readOptionValue(options, kebab) {
-    return options[kebab] ?? options[camelKey(kebab)];
+    const parsed = parseJiraOptions(options);
+    return parsed[kebab] ?? parsed[camelKey(kebab)];
 }
 /**
  * Read a trimmed, non-empty string option under its kebab- or camel-case key.
  *
- * Returns `undefined` for a missing or blank value. The pm CLI normalizes loose
+ * Returns `undefined` only for an omitted value; blank supplied values are usage errors. The pm CLI normalizes loose
  * flags to camelCase, so both spellings are checked (see the section note).
  *
  * @param options - The raw option object.
@@ -529,8 +532,7 @@ function readOptionValue(options, kebab) {
 export function readStringOption(options, kebab) {
     const v = readOptionValue(options, kebab);
     const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
-    const trimmed = value?.trim();
-    return trimmed ? trimmed : undefined;
+    return value;
 }
 /**
  * Read a string option under one or more alias keys (kebab or camel).
@@ -544,6 +546,7 @@ export function readStringOption(options, kebab) {
  * @returns The first non-empty value, or `undefined`.
  */
 export function readStringOptionAliased(options, ...kebabs) {
+    options = parseJiraOptions(options);
     for (const kebab of kebabs) {
         const value = readStringOption(options, kebab);
         if (value !== undefined)
@@ -563,7 +566,7 @@ export function readStringOptionAliased(options, ...kebabs) {
  */
 export function readNumberOption(options, kebab) {
     const v = readOptionValue(options, kebab);
-    if (v === undefined || v === null)
+    if (v === undefined)
         return undefined;
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : undefined;
@@ -571,7 +574,7 @@ export function readNumberOption(options, kebab) {
 /**
  * Read a boolean option under its kebab- or camel-case key.
  *
- * A bare flag (empty string) reads as true, as do the strings "true"/"1"/"yes";
+ * A bare CLI flag is boolean true, as are the strings "true"/"1"/"yes";
  * anything else falls back to JavaScript truthiness.
  *
  * @param options - The raw option object.
@@ -583,8 +586,8 @@ export function readBooleanOption(options, kebab) {
     if (typeof v === "boolean")
         return v;
     if (typeof v === "string") {
-        const s = v.trim().toLowerCase();
-        return s === "true" || s === "1" || s === "yes" || s === "";
+        const s = v.toLowerCase();
+        return s === "true" || s === "1" || s === "yes";
     }
     return Boolean(v);
 }
@@ -596,6 +599,7 @@ export function readBooleanOption(options, kebab) {
  * @returns The first non-empty value, or `undefined`.
  */
 export function optionString(options, ...keys) {
+    options = parseJiraOptions(options);
     for (const key of keys) {
         const value = readStringOption(options, key);
         if (value !== undefined)
@@ -612,6 +616,7 @@ export function optionString(options, ...keys) {
  * @returns The first parsed number, or the default.
  */
 export function optionInt(options, defaultValue, ...keys) {
+    options = parseJiraOptions(options);
     for (const key of keys) {
         const value = readNumberOption(options, key);
         if (value !== undefined)
@@ -627,21 +632,16 @@ export function optionInt(options, defaultValue, ...keys) {
  * @returns True when at least one key is truthy.
  */
 export function optionEnabled(options, ...keys) {
+    options = parseJiraOptions(options);
     return keys.some((key) => readBooleanOption(options, key));
 }
 /**
- * Coalesce a possibly-missing options bag to an empty object.
- *
- * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
- * Reading properties off `undefined` would throw, so a missing bag is treated
- * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
- * or other falsy value cannot leak through as a non-object.
- *
- * @param options - The raw options bag, or a falsy stand-in.
- * @returns The given bag when it is truthy, otherwise `{}`.
+ * Validate and snapshot an option bag; only undefined denotes an omitted bag.
+ * Present null, false, zero or empty strings are typed usage errors, preserving
+ * the distinction between omitted configuration and unusable supplied input.
  */
 export function optionsOrEmpty(options) {
-    return options || {};
+    return parseJiraOptions(options);
 }
 // Resolve Jira credentials from options (--host) + env. Returns a structured
 // createCommandError (numeric exitCode) when anything is missing rather than throwing
@@ -768,6 +768,7 @@ export function planJiraTransition(intent, issueResponse, transitionResponse) {
  * Errors are redacted typed refusals. No tracker access, git subprocess or POST occurs.
  */
 export async function discoverJiraTransitionPlan(intent, options = {}) {
+    options = parseJiraOptions(options);
     if (!/^[A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*$/.test(intent.issue) || !PM_STATUSES.includes(intent.target)) {
         return transitionRefusal("invalid_input", "Supply an issue key and open|in_progress|closed|blocked target.");
     }
@@ -788,6 +789,7 @@ export async function discoverJiraTransitionPlan(intent, options = {}) {
 }
 /** Parse CLI intent once and let the host render the compact result as TOON or JSON. */
 export async function runTransitionPlan(options) {
+    options = parseJiraOptions(options);
     const target = normalizePmStatusInput(readStringOption(options, "to"));
     const issue = readStringOption(options, "issue");
     if (!target || !issue)
@@ -968,6 +970,7 @@ function httpsPost(url, authHeader, payload) {
         const parsed = new URL(url);
         const options = {
             hostname: parsed.hostname,
+            port: parsed.port,
             path: parsed.pathname + parsed.search,
             method: "POST",
             headers: {
@@ -1008,6 +1011,7 @@ function httpsPut(url, authHeader, payload) {
         const parsed = new URL(url);
         const options = {
             hostname: parsed.hostname,
+            port: parsed.port,
             path: parsed.pathname + parsed.search,
             method: "PUT",
             headers: {
@@ -1454,6 +1458,7 @@ export function buildSearchRequest(baseUrl, jql, nextPageToken, maxResults) {
  * @returns The dry-run request or import counts and optional transaction receipt.
  */
 export async function runImport(options, pmRoot, opts = {}) {
+    options = parseJiraOptions(options);
     const project = readStringOptionAliased(options, "project", "project-key");
     const customJql = readStringOption(options, "jql");
     const maxResults = readNumberOption(options, "max-results") ?? 500;

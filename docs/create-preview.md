@@ -132,3 +132,29 @@ from cross-tracker comparison. The initial run preserved state through 40 exact
 SDK journal-plan mismatch refusals from older atomic inputs. That existing
 limitation is tracked by `pm-jira-atomic-replay-revisions`; its misleading rollback
 diagnostic is tracked by `pm-jira-d3tp`. The preview adds no journal or replay path.
+
+## Supplied option values
+
+Every Jira command validates its complete option bag through the shared
+`option-boundary.ts` schema before defaults, alias selection, file/tracker reads
+or HTTP. A supplied empty string, spaces, tab or CRLF is a typed SDK usage error
+(`invalid_option`, exit 2), with a remedy to omit the option or provide a
+nonblank documented value. This includes `--create-contract`, secondary aliases,
+boolean flags supplied as strings and legacy importer credential options. A valid
+primary alias cannot hide a blank secondary alias. Omitted/undefined options retain
+their defaults; meaningful strings are trimmed once. CLI bare switches are true.
+
+Known text flags require strings; numeric flags require finite safe integers in
+their documented domains; boolean options accept true/false, 0/1 and the explicit
+strings true/false/yes/no/0/1. The immutable snapshot accepts at most 256 option
+keys, each 1..128 characters, and strings up to 1,048,576 UTF-16 code units. Callers must omit an unused
+option rather than use an empty/null/falsy options bag or a blank guard value.
+
+`test/option-boundary.test.ts` reconciles the inventory with actual SDK command
+registrations. It covers all eight command surfaces, 60 value-bearing bindings
+and eight switch bindings, 94 kebab/camel spellings, and the Cartesian product of
+absent/empty/spaces/tab/CRLF/valid values: 564 table cases, including 376 blank
+cases. Every blank produces typed usage refusal and zero calls to a recording
+TLS Jira server. Fixed SDK and installed non-git CLI cases cover
+`--create-contract ' ' --push`; positive GET/POST/PUT controls reach the fake
+server. GET, POST and PUT preserve an explicitly configured URL port.

@@ -311,7 +311,7 @@ export declare function extractJiraKey(text: string | undefined): {
 /**
  * Read a trimmed, non-empty string option under its kebab- or camel-case key.
  *
- * Returns `undefined` for a missing or blank value. The pm CLI normalizes loose
+ * Returns `undefined` only for an omitted value; blank supplied values are usage errors. The pm CLI normalizes loose
  * flags to camelCase, so both spellings are checked (see the section note).
  *
  * @param options - The raw option object.
@@ -345,7 +345,7 @@ export declare function readNumberOption(options: Record<string, unknown>, kebab
 /**
  * Read a boolean option under its kebab- or camel-case key.
  *
- * A bare flag (empty string) reads as true, as do the strings "true"/"1"/"yes";
+ * A bare CLI flag is boolean true, as are the strings "true"/"1"/"yes";
  * anything else falls back to JavaScript truthiness.
  *
  * @param options - The raw option object.
@@ -379,15 +379,9 @@ export declare function optionInt(options: Record<string, unknown>, defaultValue
  */
 export declare function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean;
 /**
- * Coalesce a possibly-missing options bag to an empty object.
- *
- * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
- * Reading properties off `undefined` would throw, so a missing bag is treated
- * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
- * or other falsy value cannot leak through as a non-object.
- *
- * @param options - The raw options bag, or a falsy stand-in.
- * @returns The given bag when it is truthy, otherwise `{}`.
+ * Validate and snapshot an option bag; only undefined denotes an omitted bag.
+ * Present null, false, zero or empty strings are typed usage errors, preserving
+ * the distinction between omitted configuration and unusable supplied input.
  */
 export declare function optionsOrEmpty(options: Record<string, unknown> | undefined | null | false | "" | 0): Record<string, unknown>;
 /**
