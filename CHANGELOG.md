@@ -6,6 +6,10 @@
 
 - Use the pm SDK for ordinary Jira imports and expected failures ([pm-jira-na2i](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-na2i.toon))
 
+### Other
+
+- Stop Hound from linting generated dist/ output ([pm-jira-92cf](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-92cf.toon))
+
 ## 2026.10.25 - 2026-10-25
 
 ### Added
