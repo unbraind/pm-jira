@@ -26,7 +26,7 @@
     "build:test": "tsc -p tsconfig.test.json",
     "prepare": "node scripts/prepare-merge-driver.ts",
     "merge:install": "pm merge install",
-    "test": "npm run build && npm run build:test && node --test test/*.test.ts",
+    "test": "npm run build && npm run build:test && node --test --test-concurrency=2 test/*.test.ts",
     "dev": "tsc --watch",
     "prepack": "npm run build",
     "typecheck": "tsc --noEmit",

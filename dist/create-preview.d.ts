@@ -40,6 +40,7 @@ export interface JiraCreatePreviewInput {
 /** Redacted, actionable refusal with the host semantic exit code. */
 export interface JiraCreateRefusal {
     kind: "refused";
+    diagnostics: [];
     code: "invalid_input" | "scope_mismatch" | "input_read" | "budget_too_small";
     remediation: string;
     exit_code: 2;

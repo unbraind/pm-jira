@@ -76,9 +76,16 @@ Export protection is opt-in with `--create-contract`; ordinary exports retain
 their historical behavior. The guarded push reads the file on each invocation
 and recompiles **every create before any POST or PUT**. Missing or invalid
 answers anywhere abort the batch with usage exit 2 and zero writes. One builder
-merges **explicit answers > item mapped fields > generated rich/default fields**,
+checks project/type identity in every original source layer before merging
+**explicit answers > item mapped fields > generated rich/default fields**,
 then validates that final body against the captured metadata. Explicit summary
 answers override mapped item titles as well as generated priority values.
+Project and issue type are immutable target identity. Every supplied `project`
+reference must equal the selected `{key}` and every `issuetype` must equal the
+selected `{name}` in each layer, including native export fields. A later matching
+override cannot repair or hide a lower mismatched target: OTHER/Bug plus a
+DEMO/Task contract always refuses before HTTP. The builder constructs scope from
+the explicit selection, outside ordinary field precedence.
 Only declared fields and the selected project/type scope are sent. Undeclared
 native mappings are reported as `omitted`; unknown explicit answers refuse.
 Optional empty fields are omitted after the merge. A rich `{name:"High"}` can
@@ -245,3 +252,19 @@ The fixed rich-priority, optional empty-label and blank CLI-option cases remain.
 The existing 512-sequence optional-empty corpus and whole CLI option-table
 corpus run separately. These are offline contract-adaptation laws, not evidence
 of live Jira permissions or tenant-side validators.
+
+## Scope and refusal-contract regression evidence
+
+`test/create-scope.test.ts` covers 90 adversarial reserved-identity layer cases.
+Seed `0x53434f50` supplies 512 random mismatched export targets with matching
+contract overlays: every case refuses with the same code/remedy and zero HTTP.
+The corresponding 512 matching targets POST the exact preview digest and selected
+project/type. Real non-git SDK readback remains unchanged. The suite exercises the
+registered exporter, actual npm tarball consumers under Node and native Bun, and
+installed CLI JSON/TOON commands with git absent from PATH.
+
+All create refusal variants include `diagnostics: []`, honoring the host's declared
+row contract. This preserves `scope_mismatch` and other typed refusals through
+installed JSON/TOON rendering instead of substituting a host output-schema error.
+Every refusal code is tested against the same row and byte bounds. Full npm/Bun
+release gates keep their thresholds and run at most two Node test workers.

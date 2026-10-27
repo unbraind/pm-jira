@@ -632,3 +632,8 @@ Optional empty fields and native mappings absent from the captured create screen
 are omitted. Option references preserve schema-supported `id`/`name`/`value`
 forms; Jira Cloud users use `accountId`. See the
 [agreement example and schema projection rules](docs/create-preview.md#previewapply-agreement-example).
+
+Project and issue type stay fixed outside field precedence. Every native and
+contract source must agree with the selected target before merging; matching
+contract overrides cannot conceal a plan for another project/type. Scope refusals
+remain typed in SDK, installed JSON/TOON and packed Node/Bun consumers.

@@ -38,6 +38,7 @@ export interface JiraCreatePreviewInput {
 /** Redacted, actionable refusal with the host semantic exit code. */
 export interface JiraCreateRefusal {
   kind: "refused";
+  diagnostics: [];
   code: "invalid_input" | "scope_mismatch" | "input_read" | "budget_too_small";
   remediation: string;
   exit_code: 2;
@@ -92,7 +93,7 @@ export function createPreviewRefusal(code: JiraCreateRefusal["code"]): JiraCreat
     budget_too_small: "Increase budget up to 65536 bytes to fit the next diagnostic row; keep the same revision, answers and offset.",
     input_read: "Supply a readable regular JSON contract file of at most 1 MiB; see docs/create-preview.md.",
   };
-  return { kind: "refused", code, remediation: remedies[code], posts: 0, exit_code: 2 };
+  return { kind: "refused", diagnostics: [], code, remediation: remedies[code], posts: 0, exit_code: 2 };
 }
 
 /** Recognize plain objects, excluding class instances and prototype-bearing documents. */
@@ -185,6 +186,13 @@ function allowed(value: JiraCreateValue, field: JiraCreateField): boolean {
     (field.allowedValues === undefined || field.allowedValues.some(choice => same(entry, choice))));
 }
 
+/** Check reserved identity in each original layer, before another layer can hide a mismatch. */
+function matchingScope(fields: Record<string, unknown> | undefined, project: string, issueType: string): boolean {
+  if (fields === undefined) return true;
+  return (!Object.hasOwn(fields, "project") || (record(fields.project) && keys(fields.project, ["key"]) && fields.project.key === project)) &&
+    (!Object.hasOwn(fields, "issuetype") || (record(fields.issuetype) && keys(fields.issuetype, ["name"]) && fields.issuetype.name === issueType));
+}
+
 /**
  * Compile bindings/checklist from a complete, revisioned normalized metadata fixture.
  * The byte budget covers pretty JSON UTF-8 plus newline; TOON also uses the host budget.
@@ -198,12 +206,13 @@ export function compileJiraCreate(input: unknown, sources?: JiraCreateSources): 
     bindings: preview.kind === "ready" ? bindings : {}, omitted: preview.kind === "ready" ? omitted : [], body: preview.kind === "ready" ? body : "" });
   if (!validate(input) || (sources !== undefined && (!record(sources) || !keys(sources, ["mappedFields", "generatedFields"]) || !fieldSource(sources.mappedFields) || !fieldSource(sources.generatedFields)))) return finish(createPreviewRefusal("invalid_input"));
   const { metadata, project, issueType, budget = 8192, offset = 0 } = input;
-  // This is the sole payload merge: explicit answers > item mappings > generated defaults.
-  const answers: Record<string, unknown> = { ...input.generatedFields, ...sources?.generatedFields, ...sources?.mappedFields, ...input.mappedFields, ...input.answers };
-  const scope = { project: { key: project }, issuetype: { name: issueType }, ...answers };
-  const fields: Record<string, unknown> = { project: scope.project, issuetype: scope.issuetype };
-  if (!record(scope.project) || !keys(scope.project, ["key"]) || scope.project.key !== project || !record(scope.issuetype) || !keys(scope.issuetype, ["name"]) || scope.issuetype.name !== issueType) return finish(createPreviewRefusal("scope_mismatch"));
   if (metadata.project !== project || metadata.issueType !== issueType) return finish(createPreviewRefusal("scope_mismatch"));
+  const layers = [input.generatedFields, sources?.generatedFields, sources?.mappedFields, input.mappedFields, input.answers];
+  if (!layers.every(layer => matchingScope(layer, project, issueType))) return finish(createPreviewRefusal("scope_mismatch"));
+  // Identity is never editable field data. Ordinary answers still override mapped/generated values.
+  const answers: Record<string, unknown> = { ...input.generatedFields, ...sources?.generatedFields, ...sources?.mappedFields, ...input.mappedFields, ...input.answers };
+  delete answers.project; delete answers.issuetype;
+  const fields: Record<string, unknown> = { project: { key: project }, issuetype: { name: issueType } };
   const rows: JiraCreateDiagnostic[] = [];
   const counts = { bound: 0, missing: 0, invalid: 0 };
   for (const field of metadata.fields) {
