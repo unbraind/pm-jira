@@ -26,7 +26,6 @@
 
 ### Fixed
 
-- Fix release publish ordering ahead of protected main push ([pm-jira-i3jb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-i3jb.toon))
 - The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-jira-7khk](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-7khk.toon))
 - Certify pm-jira on CLI 2026.9.27 and pinned GitHub extension ([pm-jira-b0n8](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-b0n8.toon))
 - Jira Cloud imports still call removed offset search endpoint ([pm-jira-h5bm](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-h5bm.toon))
@@ -36,6 +35,10 @@
 ### Other
 
 - Certify pm-jira on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates ([pm-jira-gdlw](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-gdlw.toon))
+
+### Closed
+
+- Closed: Fix release publish ordering ahead of protected main push ([pm-jira-i3jb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-i3jb.toon))
 
 ## 2026.10.8 - 2026-10-08
 
@@ -111,9 +114,9 @@
 
 ## 2026.8.31 - 2026-08-31
 
-### Fixed
+### Closed
 
-- Pin pm-changelog 2026.8.30 before the next release ([pm-jira-5whg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5whg.toon))
+- Closed: Pin pm-changelog 2026.8.30 before the next release ([pm-jira-5whg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5whg.toon))
 
 ## 2026.8.29 - 2026-08-29
 
@@ -131,13 +134,13 @@
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-jira-frtv](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-frtv.toon))
 
-### Security
-
-- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
-
 ### Other
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-jira-qd15](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-qd15.toon))
+
+### Closed
+
+- Closed: The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
 
 ## 2026.8.17 - 2026-08-17
 
@@ -220,23 +223,23 @@
 
 ## 2026.7.25 - 2026-07-25
 
-### Fixed
-
-- pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-jira-x4nd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x4nd.toon))
-
 ### Other
 
 - Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-jira-jwh2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-jwh2.toon))
 
+### Closed
+
+- Closed: pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-jira-x4nd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-x4nd.toon))
+
 ## 2026.7.23 - 2026-07-23
-
-### Fixed
-
-- Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-jira-xa9c](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-xa9c.toon))
 
 ### Other
 
 - Adopt pm field-aware merge driver for multi-agent branch-merge safety ([pm-jira-pzau](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-pzau.toon))
+
+### Closed
+
+- Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-jira-xa9c](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-xa9c.toon))
 
 ## 2026.7.20-1 - 2026-07-20
 
@@ -255,7 +258,6 @@
 ### Added
 
 - Publish/review loop for pm-jira feat/agent-enhancement-pass ([pm-jira-326a](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-326a.toon))
-- Full pm ecosystem production pass for pm-jira ([pm-jira-1soq](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-1soq.toon))
 
 ### Fixed
 
@@ -265,7 +267,6 @@
 
 - Ecosystem release readiness pass 2026-07-06 ([pm-jira-8r0w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-8r0w.toon))
 - Adversarial review: clean pass, no defects found ([pm-jira-pz02](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-pz02.toon))
-- Full-cycle hardening wave: pm-jira ([pm-jira-122e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-122e.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
 
 ## 2026.7.6 - 2026-07-06
@@ -313,7 +314,6 @@
 ### Added
 
 - pm-jira: deepen filters/dry-run/field-mapping/validate/hooks (enhancement brief 2026-06-03) ([pm-jira-i7fd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-i7fd.toon))
-- pm-jira: domain-max SDK enhancement (idempotent import, preflight, rate-limit backoff) ([pm-jira-4804](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-4804.toon))
 - export-on-write hook (opt-in) + add 'hooks' capability ([pm-jira-65ao](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-65ao.toon))
 
 ### Changed
@@ -323,7 +323,6 @@
 ### Other
 
 - Production-readiness audit 2026-05-28 ([pm-jira-fc13](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-fc13.toon))
-- preflight capability: pm jira preflight command + registerPreflight guard ([pm-jira-vfb3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-vfb3.toon))
 - Robustness: 429/503 rate-limit backoff + Retry-After on GET/POST ([pm-jira-2up8](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-2up8.toon))
 - manifest capabilities correctness + README + tests + functional verification ([pm-jira-lu1f](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-lu1f.toon))
 - Filters: --assignee augments default JQL ([pm-jira-ia8o](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-ia8o.toon))
@@ -354,11 +353,11 @@
 
 - Hands-on functional test pass 2026-05-29 (real data) ([pm-jira-xfd9](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-xfd9.toon))
 
-### Fixed
+### Closed
 
-- description (ADF) and priority fetched but never written to pm items ([pm-jira-1aqg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1aqg.toon))
-- sync failures return {success:false} instead of throwing -\> exit code 0 ([pm-jira-lk24](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-lk24.toon))
-- dry-run/max-results flags read kebab keys; --dry-run silently writes ([pm-jira-dhsn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-dhsn.toon))
+- Closed: description (ADF) and priority fetched but never written to pm items ([pm-jira-1aqg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1aqg.toon))
+- Closed: sync failures return {success:false} instead of throwing -\> exit code 0 ([pm-jira-lk24](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-lk24.toon))
+- Closed: dry-run/max-results flags read kebab keys; --dry-run silently writes ([pm-jira-dhsn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-dhsn.toon))
 
 ## 2026.5.29 - 2026-05-29
 
