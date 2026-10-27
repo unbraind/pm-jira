@@ -6,7 +6,7 @@ status: closed
 priority: 2
 tags[2]: ci,review-bots
 created_at: "2026-10-23T17:01:26.732Z"
-updated_at: "2026-10-27T09:11:08.242Z"
+updated_at: "2026-10-27T09:40:47.566Z"
 closed_at: "2026-10-27T09:11:07.377Z"
 completed_at: "2026-10-27T07:14:52.000Z"
 author: codex-agent
@@ -14,13 +14,14 @@ acceptance_criteria: Hound no longer lints generated dist/ output; no other lint
 resolution: "Merged PR #172 at f1888da07a162d8da97896b3bcc06d3f5803b3d1; inspected .hound.yml and ran node -e \"require('node:assert/strict').match(require('node:fs').readFileSync('.hound.yml','utf8'), /^jshint:\\n  enabled: false\\s*$/m)\" on main. Hound JSHint is explicitly disabled for generated ES2022 output. The merged configuration leaves package lint and release gates unchanged."
 expected_result: Hound no longer lints generated dist/ output; no other lint or gate changes
 actual_result: Hound JSHint is explicitly disabled for generated ES2022 output. The merged configuration leaves package lint and release gates unchanged.
-comments[6]{created_at,author,text}:
+comments[7]{created_at,author,text}:
   "2026-10-27T06:44:00.712Z",codex-agent,"Reuse the existing Hound record and preserve its append-only history. The current request selects the explicit pm-slack and pm-web .hound.yml precedent: disable only Hound JSHint while retaining source lint, any existing generated-output exclusions and all release gates. Reclassify this work as a Chore, verify a failing configuration revert proof, run both unchanged release gates with limited workers and isolated Git identity, regenerate the changelog from fetched tags, and open an unmerged PR. The item remains unclosed for orchestrator verification."
   "2026-10-27T06:44:14.591Z",codex-agent,"The current owner request replaces the earlier parser-only criterion with the explicit pm-slack/pm-web JSHint-disable strategy. The separate pm-jira-0571 record retains its unresolved historical PR #120 service-error acceptance and remains untouched. This configuration change preserves runtime code, source lint and every other gate."
   "2026-10-27T06:44:18.684Z",codex-agent,"Configuration revert proof: the focused Node assertion passes with .hound.yml present, fails when the new file is removed, then passes after restoring its exact bytes. No source behavior or package gates change."
   "2026-10-27T06:59:15.664Z",codex-agent,"Validation complete: focused configuration assertion and both unchanged release:check gates passed under isolated Git identity with at most two test workers. Changelog regenerated from fetched tags; final changelog:check follows all tracker writes. No lint, gate, source, dependency or generated dist changes. Hound service behavior will be observable on the PR; no merge authorized. Measured test counts: npm: 279 tests in each full suite; gate exit 0; bun: 279 tests in each full suite; gate exit 0. Reused the existing Hound item as a Chore under the same ID; the original history remains a byte-identical prefix and existing exclusions and lint configuration are preserved."
   "2026-10-27T09:11:02.200Z",codex-agent,"Closure audit: verify every acceptance criterion on current main against merged PR #172 (f1888da07a162d8da97896b3bcc06d3f5803b3d1), inspect .hound.yml, and run the focused linked check before closing. Completion will be the merge timestamp 2026-10-27T07:14:52Z."
   "2026-10-27T09:11:06.671Z",codex-agent,"Merged PR #172 at f1888da07a162d8da97896b3bcc06d3f5803b3d1; inspected .hound.yml and ran node -e \"require('node:assert/strict').match(require('node:fs').readFileSync('.hound.yml','utf8'), /^jshint:\\n  enabled: false\\s*$/m)\" on main. Hound JSHint is explicitly disabled for generated ES2022 output. The merged configuration leaves package lint and release gates unchanged. Full unchanged npm and Bun release gates run in CI for this tracker-only closure PR; prior behavioral revert evidence remains in the merged implementation history."
+  "2026-10-27T09:40:47.566Z",codex-agent,"Bounded CI watch: required checks at ab17553806186447284aacd0a787c480afe94b8d remain pending after approximately 28 minutes: test (26), test (22). Runs: https://github.com/unbraind/pm-jira/actions/runs/40479067825. No red check was reported; runner scheduling has not completed these jobs. This append-only receipt changes tracker evidence only. The final receipt commit will have its own CI; no full release-gate pass is claimed for a pending head, and the orchestrator pipeline must wait before merging."
 files[1]{path,scope}:
   .hound.yml,project
 tests[4]{command,scope,timeout_seconds,pm_context_mode,workspace_context_mode,provenance{author,created_at,source_kind,source_ref}}:
