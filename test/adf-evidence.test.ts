@@ -38,6 +38,80 @@ function signed(value: unknown): unknown { const { digest: _digest, ...rest } = 
 /** Fresh mutable JSON copy keeps failure corpus cases independent. */
 function copy<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 
+/** Follow original coordinates without changing or normalizing the source fields. */
+function sourceNode(document: AdfSourceNode, pointer: string): AdfSourceNode {
+  return pointer.split("/content/").slice(1).reduce((node, index) => node.content![Number(index)]!, document);
+}
+
+test("nullable editor defaults: 500 seeded selections preserve every recognized default and source coordinate", () => {
+  let seed = 0x178c011;
+  const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
+  const variants = [undefined, null, [0], [1000000], [0, 1000000]];
+  for (let sequence = 0; sequence < 500; sequence++) {
+    const request = fixture();
+    const cells = request.source.document.content![1]!.content![0]!.content!;
+    for (const [i, cell] of cells.entries()) {
+      cell.type = (sequence + i) % 2 ? "tableCell" : "tableHeader";
+      const width = variants[sequence < variants.length ? sequence : rand() % variants.length];
+      const background = [undefined, null, "", "#ffffff"][sequence < 4 ? sequence : rand() % 4];
+      cell.attrs = { colspan: Array.isArray(width) ? width.length : 1, rowspan: 1, ...(width === undefined ? {} : { colwidth: width }), ...(background === undefined ? {} : { background }) };
+      cell.content![0]!.content![0]!.text = ` cell ${i}\r\n `;
+    }
+    const code = request.source.document.content![2]!;
+    const language = [undefined, null, "", "typescript"][sequence % 4];
+    if (language === undefined) delete code.attrs; else code.attrs = { language };
+    code.content![0]!.text = ` ${rand()}${sequence % 2 ? "\r\n" : "\n"} `;
+    request.select = [["/content/2"], ["/content/1", "/content/2"], ["/content/1/content/0/content/0", "/content/2"], ["/content/1/content/0/content/1/content/0", "/content/2"]][sequence % 4]!;
+    const packet = preview(request); const replay = replayAdfEvidence(copy(packet));
+    assert.equal(replay.kind, "replayed"); if (replay.kind !== "replayed") return;
+    for (const row of packet.nodes.filter(row => ["tableCell", "tableHeader", "codeBlock"].includes(row.type))) {
+      const original = sourceNode(request.source.document, row.pointer);
+      assert.deepEqual(row.attrs, original.attrs);
+      const coordinate = replay.coordinates.find(entry => entry.sourcePointer === row.pointer)!;
+      const restored = sourceNode(replay.document, coordinate.pointer);
+      assert.deepEqual(restored.attrs, original.attrs);
+      if (!row.context) assert.deepEqual(restored, original);
+    }
+    assert.ok(!JSON.stringify(packet).includes("UNSELECTED"));
+    const approval = { revision: request.source.revision, digest: packet.source.digest };
+    assert.deepEqual(captureAdfEvidence({ ...request, approval }), { kind: "captured", packet });
+    const changed = copy(request); changed.source.document.content![1]!.content![0]!.content![0]!.attrs!.colwidth = [123];
+    assert.equal(captureAdfEvidence({ ...changed, approval }).kind, "refused");
+    const stale = copy(request); stale.source.revision = "later";
+    assert.equal(captureAdfEvidence({ ...stale, approval }).kind, "refused");
+    assert.deepEqual(preview(request), packet);
+  }
+});
+
+test("nullable editor defaults never admit malformed known attributes in sources or signed packets", () => {
+  const specs: [string, string, unknown[]][] = [
+    ["tableCell", "colwidth", [false, 0, "", {}, [null], [-1], [1000001], [1.1], [NaN], [Infinity], Array(1), Array(257).fill(1)]],
+    ["tableHeader", "colwidth", [false, 0, "", {}, [null], [-1], [1000001], [1.1], [NaN], [Infinity], Array(1), Array(257).fill(1)]],
+    ["tableCell", "background", [false, 0, [], {}, "x".repeat(129)]],
+    ["tableHeader", "background", [false, 0, [], {}, "x".repeat(129)]],
+    ["codeBlock", "language", [false, 0, [], {}, "x".repeat(129)]],
+    ["tableCell", "colspan", [null]], ["tableHeader", "colspan", [null]],
+    ["tableCell", "rowspan", [null]], ["tableHeader", "rowspan", [null]],
+    ["heading", "level", [null]], ["orderedList", "order", [null]],
+  ];
+  for (const [type, key, invalid] of specs) for (const value of invalid) {
+    const request = fixture(); const node = type === "tableHeader" ? request.source.document.content![1]!.content![0]!.content![1]! : request.source.document.content![1]!.content![0]!.content![0]!;
+    node.type = type;
+    node.content = type === "codeBlock" ? [{ type: "text", text: "code" }] : type === "orderedList" ? [{ type: "listItem", content: [{ type: "paragraph" }] }] : type === "heading" ? [{ type: "text", text: "heading" }] : [{ type: "paragraph" }];
+    if (!["tableCell", "tableHeader"].includes(type)) { request.source.document.content!.push(node); request.source.document.content![1]!.content![0]!.content = []; }
+    const path = ["tableCell", "tableHeader"].includes(type) ? `/content/1/content/0/content/${type === "tableHeader" ? 1 : 0}` : "/content/7";
+    node.attrs = {};
+    request.select = [path]; const packet = preview(request);
+    node.attrs = { [key]: value } as AdfSourceNode["attrs"];
+    for (const select of [[path], ["/content/2"]]) {
+      const result = captureAdfEvidence({ ...request, select });
+      assert.equal(result.kind, "refused", `${type}.${key}`); if (result.kind === "refused") assert.equal(result.code, "invalid_input");
+    }
+    packet.nodes.find(row => row.pointer === path)!.attrs = node.attrs;
+    assert.equal(replayAdfEvidence(signed(packet)).kind, "refused", `${type}.${key}`);
+  }
+});
+
 test("table cell, code and list round-trip with stable source coordinates; no unselected or attachment content", () => {
   const request = fixture(); const packet = preview(request);
   assert.deepEqual(packet.counts, { source: 30, retained: 17, context: 3, unselected: 7, unsupported: 1, attachments: 2, omittedMarks: 2 });

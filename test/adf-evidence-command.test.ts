@@ -5,9 +5,11 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { PmClient, listAllComplete } from "@unbrained/pm-cli/sdk";
-import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
+import { PmClient, listAllComplete, decodePmTableRows } from "@unbrained/pm-cli/sdk";
+import type { PmEncodedTableRows, PmTableCellEncoding } from "@unbrained/pm-cli/sdk";
+import { createExtensionTestHarness, decodeToon } from "@unbrained/pm-cli/sdk/testing";
 import extension, { replayAdfEvidence } from "../index.ts";
+import type { AdfCaptureInput, AdfEvidencePacket } from "../index.ts";
 import { runAdfCapture } from "../adf-evidence-command.ts";
 
 test("CLI adapter refuses before reads/writes; host recognizes semantic refusals", async t => {
@@ -37,22 +39,37 @@ test("installed JSON/TOON capture works without git, preserving native fields, c
   const parent = await client.create({ title: "Parent", type: "Epic", status: "open", parent: "none", goal: "none", objective: "none", sprint: "none", release: "none" });
   await client.create({ title: "Child", type: "Task", status: "investigating_custom", body: " independent\r\nnotes ", parent: parent.item.id, dep: [`id=${parent.item.id},kind=related`], goal: "none", objective: "none", sprint: "none", release: "none" });
   const before = await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
-  const contract = JSON.parse(readFileSync(resolve("docs/examples/adf-capture.json"), "utf8")) as Record<string, unknown>;
+  const contract = JSON.parse(readFileSync(resolve("docs/examples/adf-capture.json"), "utf8")) as AdfCaptureInput;
   writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
   const empty = join(root, "empty-bin"); mkdirSync(empty);
   const run = (json: boolean) => spawnSync(process.execPath, [cli, "--path", root, "jira", "capture-adf", "--contract", "capture.json", ...(json ? ["--json"] : [])], { cwd: root, env: { ...childEnv, PATH: empty }, encoding: "utf8" });
-  const preview = run(true); assert.equal(preview.status, 0, preview.stdout + preview.stderr);
-  const parsed = JSON.parse(preview.stdout) as { kind: string; packet: { source: { revision: string; digest: string } } };
-  assert.equal(parsed.kind, "preview");
-  contract.approval = { revision: parsed.packet.source.revision, digest: parsed.packet.source.digest };
-  writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
-  for (const json of [true, false]) {
-    const result = run(json); assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.ok(Buffer.byteLength(result.stdout) <= 8192); assert.match(result.stdout, /captured/);
-    assert.ok(!result.stdout.includes("Not selected")); assert.ok(!result.stdout.includes("excluded"));
-    if (json) assert.equal(replayAdfEvidence((JSON.parse(result.stdout) as { packet: unknown }).packet).kind, "replayed");
+  for (const select of [contract.select, ["/content/2"]]) {
+    contract.select = select; delete contract.approval;
+    writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
+    const preview = run(true); assert.equal(preview.status, 0, preview.stdout + preview.stderr);
+    const parsed = JSON.parse(preview.stdout) as { kind: string; packet: AdfEvidencePacket };
+    assert.equal(parsed.kind, "preview");
+    contract.approval = { revision: parsed.packet.source.revision, digest: parsed.packet.source.digest };
+    writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
+    for (const json of [true, false]) {
+      const result = run(json); assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.ok(Buffer.byteLength(result.stdout) <= 8192); assert.match(result.stdout, /captured/);
+      assert.ok(!result.stdout.includes("Not selected")); assert.ok(!result.stdout.includes("excluded"));
+      const decoded = (json ? JSON.parse(result.stdout) : decodeToon(result.stdout)) as { kind: string; packet: AdfEvidencePacket };
+      if (!json) {
+        const { nodes_encoding: encoding, ...packet } = decoded.packet as AdfEvidencePacket & { nodes_encoding?: PmTableCellEncoding };
+        if (encoding) packet.nodes = decodePmTableRows({ rows: packet.nodes as unknown as PmEncodedTableRows["rows"], encoding }) as unknown as AdfEvidencePacket["nodes"];
+        decoded.packet = packet;
+      }
+      assert.deepEqual(decoded, { kind: "captured", packet: parsed.packet });
+      const replay = replayAdfEvidence(decoded.packet); assert.equal(replay.kind, "replayed");
+      assert.equal(decoded.packet.nodes.find(row => row.type === "codeBlock")!.attrs!.language, null);
+      const cells = decoded.packet.nodes.filter(row => ["tableCell", "tableHeader"].includes(row.type));
+      assert.equal(cells.length, select.length === 1 ? 0 : 2);
+      for (const cell of cells) assert.deepEqual([cell.attrs!.colwidth, cell.attrs!.background], [null, null]);
+    }
   }
-  (contract.source as Record<string, unknown>).revision = "new-revision";
+  contract.source.revision = "new-revision";
   writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
   const refused = run(true); assert.equal(refused.status, 2, refused.stdout + refused.stderr); assert.match(refused.stdout, /source_changed/);
   assert.deepEqual((await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true })).items, before.items);

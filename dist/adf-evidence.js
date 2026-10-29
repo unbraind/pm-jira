@@ -79,7 +79,7 @@ function hash(value) { return typeof value === "string" && /^[a-f0-9]{64}$/.test
 function pointer(value) { return typeof value === "string" && value.length <= 512 && /^(\/content\/(0|[1-9][0-9]{0,3})){1,32}$/.test(value) && value.split("/content/").slice(1).every(index => Number(index) < 8192); }
 /** Selection order is canonical source order, independent of caller order. */
 function selections(value) { return dense(value, 64) && value.length > 0 && value.every(pointer) && value.every((path, i) => value.every((other, j) => i === j || (path !== other && !String(other).startsWith(`${path}/`)))); }
-/** Validate known attributes; unknown JSON attributes stay in the source hash but are never emitted. */
+/** Preserve nullable editor defaults in source and packet schemas; unfamiliar attributes remain source-only. */
 function validAttrs(type, attrs, retained) {
     if (!record(attrs))
         return false;
@@ -88,9 +88,9 @@ function validAttrs(type, attrs, retained) {
         if (!allowed.includes(key))
             return !retained;
         if (key === "language" || key === "background")
-            return text(value, 128);
+            return value === null || text(value, 128);
         if (key === "colwidth")
-            return dense(value, 256) && value.every(width => integer(width, 0, 1000000));
+            return value === null || (dense(value, 256) && value.every(width => integer(width, 0, 1000000)));
         return integer(value, key === "order" ? 0 : 1, key === "level" ? 6 : 1000000);
     });
 }

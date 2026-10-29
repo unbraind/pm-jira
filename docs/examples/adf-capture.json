@@ -10,12 +10,13 @@
       "content": [
         { "type": "paragraph", "content": [{ "type": "text", "text": "Not selected" }] },
         { "type": "table", "content": [{ "type": "tableRow", "content": [
-          { "type": "tableCell", "attrs": { "colspan": 1, "rowspan": 1 }, "content": [
+          { "type": "tableCell", "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null, "background": null }, "content": [
             { "type": "paragraph", "content": [{ "type": "text", "text": "Selected observation" }] }
           ] },
-          { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Not selected" }] }] }
+          { "type": "tableCell", "attrs": { "colwidth": null, "background": null }, "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Not selected" }] }] },
+          { "type": "tableHeader", "attrs": { "colwidth": null, "background": null }, "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Selected header" }] }] }
         ] }] },
-        { "type": "codeBlock", "attrs": { "language": "typescript" }, "content": [
+        { "type": "codeBlock", "attrs": { "language": null }, "content": [
           { "type": "text", "text": "const observed = true;\r\n" }
         ] },
         { "type": "mediaSingle", "content": [{ "type": "media", "attrs": { "id": "excluded" } }] },
@@ -23,6 +24,6 @@
       ]
     }
   },
-  "select": ["/content/1/content/0/content/0", "/content/2"],
+  "select": ["/content/1/content/0/content/0", "/content/1/content/0/content/2", "/content/2"],
   "budget": 8192
 }

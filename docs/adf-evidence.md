@@ -4,6 +4,9 @@
 read-only evidence packet from an explicitly supplied Jira description snapshot.
 Omit `--json` for the host's compact TOON rendering. It needs neither git nor
 Jira credentials. Capture never changes native items, Jira, or attachment files.
+For programmatic TOON replay, decode with the host SDK's `decodeToon`, then
+restore `packet.nodes` with `decodePmTableRows` and its `nodes_encoding` receipt;
+remove that receipt before replay. JSON output contains the packet directly.
 
 Start with [the complete example](examples/adf-capture.json). The strict v1
 contract has `source` (`site`, `issue`, `revision`, `document`), `select` and an
@@ -50,6 +53,12 @@ underline marks are retained. Other marks, including block formatting marks, are
 block mark arrays remain accepted.
 Unfamiliar attributes never leave the snapshot.
 
+Explicit editor defaults `colwidth: null` and `background: null` on either
+tableCell or tableHeader, and `language: null` on codeBlock, are accepted and
+preserved exactly. Omitted attributes stay omitted. The same schema applies to
+every source node (including unselected tables), emitted packets and replay;
+an unresized table therefore does not prevent a separate code-block capture.
+
 Media and card nodes (media, mediaInline, mediaGroup, mediaSingle, inlineCard,
 blockCard) are excluded. Other unsupported nodes are counted separately. Their
 entire subtrees are excluded, even if a descendant would otherwise be supported.
@@ -91,7 +100,9 @@ The request must be dense, finite JSON of at most 1 MiB, with at most 8192 ADF
 nodes, ADF depth 32 and 1..64 nonoverlapping block selectors. Arrays have at most
 8192 entries (marks 32, colwidth 256). JSON has at most 65536 values and depth 72.
 Integers use safe domains: heading 1..6, order 0..1000000, spans 1..1000000,
-widths 0..1000000. Known attribute strings have at most 128 characters.
+widths 0..1000000. Known attribute strings have at most 128 characters. Column
+width may instead be null; background and language may instead be null.
+Numeric span, heading and list-start attributes do not accept null.
 The default output budget is 8192 bytes, configurable 4096..65536; it covers
 pretty JSON plus newline. TOON also passes through the host renderer's budget.
 Capture refuses oversized packets rather than clipping evidence or a code block.

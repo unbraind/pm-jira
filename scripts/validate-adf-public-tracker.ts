@@ -18,10 +18,10 @@ for (const [i, item] of before.items.entries()) {
   const input = { version: 1, budget: 65536, source: { site: "https://example.invalid", issue: `PUBLIC-${i + 1}`, revision: item.updated_at,
     document: { type: "doc", version: 1, content: [
       { type: "paragraph", content: [{ type: "text", text: "excluded context" }] },
-      { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [
+      { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", attrs: { colwidth: null, background: null }, content: [
         { type: "paragraph", content: [{ type: "text", text: item.title }] },
-      ] }, { type: "tableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "excluded sibling" }] }] }] }] },
-      { type: "codeBlock", content: [{ type: "text", text: body }] },
+      ] }, { type: "tableHeader", attrs: { colwidth: null, background: null }, content: [{ type: "paragraph", content: [{ type: "text", text: "excluded sibling" }] }] }] }] },
+      { type: "codeBlock", attrs: { language: null }, content: [{ type: "text", text: body }] },
       { type: "extension", attrs: { unselected: true } }, { type: "media", attrs: { id: "excluded attachment" } },
     ] } }, select: ["/content/1/content/0/content/0", "/content/2"] };
   const preview = captureAdfEvidence(input);
@@ -31,6 +31,7 @@ for (const [i, item] of before.items.entries()) {
   if (result.kind !== "captured") throw new Error("Reviewed projection did not capture");
   const replayed = replayAdfEvidence(JSON.parse(JSON.stringify(result.packet)));
   if (replayed.kind !== "replayed" || replayed.document.content?.[1]?.content?.[0]?.text !== body || replayed.document.content?.[0]?.content?.[0]?.content?.[0]?.content?.[0]?.content?.[0]?.text !== item.title) throw new Error("Public native field round-trip differs");
+  if (replayed.document.content[0]?.content?.[0]?.content?.[0]?.attrs?.colwidth !== null || replayed.document.content[0]?.content?.[0]?.content?.[0]?.attrs?.background !== null || replayed.document.content[1]?.attrs?.language !== null) throw new Error("Nullable editor default round-trip differs");
   const stale = captureAdfEvidence({ ...input, source: { ...input.source, revision: `${item.updated_at}-new` }, approval });
   if (stale.kind !== "refused" || stale.code !== "source_changed") throw new Error("Changed revision did not refuse");
   sourceChanged++; captured++; retained += result.packet.counts.retained; sourceNodes += result.packet.counts.source;
