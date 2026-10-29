@@ -19,7 +19,7 @@ try {
   const artifact = join(root, packed[0]!.filename); const artifactHash = createHash("sha256").update(readFileSync(artifact)).digest("hex");
   for (const file of ["dist/adf-evidence.js", "dist/adf-evidence.d.ts", "docs/adf-evidence.md", "docs/examples/adf-capture.json"]) assert.ok(packed[0]!.files.some(entry => entry.path === file), file);
   const extracted = join(root, "artifact"); mkdirSync(extracted); run("tar", ["-xzf", artifact, "-C", extracted], root);
-  const results = [];
+  let passed = 0;
   for (const mode of ["npm-global", "bun-global", "npx", "bunx", "npm-local", "bun-local"]) {
     const cwd = join(root, mode); mkdirSync(cwd);
     const prefix = join(cwd, "prefix"); let command = ""; let leading: string[] = []; let packageRoot = join(extracted, "package");
@@ -43,9 +43,9 @@ try {
     const captured = JSON.parse(invoke(["jira", "capture-adf", "--contract", "capture.json", "--json"])) as { kind: string; packet: unknown };
     assert.equal(captured.kind, "captured"); assert.deepEqual(captured.packet, preview.packet);
     assert.match(invoke(["jira", "capture-adf", "--contract", "capture.json"]), /captured/);
-    results.push({ mode, preview: true, captured: true, toon: true });
+    passed++;
     console.log(JSON.stringify({ mode, passed: true }));
   }
   assert.equal(createHash("sha256").update(readFileSync(artifact)).digest("hex"), artifactHash);
-  console.log(JSON.stringify({ artifact: packed[0]!.filename, sha256: artifactHash, files: packed[0]!.files.length, modes: results.length, assertions: results.length * 4, host: "2026.10.28" }));
+  console.log(JSON.stringify({ artifact: packed[0]!.filename, sha256: artifactHash, files: packed[0]!.files.length, modes: passed, assertions: passed * 4, host: "2026.10.28" }));
 } finally { rmSync(root, { recursive: true, force: true }); }
