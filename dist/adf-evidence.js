@@ -104,7 +104,7 @@ function nodeFields(value, retained) {
         return false;
     if (Object.hasOwn(value, "attrs") && !validAttrs(value.type, value.attrs, retained))
         return false;
-    return !Object.hasOwn(value, "marks") || (value.type === "text" && dense(value.marks, 32) && value.marks.every(mark => record(mark) && keys(mark, ["type"], retained ? [] : ["attrs"]) && text(mark.type, 64) && mark.type.length > 0 && (!retained || marks.has(mark.type)) && (!Object.hasOwn(mark, "attrs") || record(mark.attrs))));
+    return !Object.hasOwn(value, "marks") || ((!retained || value.type === "text") && dense(value.marks, 32) && value.marks.every(mark => record(mark) && keys(mark, ["type"], retained ? [] : ["attrs"]) && text(mark.type, 64) && mark.type.length > 0 && (!retained || marks.has(mark.type)) && (!Object.hasOwn(mark, "attrs") || record(mark.attrs))));
 }
 /** Structural grammar permits unsupported nodes so exclusion counts never silently lose them. */
 function childAllowed(parent, child) { return !supported.has(parent) || !supported.has(child) || (children.get(parent) ?? []).includes(child); }
@@ -128,7 +128,7 @@ function input(value) {
 function fields(node) {
     const attrs = Object.fromEntries(Object.entries(node.attrs ?? {}).filter(([key]) => (attrKeys.get(node.type) ?? []).includes(key)));
     return { type: node.type, ...(node.text === undefined ? {} : { text: node.text }),
-        ...(Object.keys(attrs).length === 0 ? {} : { attrs: structuredClone(attrs) }), ...(node.marks === undefined ? {} : { marks: node.marks.filter(mark => marks.has(mark.type) && mark.attrs === undefined).map(mark => ({ type: mark.type })) }) };
+        ...(Object.keys(attrs).length === 0 ? {} : { attrs: structuredClone(attrs) }), ...(node.marks === undefined || node.type !== "text" ? {} : { marks: node.marks.filter(mark => marks.has(mark.type) && mark.attrs === undefined).map(mark => ({ type: mark.type })) }) };
 }
 /** Compile selected rows and ancestor boundaries, binding approval to the entire observed source. */
 export function captureAdfEvidence(value) {

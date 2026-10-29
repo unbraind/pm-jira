@@ -86,7 +86,6 @@ test("strict source boundary refuses sparse/extreme/malformed inputs, allows rel
     { type: "doc", version: 1, content: [{ type: "heading", attrs: { level: 7 } }] },
     { type: "doc", version: 1, content: [{ type: "codeBlock", attrs: { language: 1 } }] },
     { type: "doc", version: 1, content: [{ type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", attrs: { colwidth: [-1] } }] }] }] },
-    { type: "doc", version: 1, content: [{ type: "paragraph", marks: [] }] },
     { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "\u0000" }] }] },
     { type: "doc", version: 1, attrs: { finite: Infinity } }, { type: "doc", version: 1, attrs: { finite: Number.MAX_VALUE } },
     { type: "doc", version: 1, attrs: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`x${i}`, i])) },
@@ -100,6 +99,15 @@ test("strict source boundary refuses sparse/extreme/malformed inputs, allows rel
   // Previously released plain-text export ADF remains accepted without rewriting its whitespace.
   const legacy = fixture(); legacy.source.document = { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: " \r\n legacy " }] }] }; legacy.select = ["/content/0"];
   assert.equal(preview(legacy).nodes.at(-1)!.text, " \r\n legacy ");
+  // Atlassian permits empty codeBlock marks and block formatting marks. They
+  // must remain readable even though this evidence projection omits formatting.
+  const blockMarks = fixture();
+  blockMarks.source.document.content![2]!.marks = [];
+  blockMarks.source.document.content![1]!.content![0]!.content![0]!.content![0]!.marks = [{ type: "alignment", attrs: { align: "center" } }];
+  const blockPacket = preview(blockMarks);
+  assert.equal(blockPacket.counts.omittedMarks, 3);
+  assert.equal(replayAdfEvidence(blockPacket).kind, "replayed");
+  assert.ok(!JSON.stringify(blockPacket).includes("alignment"));
   const unknown = fixture(); unknown.source.document.attrs = { data: [null, true, 0, { key: false }] }; preview(unknown);
 });
 

@@ -46,7 +46,8 @@ Supported nodes: doc, paragraph, text, hardBreak, heading, codeBlock, blockquote
 bulletList, orderedList, listItem, table, tableRow, tableCell, tableHeader, rule.
 Code language, heading level, list start and cell span/width/background are
 retained. Text, whitespace and CRLF are exact. Simple strong/em/code/strike/
-underline marks are retained. Other marks are excluded and counted.
+underline marks are retained. Other marks, including block formatting marks, are excluded and counted. Empty
+block mark arrays remain accepted.
 Unfamiliar attributes never leave the snapshot.
 
 Media and card nodes (media, mediaInline, mediaGroup, mediaSingle, inlineCard,
@@ -54,7 +55,7 @@ blockCard) are excluded. Other unsupported nodes are counted separately. Their
 entire subtrees are excluded, even if a descendant would otherwise be supported.
 Counts refer to individual source nodes: `source = retained + context +
 unselected + unsupported + attachments`. Supported descendants below excluded
-nodes count as `unselected`. `omittedMarks` covers retained text only. No excluded
+nodes count as `unselected`. `omittedMarks` covers retained and context nodes. No excluded
 node attributes or attachment references are emitted. Ordinary selected text can
 still contain sensitive data; the caller must choose the intended selection.
 

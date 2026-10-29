@@ -103,7 +103,7 @@ function nodeFields(value: Record<string, unknown>, retained: boolean): boolean 
   if (Object.hasOwn(value, "text") && (value.type !== "text" || !text(value.text, 1048576))) return false;
   if (value.type === "text" && !Object.hasOwn(value, "text")) return false;
   if (Object.hasOwn(value, "attrs") && !validAttrs(value.type, value.attrs, retained)) return false;
-  return !Object.hasOwn(value, "marks") || (value.type === "text" && dense(value.marks, 32) && value.marks.every(mark => record(mark) && keys(mark, ["type"], retained ? [] : ["attrs"]) && text(mark.type, 64) && mark.type.length > 0 && (!retained || marks.has(mark.type)) && (!Object.hasOwn(mark, "attrs") || record(mark.attrs))));
+  return !Object.hasOwn(value, "marks") || ((!retained || value.type === "text") && dense(value.marks, 32) && value.marks.every(mark => record(mark) && keys(mark, ["type"], retained ? [] : ["attrs"]) && text(mark.type, 64) && mark.type.length > 0 && (!retained || marks.has(mark.type)) && (!Object.hasOwn(mark, "attrs") || record(mark.attrs))));
 }
 /** Structural grammar permits unsupported nodes so exclusion counts never silently lose them. */
 function childAllowed(parent: string, child: string): boolean { return !supported.has(parent) || !supported.has(child) || (children.get(parent) ?? []).includes(child); }
@@ -123,7 +123,7 @@ function input(value: unknown): value is AdfCaptureInput {
 function fields(node: AdfSourceNode): Pick<AdfEvidenceNode, "type" | "text" | "attrs" | "marks"> {
   const attrs = Object.fromEntries(Object.entries(node.attrs ?? {}).filter(([key]) => (attrKeys.get(node.type) ?? []).includes(key)));
   return { type: node.type, ...(node.text === undefined ? {} : { text: node.text }),
-    ...(Object.keys(attrs).length === 0 ? {} : { attrs: structuredClone(attrs) }), ...(node.marks === undefined ? {} : { marks: node.marks.filter(mark => marks.has(mark.type) && mark.attrs === undefined).map(mark => ({ type: mark.type })) }) };
+    ...(Object.keys(attrs).length === 0 ? {} : { attrs: structuredClone(attrs) }), ...(node.marks === undefined || node.type !== "text" ? {} : { marks: node.marks.filter(mark => marks.has(mark.type) && mark.attrs === undefined).map(mark => ({ type: mark.type })) }) };
 }
 /** Compile selected rows and ancestor boundaries, binding approval to the entire observed source. */
 export function captureAdfEvidence(value: unknown): AdfCaptureResult {
