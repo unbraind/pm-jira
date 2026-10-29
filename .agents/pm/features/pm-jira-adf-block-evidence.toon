@@ -1,0 +1,31 @@
+id: pm-jira-adf-block-evidence
+title: Capture selected structured Jira description blocks as portable evidence
+description: ""
+type: Feature
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-29T03:46:37.895Z"
+updated_at: "2026-10-29T04:03:51.238Z"
+assignee: codex-agent
+claim_principal: codex-agent
+author: codex-agent
+acceptance_criteria: Table cell and code block round-trip with stable source coordinates; unsupported nodes are counted; changed source revision refuses approved capture.
+comments[5]{created_at,author,text}:
+  "2026-10-29T03:47:27.247Z",codex-agent,"Design: portable read-only capture packets preserve original RFC 6901 coordinates and ancestor scaffolding, never pull attachments or mutate native items. Approval compares both the caller-provided source revision and complete description digest, catching same-revision edits as well. Replay validates the exact producer schema and digest. No transaction isolation or remote freshness claim: callers supply a newly read source snapshot; this feature has no target writes, leases or frozen journal. Existing atomic replay work remains tracked separately by pm-jira-atomic-replay-revisions."
+  "2026-10-29T03:53:18.949Z",codex-agent,"Implemented typed captureAdfEvidence/replayAdfEvidence plus jira capture-adf, with strict shared node schema, original JSON pointers, ancestor scaffolding, immutable copied attributes, digest/revision approval, complete exclusion counts and all-or-refuse output bounds. Added documented example and pm-evidence citation handoff. Seeded 500-sequence selection/approval property passed; native import/export/sync reference-model coverage now also asserts capture/replay against exact SDK readback. Targeted malformed-schema, sparse-array, CRLF, foreign packet and non-git CLI checks are in progress."
+  "2026-10-29T03:58:20.664Z",codex-agent,"Real-data measurement used a read-only, non-git copy of public main at eaeaf48: 112 native items; exact SDK-read title/body-or-description projected into ADF table/code wrappers; 112 captures and round trips; 112 changed-revision refusals; 1680 source nodes, 560 retained nodes; 14825 native body bytes; 200704 emitted bytes, maximum packet 3996 bytes; zero budget refusals, zero Jira calls and unchanged SDK native state. This is real public tracker content in explicit ADF projections, not a live Jira validation."
+  "2026-10-29T04:02:43.861Z",codex-agent,"Behavioral revert proof: disposable non-git copies with only the source-revision guard disabled or original coordinates discarded both fail the table/code regression; the unchanged fixed implementation then passes. Pinned pm test --run --progress passed 9/9 focused tests with no skips. Typecheck, test compilation and docstrings pass. Full npm/Bun release checks remain assigned to CI at unchanged thresholds. Local health initially reports extension_host_pm_cli_version_skew in the preinstalled pm-github graph; refreshing the ignored project extension using the CI installation contract."
+  "2026-10-29T04:03:51.238Z",codex-agent,"Focused coverage reports 100% lines, branches and functions in both new feature modules. All six real packed launch/install modes passed on host 2026.10.28 (24 mode assertions, one artifact): npm global, Bun global, npx, bunx, npm local and Bun local. Local strict tracker health now passes after refreshing pm-github exactly as CI does; only its ignored install graph changed and the managed registry timestamp was restored. Final packet-domain hardening narrows pointer indices and count bounds to producer domains; final exact-artifact acceptance will repeat after final generation."
+files[3]{path,scope,note}:
+  adf-evidence-command.ts,project,Host command registration
+  adf-evidence.ts,project,Shared capture and replay schema with original coordinates
+  test/create-preview-model.test.ts,project,500 native SDK model sequences include evidence round trips
+tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 test/adf-evidence.test.ts test/adf-evidence-command.test.ts,project,codex-agent,"2026-10-29T03:58:11.284Z",local_mutation,feat/adf-block-evidence-capture
+  npm run typecheck,project,codex-agent,"2026-10-29T04:02:58.620Z",local_mutation,feat/adf-block-evidence-capture
+  npm run docstring,project,codex-agent,"2026-10-29T04:03:00.591Z",local_mutation,feat/adf-block-evidence-capture
+docs[2]{path,scope,note}:
+  docs/adf-evidence-validation.md,project,Measured public tracker and behavioral revert evidence
+  docs/adf-evidence.md,project,Strict contract and freshness boundary
+body: "Overlap rechecked against main: pm-jira adfToPlainText flattens descriptions; existing export emits plain text as ADF; older attachment proposal is separate. pm-evidence owns generic citations, retention and freshness, not ADF structure. New scope: strict offline source snapshot plus explicit JSON-pointer selection; portable evidence packet with source revision and original coordinates, code/list/table boundaries, exclusion counts, approval bound to source digest, bounded agent output and typed refusals. No tracker mutations, journals, remote actions or attachment reads on this path; pm-evidence can cite the retained JSON output. Reuse the host command renderer, supported SDK loader, bounded file adapter and SDK testing harness. Existing native import/export/sync model regression will run in CI; new model checks capture against SDK-read native state without modifying it."

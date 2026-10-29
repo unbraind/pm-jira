@@ -51,6 +51,9 @@ import type { JiraCreateCompilation, JiraCreatePreviewResult } from "./create-pr
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
 export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
 export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
+import { registerAdfCaptureCommand } from "./adf-evidence-command.ts";
+export { captureAdfEvidence, replayAdfEvidence } from "./adf-evidence.ts";
+export type { AdfJson, AdfSourceNode, AdfSource, AdfCaptureInput, AdfEvidenceNode, AdfEvidencePacket, AdfEvidenceRefusal, AdfCaptureResult, AdfReplayResult } from "./adf-evidence.ts";
 import { registerJqlSelectionCommand } from "./jql-selection-command.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions,
@@ -2648,6 +2651,7 @@ export default defineExtension({
   activate(api: ExtensionApi) {
     registerJqlSelectionCommand(api);
     registerCreatePreviewCommand(api);
+    registerAdfCaptureCommand(api);
     // -----------------------------------------------------------------------
     // schema — declare Jira provenance fields so the workspace knows them
     // -----------------------------------------------------------------------

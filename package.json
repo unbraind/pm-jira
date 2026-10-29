@@ -19,7 +19,9 @@
     "README.md",
     "CHANGELOG.md",
     "docs/create-preview.md",
-    "docs/examples/create-contract.json"
+    "docs/examples/create-contract.json",
+    "docs/adf-evidence.md",
+    "docs/examples/adf-capture.json"
   ],
   "scripts": {
     "build": "tsc",

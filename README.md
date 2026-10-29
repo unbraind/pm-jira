@@ -492,7 +492,7 @@ The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
 
 ## Without git
 
-Create-field completion previews, JQL selection comparison, transition planning, credential diagnostics and Jira
+ADF evidence capture/replay, create-field completion previews, JQL selection comparison, transition planning, credential diagnostics and Jira
 import/export previews work in plain directories and non-git trackers. Import/sync and explicit export push
 also use the tracker and Jira APIs without requiring git. Ordinary imports create
 items through the pm SDK in process, so they do not need a separate `pm` executable
@@ -637,3 +637,15 @@ Project and issue type stay fixed outside field precedence. Every native and
 contract source must agree with the selected target before merging; matching
 contract overrides cannot conceal a plan for another project/type. Scope refusals
 remain typed in SDK, installed JSON/TOON and packed Node/Bun consumers.
+
+## Selected ADF block evidence
+
+`pm jira capture-adf --contract capture.json --json` preserves selected description
+blocks with original source coordinates, including table cells, code and lists.
+Unselected siblings and media/card content are excluded; unsupported nodes are
+counted. Preview first, then approve the observed source revision and digest.
+Changed sources refuse capture. Output is a bounded portable packet; native
+items and Jira remain untouched. The SDK exports `captureAdfEvidence`,
+`replayAdfEvidence` and their typed contracts. See [the contract and refusal guide](docs/adf-evidence.md)
+and [the runnable example](docs/examples/adf-capture.json). Snapshot approval
+requires a fresh caller-supplied source read; it does not attest live Jira freshness.

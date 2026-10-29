@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "source": {
+    "site": "https://example.atlassian.net",
+    "issue": "DEMO-12",
+    "revision": "2026-10-29T00:00:00.000Z",
+    "document": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        { "type": "paragraph", "content": [{ "type": "text", "text": "Not selected" }] },
+        { "type": "table", "content": [{ "type": "tableRow", "content": [
+          { "type": "tableCell", "attrs": { "colspan": 1, "rowspan": 1 }, "content": [
+            { "type": "paragraph", "content": [{ "type": "text", "text": "Selected observation" }] }
+          ] },
+          { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Not selected" }] }] }
+        ] }] },
+        { "type": "codeBlock", "attrs": { "language": "typescript" }, "content": [
+          { "type": "text", "text": "const observed = true;\r\n" }
+        ] },
+        { "type": "mediaSingle", "content": [{ "type": "media", "attrs": { "id": "excluded" } }] },
+        { "type": "extension", "attrs": { "extensionKey": "excluded" } }
+      ]
+    }
+  },
+  "select": ["/content/1/content/0/content/0", "/content/2"],
+  "budget": 8192
+}
