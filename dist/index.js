@@ -34,6 +34,8 @@ import { importPmSdk } from "./sdk-importer.js";
 import { compileJiraCreate } from "./create-preview.js";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.js";
 export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.js";
+import { registerAdfCaptureCommand } from "./adf-evidence-command.js";
+export { captureAdfEvidence, replayAdfEvidence } from "./adf-evidence.js";
 import { registerJqlSelectionCommand } from "./jql-selection-command.js";
 export { explainJqlSelectionChanges } from "./jql-selection.js";
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
@@ -1980,6 +1982,7 @@ export default defineExtension({
     activate(api) {
         registerJqlSelectionCommand(api);
         registerCreatePreviewCommand(api);
+        registerAdfCaptureCommand(api);
         // -----------------------------------------------------------------------
         // schema — declare Jira provenance fields so the workspace knows them
         // -----------------------------------------------------------------------

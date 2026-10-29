@@ -13,6 +13,7 @@ export const JIRA_OPTION_TABLE: Readonly<Record<string, readonly string[]>> = Ob
   "jira plan-transition": ["issue", "to", "transition", "fields", "status-map", "host"],
   "jira explain-selection": ["before", "after", "limit", "offset"],
   "jira preview-create": ["contract"],
+  "jira capture-adf": ["contract"],
 });
 const booleans = new Set(["dry-run", "atomic", "push", "rich", "update-existing"]);
 const numbers = new Set(["max-results", "limit", "offset"]);

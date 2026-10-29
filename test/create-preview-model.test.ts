@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { PmClient, listAllComplete } from "@unbrained/pm-cli/sdk";
-import { buildExportPlan, previewJiraCreate, readPmItems, runExportPush, runImport } from "../index.ts";
+import { captureAdfEvidence, replayAdfEvidence, buildExportPlan, previewJiraCreate, readPmItems, runExportPush, runImport } from "../index.ts";
 import type { JiraIssue } from "../index.ts";
 
 /** Deterministic generator keeps every failure exactly replayable. */
@@ -114,6 +114,35 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
       status: statuses[rand() % statuses.length] };
     for (const client of clients) await client.update(id, options);
     const before = await state(roots[0]!, false);
+    // Evidence consumes exact native state read back through the SDK. Captures,
+    // old approval replays and reconstructed ADF never modify native relationships.
+    const observed = (await clients[0]!.get(id, { full: true })).item;
+    const evidenceInput = { version: 1, source: { site: "https://example.invalid", issue: "DEMO-1",
+      revision: `native-${sequence}`, document: { type: "doc", version: 1, content: [
+        { type: "paragraph", content: [{ type: "text", text: "unselected native context" }] },
+        { type: "codeBlock", attrs: { language: null }, content: [{ type: "text", text: observed.body ?? "" }] },
+        { type: "table", content: [{ type: "tableRow", content: [
+          { type: sequence % 2 ? "tableHeader" : "tableCell", attrs: { colwidth: null, background: null }, content: [
+            { type: "paragraph", content: [{ type: "text", text: observed.title }] },
+          ] },
+        ] }] },
+      ] } }, select: sequence % 2 ? ["/content/1", "/content/2/content/0/content/0"] : ["/content/1"] };
+    const evidence = captureAdfEvidence(evidenceInput); assert.equal(evidence.kind, "preview");
+    if (evidence.kind !== "preview") throw new Error("evidence preview failed");
+    const approved = captureAdfEvidence({ ...evidenceInput, approval: { revision: evidence.packet.source.revision, digest: evidence.packet.source.digest } });
+    assert.equal(approved.kind, "captured");
+    const restored = replayAdfEvidence(JSON.parse(JSON.stringify(evidence.packet)));
+    assert.equal(restored.kind, "replayed");
+    if (restored.kind === "replayed") {
+      assert.equal(restored.document.content![0]!.content![0]!.text, observed.body ?? "");
+      assert.deepEqual(restored.document.content![0]!.attrs, { language: null });
+      if (sequence % 2) {
+        const cell = restored.document.content![1]!.content![0]!.content![0]!;
+        assert.deepEqual(cell.attrs, { colwidth: null, background: null });
+        assert.equal(cell.content![0]!.content![0]!.text, observed.title);
+      }
+    }
+    assert.equal(captureAdfEvidence({ ...evidenceInput, source: { ...evidenceInput.source, revision: `native-${sequence + 1}` }, approval: { revision: evidence.packet.source.revision, digest: evidence.packet.source.digest } }).kind, "refused");
     const path = paths[rand() % paths.length]!; const atomic = Boolean(rand() % 2);
     try {
       const imported = await importing(path, [originals[index]!], atomic) as { imported: number };
@@ -139,7 +168,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
     assert.deepEqual(await state(roots[0]!), await state(roots[1]!), `sequence ${sequence}: SDK reference model`);
   }
   assert.equal(posts, 0);
-  t.diagnostic(`500 sequences, 2000 operations, ${refusedReplays} safely refused older atomic replays`);
+  t.diagnostic(`500 sequences, 2000 native operations plus 2000 evidence operations, ${refusedReplays} safely refused older atomic replays`);
   assert.ok(refusedReplays > 0);
   assert.equal(visited.size, 8, "all import/sync entrypoints and atomic selections were exercised");
 });
