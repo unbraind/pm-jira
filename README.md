@@ -492,7 +492,7 @@ The typed SDK exports `JiraTransitionIntent`, `JiraTransitionPlan`,
 
 ## Without git
 
-JQL selection comparison, transition planning, credential diagnostics and Jira
+Create-field completion previews, JQL selection comparison, transition planning, credential diagnostics and Jira
 import/export previews work in plain directories and non-git trackers. Import/sync and explicit export push
 also use the tracker and Jira APIs without requiring git. Ordinary imports create
 items through the pm SDK in process, so they do not need a separate `pm` executable
@@ -592,3 +592,48 @@ authoritative SDK-created history, and checks that `verifyHistoryEntries` still
 detects the corruption. No Jira create, link or comment call is introduced by
 these replacements; imports only read Jira and create local items in one commit
 per item.
+
+## Create-field completion previews
+
+Preview the required bindings and missing answers for an explicitly selected
+Jira project/type, using revisioned create metadata:
+
+```bash
+pm jira preview-create --contract docs/examples/create-contract.json --json
+# Add the required Team answer, then protect the complete create batch:
+pm jira export --project DEMO --create-contract create.json --push --json
+```
+
+The SDK exports `previewJiraCreate` and typed `JiraCreate*` contracts. Custom
+required fields and exact allowed values are checked before any guarded POST.
+Diagnostics fit a declared JSON byte budget and expose `page.nextOffset`.
+See [the contract, limits and export guarantees](docs/create-preview.md) and
+[the example fixture](docs/examples/create-contract.json). The preview is read-only
+and validates supplied metadata; it does not establish live Jira permissions.
+
+All Jira commands reject supplied blank option values with `invalid_option`
+(exit 2) before I/O. Leave unused options omitted, and supply nonblank values for
+contracts and other guards. The shared boundary checks the whole bag, including
+secondary aliases and legacy importer credential options. See
+[the option contract and table-driven validation](docs/create-preview.md#supplied-option-values).
+
+
+Payload completeness follows each Jira metadata `required` flag. Optional empty
+values (including native `labels: []` for untagged items) are omitted from guarded
+POST bodies. Required empty values stop the complete batch. The CLI blank-option
+rule applies to option values, while JSON payload fields follow their schemas;
+see [the refuse/allow corpora](docs/create-preview.md#cli-values-and-payload-completeness-have-different-scopes).
+
+Create previews and guarded exports share one final-body builder: explicit
+contract answers win over mapped item fields, which win over generated `--rich`
+and default values. `previewJiraExport(plan, contract)` reports each exact POST
+`bodyDigest`; `runExportPush` validates and sends that same JSON representation.
+Optional empty fields and native mappings absent from the captured create screen
+are omitted. Option references preserve schema-supported `id`/`name`/`value`
+forms; Jira Cloud users use `accountId`. See the
+[agreement example and schema projection rules](docs/create-preview.md#previewapply-agreement-example).
+
+Project and issue type stay fixed outside field precedence. Every native and
+contract source must agree with the selected target before merging; matching
+contract overrides cannot conceal a plan for another project/type. Scope refusals
+remain typed in SDK, installed JSON/TOON and packed Node/Bun consumers.

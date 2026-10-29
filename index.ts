@@ -44,7 +44,13 @@ import type {
   CommitItemMutationsOptions,
   CommitItemMutationsResult,
 } from "@unbrained/pm-cli/sdk";
+import { parseJiraOptions } from "./option-boundary.ts";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
+import { compileJiraCreate } from "./create-preview.ts";
+import type { JiraCreateCompilation, JiraCreatePreviewResult } from "./create-preview.ts";
+import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
+export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
+export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
 import { registerJqlSelectionCommand } from "./jql-selection-command.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions,
@@ -576,6 +582,7 @@ export function buildJql(filters: JqlFilters): string {
  * @returns The resolved JQL filters.
  */
 export function readJqlFilters(options: Record<string, unknown>): JqlFilters {
+  options = parseJiraOptions(options);
   return {
     jql: readStringOption(options, "jql"),
     project: readStringOptionAliased(options, "project", "project-key"),
@@ -691,13 +698,14 @@ function camelKey(kebab: string): string {
 }
 
 function readOptionValue(options: Record<string, unknown>, kebab: string): unknown {
-  return options[kebab] ?? options[camelKey(kebab)];
+  const parsed = parseJiraOptions(options);
+  return parsed[kebab] ?? parsed[camelKey(kebab)];
 }
 
 /**
  * Read a trimmed, non-empty string option under its kebab- or camel-case key.
  *
- * Returns `undefined` for a missing or blank value. The pm CLI normalizes loose
+ * Returns `undefined` only for an omitted value; blank supplied values are usage errors. The pm CLI normalizes loose
  * flags to camelCase, so both spellings are checked (see the section note).
  *
  * @param options - The raw option object.
@@ -710,8 +718,7 @@ export function readStringOption(
 ): string | undefined {
   const v = readOptionValue(options, kebab);
   const value = typeof v === "string" ? v : v === undefined ? undefined : String(v);
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  return value;
 }
 
 /**
@@ -729,6 +736,7 @@ export function readStringOptionAliased(
   options: Record<string, unknown>,
   ...kebabs: string[]
 ): string | undefined {
+  options = parseJiraOptions(options);
   for (const kebab of kebabs) {
     const value = readStringOption(options, kebab);
     if (value !== undefined) return value;
@@ -751,7 +759,7 @@ export function readNumberOption(
   kebab: string
 ): number | undefined {
   const v = readOptionValue(options, kebab);
-  if (v === undefined || v === null) return undefined;
+  if (v === undefined) return undefined;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -759,7 +767,7 @@ export function readNumberOption(
 /**
  * Read a boolean option under its kebab- or camel-case key.
  *
- * A bare flag (empty string) reads as true, as do the strings "true"/"1"/"yes";
+ * A bare CLI flag is boolean true, as are the strings "true"/"1"/"yes";
  * anything else falls back to JavaScript truthiness.
  *
  * @param options - The raw option object.
@@ -773,8 +781,8 @@ export function readBooleanOption(
   const v = readOptionValue(options, kebab);
   if (typeof v === "boolean") return v;
   if (typeof v === "string") {
-    const s = v.trim().toLowerCase();
-    return s === "true" || s === "1" || s === "yes" || s === "";
+    const s = v.toLowerCase();
+    return s === "true" || s === "1" || s === "yes";
   }
   return Boolean(v);
 }
@@ -787,6 +795,7 @@ export function readBooleanOption(
  * @returns The first non-empty value, or `undefined`.
  */
 export function optionString(options: Record<string, unknown>, ...keys: string[]): string | undefined {
+  options = parseJiraOptions(options);
   for (const key of keys) {
     const value = readStringOption(options, key);
     if (value !== undefined) return value;
@@ -803,6 +812,7 @@ export function optionString(options: Record<string, unknown>, ...keys: string[]
  * @returns The first parsed number, or the default.
  */
 export function optionInt(options: Record<string, unknown>, defaultValue: number, ...keys: string[]): number {
+  options = parseJiraOptions(options);
   for (const key of keys) {
     const value = readNumberOption(options, key);
     if (value !== undefined) return value;
@@ -818,24 +828,19 @@ export function optionInt(options: Record<string, unknown>, defaultValue: number
  * @returns True when at least one key is truthy.
  */
 export function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean {
+  options = parseJiraOptions(options);
   return keys.some((key) => readBooleanOption(options, key));
 }
 
 /**
- * Coalesce a possibly-missing options bag to an empty object.
- *
- * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
- * Reading properties off `undefined` would throw, so a missing bag is treated
- * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
- * or other falsy value cannot leak through as a non-object.
- *
- * @param options - The raw options bag, or a falsy stand-in.
- * @returns The given bag when it is truthy, otherwise `{}`.
+ * Validate and snapshot an option bag; only undefined denotes an omitted bag.
+ * Present null, false, zero or empty strings are typed usage errors, preserving
+ * the distinction between omitted configuration and unusable supplied input.
  */
 export function optionsOrEmpty(
   options: Record<string, unknown> | undefined | null | false | "" | 0,
 ): Record<string, unknown> {
-  return options || {};
+  return parseJiraOptions(options);
 }
 
 // ---------------------------------------------------------------------------
@@ -1030,6 +1035,7 @@ export function planJiraTransition(intent: JiraTransitionIntent, issueResponse: 
  * Errors are redacted typed refusals. No tracker access, git subprocess or POST occurs.
  */
 export async function discoverJiraTransitionPlan(intent: JiraTransitionIntent, options: Record<string, unknown> = {}): Promise<JiraTransitionPlan> {
+  options = parseJiraOptions(options);
   if (!/^[A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*$/.test(intent.issue) || !PM_STATUSES.includes(intent.target)) {
     return transitionRefusal("invalid_input", "Supply an issue key and open|in_progress|closed|blocked target.");
   }
@@ -1050,6 +1056,7 @@ export async function discoverJiraTransitionPlan(intent: JiraTransitionIntent, o
 
 /** Parse CLI intent once and let the host render the compact result as TOON or JSON. */
 export async function runTransitionPlan(options: Record<string, unknown>): Promise<JiraTransitionPlan> {
+  options = parseJiraOptions(options);
   const target = normalizePmStatusInput(readStringOption(options, "to"));
   const issue = readStringOption(options, "issue");
   if (!target || !issue) return transitionRefusal("invalid_input", "Pass --issue PROJECT-123 and --to open|in_progress|closed|blocked.");
@@ -1271,6 +1278,7 @@ function httpsPost(url: string, authHeader: string, payload: string): Promise<st
     const parsed = new URL(url);
     const options = {
       hostname: parsed.hostname,
+      port: parsed.port,
       path: parsed.pathname + parsed.search,
       method: "POST",
       headers: {
@@ -1313,6 +1321,7 @@ function httpsPut(url: string, authHeader: string, payload: string): Promise<str
     const parsed = new URL(url);
     const options = {
       hostname: parsed.hostname,
+      port: parsed.port,
       path: parsed.pathname + parsed.search,
       method: "PUT",
       headers: {
@@ -1945,6 +1954,7 @@ export async function runImport(
   pmRoot: string,
   opts: ImportRunOptions = {}
 ) {
+  options = parseJiraOptions(options);
   const project = readStringOptionAliased(options, "project", "project-key");
   const customJql = readStringOption(options, "jql");
   const maxResults = readNumberOption(options, "max-results") ?? 500;
@@ -2398,13 +2408,50 @@ export interface ExportPushResult {
   failures: ExportPushFailure[];
 }
 
+/** Prepared wire payloads may omit metadata-optional fields from the original export plan. */
+type ExportPushEntry = Omit<ExportPlanEntry, "payload"> & { payload: { fields: Record<string, unknown> }; body?: string };
+
+/** Compile one actual export entry using the same final-body builder as standalone previews. */
+function compileExportCreate(entry: ExportPlanEntry, input: unknown): JiraCreateCompilation {
+  const { priority, issuetype, project, ...mapped } = entry.payload.fields;
+  return compileJiraCreate(input, {
+    generatedFields: { project, issuetype, ...(priority === undefined ? {} : { priority }) }, mappedFields: mapped,
+  });
+}
+
+/** Preview each create in an export plan; each bounded result hashes the exact body apply will send. */
+export function previewJiraExport(plan: ExportPlan, contract: unknown): JiraCreatePreviewResult[] {
+  return plan.entries.filter(entry => entry.op === "create").map(entry => compileExportCreate(entry, contract).preview);
+}
+
+/** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export async function runExportPush(
   plan: ExportPlan,
-  opts: { authHeader: string; updateExisting: boolean },
+  opts: { authHeader: string; updateExisting: boolean; createContract?: unknown },
   deps: ExportPushDeps = { post: httpsPost, put: httpsPut }
 ): Promise<ExportPushResult> {
-  const toCreate = plan.entries.filter((e) => e.op === "create");
-  const toUpdate = plan.entries.filter((e) => e.op === "update");
+  let entries: ExportPushEntry[] = plan.entries;
+  // Prevalidate the complete batch before any POST/PUT. Recompile on each call;
+  // a prior ready preview is never trusted as a durable execution plan.
+  if (opts.createContract !== undefined) {
+    if (!plan.entries.some(entry => entry.op === "create")) {
+      const checked = compileJiraCreate(opts.createContract).preview;
+      if (checked.kind === "refused") throw createPmCliExpectedError(checked.remediation, { exitCode: EXIT_CODE.USAGE,
+        context: { code: checked.code, recovery: { suggested_retry: checked.remediation } } });
+    }
+    const guarded: ExportPushEntry[] = [];
+    for (const entry of plan.entries) {
+      if (entry.op !== "create") { guarded.push(entry); continue; }
+      const compiled = compileExportCreate(entry, opts.createContract);
+      if (compiled.preview.kind !== "ready") throw createPmCliExpectedError(compiled.preview.remediation!, {
+        exitCode: EXIT_CODE.USAGE, context: { code: compiled.preview.code!, recovery: { suggested_retry: compiled.preview.remediation! } },
+      });
+      guarded.push({ ...entry, payload: JSON.parse(compiled.body) as { fields: Record<string, unknown> }, body: compiled.body });
+    }
+    entries = structuredClone(guarded);
+  }
+  const toCreate = entries.filter((e) => e.op === "create");
+  const toUpdate = entries.filter((e) => e.op === "update");
   const logError = deps.logError ?? ((message: string) => console.error(message));
 
   let created = 0;
@@ -2416,7 +2463,7 @@ export async function runExportPush(
     const ref = entry.itemId ?? entry.endpoint;
     try {
       if (!entry.payload) throw new Error("export entry has no payload");
-      await deps.post(entry.endpoint, opts.authHeader, JSON.stringify(entry.payload));
+      await deps.post(entry.endpoint, opts.authHeader, entry.body ?? JSON.stringify(entry.payload));
       created++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -2467,6 +2514,7 @@ export async function runExportPush(
 // hook a strict no-op by default and trivially unit-testable.
 // ---------------------------------------------------------------------------
 
+/** Read-only decision describing whether the configured write mirror would act. */
 export interface PushOnWriteDecision {
   shouldPush: boolean;
   reason: string;
@@ -2575,6 +2623,7 @@ const EXPORT_FLAGS = [
   { long: "--rich", description: "Derive Jira issuetype + priority from pm item type/priority" },
   { long: "--update-existing", description: "PUT changed fields to issues that already carry a Jira key (else they are skipped)" },
   { long: "--dry-run", description: "Print the Jira mutations that would be made, without any network call" },
+  { long: "--create-contract", value_name: "file", description: "Validate every create against a revisioned JSON contract before any POST" },
   { long: "--push", description: "POST the payloads to Jira (requires creds + --project)" },
 ];
 
@@ -2598,6 +2647,7 @@ export default defineExtension({
 
   activate(api: ExtensionApi) {
     registerJqlSelectionCommand(api);
+    registerCreatePreviewCommand(api);
     // -----------------------------------------------------------------------
     // schema — declare Jira provenance fields so the workspace knows them
     // -----------------------------------------------------------------------
@@ -2836,9 +2886,16 @@ export default defineExtension({
         // required custom field, a 4xx, ...) is caught + counted + logged and
         // the batch CONTINUES, instead of a mid-batch throw that abandons every
         // remaining item. Errors are streamed to stderr by runExportPush.
+        let createContract: unknown;
+        const contractFile = readStringOption(options, "create-contract");
+        if (contractFile !== undefined) {
+          const input = readCreateContract(contractFile);
+          if ("kind" in input) throw createCommandError(input.remediation, EXIT_CODE.USAGE);
+          createContract = input.value;
+        }
         const { created, updated, skipped, failed, failures } = await runExportPush(
           plan,
-          { authHeader: creds.authHeader, updateExisting }
+          { authHeader: creds.authHeader, updateExisting, createContract }
         );
 
         console.error(

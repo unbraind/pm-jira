@@ -29,8 +29,10 @@ test('file adapter refuses missing options, unreadable/invalid/nonregular/oversi
   writeFileSync(join(root, 'before.json'), JSON.stringify(snapshot(['DEMO-1'])));
   writeFileSync(join(root, 'after.json'), JSON.stringify(snapshot([])));
   const options = { before: 'before.json', after: 'after.json' };
-  for (const bad of [{}, { before: '' }, { before: 'before.json' }, { before: 'before.json', after: '' }, { before: true, after: 'after.json' }]) refusal(runJqlSelectionComparison(bad, root), 'invalid_options');
-  for (const value of [0, '0', '', true, '-1', '1.2']) refusal(runJqlSelectionComparison({ ...options, limit: value }, root), 'invalid_options');
+  for (const bad of [{}, { before: 'before.json' }]) refusal(runJqlSelectionComparison(bad, root), 'invalid_options');
+  assert.throws(() => runJqlSelectionComparison({ ...options, limit: '0' }, root), /nonblank/);
+  refusal(runJqlSelectionComparison({ ...options, limit: 257 }, root), 'invalid_options');
+  for (const bad of [{ before: '' }, { before: true }, { after: '' }, { limit: '' }, { limit: 0 }, { limit: true }, { limit: '-1' }, { limit: '1.2' }]) assert.throws(() => runJqlSelectionComparison({ ...options, ...bad }, root), /nonblank/);
   assert.equal(runJqlSelectionComparison({ ...options, limit: 2, offset: '0' }, root).kind, 'explained');
   refusal(runJqlSelectionComparison({ ...options, before: 'missing.json' }, root), 'input_read');
   refusal(runJqlSelectionComparison({ ...options, after: 'missing.json' }, root), 'input_read');

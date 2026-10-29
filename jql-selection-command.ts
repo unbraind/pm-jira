@@ -1,6 +1,7 @@
 /** Portable command adapter; the pm host owns parsing, output and refusal exits. */
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseJiraOptions } from "./option-boundary.ts";
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import { explainJqlSelectionChanges, jqlSelectionRefusal, resolveJqlSelectionOptions } from "./jql-selection.ts";
 import type { JqlSelectionRefusal, JqlSelectionResult } from "./jql-selection.ts";
@@ -33,13 +34,13 @@ function readSnapshot(file: string): { value: unknown } | JqlSelectionRefusal {
 
 /** Load two explicit files relative to the caller, with no implicit tracker or git read. */
 export function runJqlSelectionComparison(options: Record<string, unknown>, cwd: string): JqlSelectionResult {
-  if (typeof options.before !== "string" || !options.before.trim() || typeof options.after !== "string" || !options.after.trim()) {
+  options = parseJiraOptions(options);
+  if (typeof options.before !== "string" || typeof options.after !== "string") {
     return jqlSelectionRefusal("invalid_options", "Pass --before before.json and --after after.json; see jira explain-selection --help.");
   }
-  // Host flags are strings; SDK callers may pass numbers. Reject booleans/empty values.
-  const numeric = (value: unknown): number | undefined => value === undefined ? undefined :
-    typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
-  const page = resolveJqlSelectionOptions({ limit: numeric(options.limit), offset: numeric(options.offset) });
+  // Scalar coercion belongs to the shared option boundary; the pure planner
+  // retains its own SDK pagination domain checks.
+  const page = resolveJqlSelectionOptions({ limit: options.limit as number | undefined, offset: options.offset as number | undefined });
   if ("kind" in page) return page;
   const before = readSnapshot(resolve(cwd, options.before));
   if ("kind" in before) return before;

@@ -154,18 +154,23 @@ test("resolveCreds treats a blank JIRA_BASE_URL as missing", () => {
   );
 });
 
-test("option readers coerce non-strings, numbers, null, and boolean strings", () => {
-  assert.equal(readStringOption({ project: 12 }, "project"), "12");
+test("option readers refuse unusable typed values and accept meaningful scalars", () => {
+  assert.throws(() => readStringOption({ project: 12 }, "project"), /nonblank/);
+  assert.equal(readStringOption({ custom: 12 }, "custom"), "12");
   assert.equal(readNumberOption({ "max-results": 50 }, "max-results"), 50);
-  assert.equal(readNumberOption({ "max-results": null }, "max-results"), undefined);
+  assert.throws(() => readNumberOption({ "max-results": null }, "max-results"), /nonblank/);
+  assert.equal(readNumberOption({}, "max-results"), undefined);
   assert.equal(readBooleanOption({ push: true }, "push"), true);
   assert.equal(readBooleanOption({ push: "yes" }, "push"), true);
-  assert.equal(readBooleanOption({ push: "" }, "push"), true);
+  assert.throws(() => readBooleanOption({ push: "" }, "push"), /nonblank/);
   assert.equal(readBooleanOption({ push: "1" }, "push"), true);
   assert.equal(readBooleanOption({ push: "false" }, "push"), false);
-  assert.equal(readBooleanOption({ push: 2 }, "push"), true);
+  assert.throws(() => readBooleanOption({ push: 2 }, "push"), /nonblank/);
+  assert.equal(readBooleanOption({ push: 1 }, "push"), true);
   assert.equal(optionString({}, "missing"), undefined);
-  assert.equal(optionInt({ n: Number.NaN }, 7, "n"), 7);
+  assert.equal(readNumberOption({ custom: "3" }, "custom"), 3);
+  assert.equal(optionInt({ custom: "nope" }, 7, "custom"), 7);
+  assert.throws(() => optionInt({ n: Number.NaN }, 7, "n"), /nonblank/);
   assert.equal(optionEnabled({ x: "nope" }, "x"), false);
   assert.equal(readStringOptionAliased({}, "map", "field-map"), undefined);
 });
@@ -283,14 +288,15 @@ test("handlePushOnWrite no-ops, swallows diagnose failures, and ignores missing 
   assert.equal(called, true);
 });
 
-test("optionsOrEmpty returns the bag when present and {} when falsy", () => {
+test("optionsOrEmpty snapshots a supplied bag and refuses unusable supplied bags", () => {
   const bag = { project: "P" };
-  assert.equal(optionsOrEmpty(bag), bag);
+  assert.deepEqual(optionsOrEmpty(bag), bag);
+  assert.notEqual(optionsOrEmpty(bag), bag);
   assert.deepEqual(optionsOrEmpty(undefined), {});
-  assert.deepEqual(optionsOrEmpty(null), {});
-  assert.deepEqual(optionsOrEmpty(""), {});
-  assert.deepEqual(optionsOrEmpty(0), {});
-  assert.deepEqual(optionsOrEmpty(false), {});
+  assert.throws(() => optionsOrEmpty(null), /nonblank/);
+  assert.throws(() => optionsOrEmpty(""), /nonblank/);
+  assert.throws(() => optionsOrEmpty(0), /nonblank/);
+  assert.throws(() => optionsOrEmpty(false), /nonblank/);
 });
 
 test("SDK error adapter defaults to GENERIC_FAILURE", () => {

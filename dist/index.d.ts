@@ -6,6 +6,9 @@
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 import { type PmSdkModule } from "./sdk-importer.ts";
+import type { JiraCreatePreviewResult } from "./create-preview.ts";
+export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
+export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
 export { explainJqlSelectionChanges } from "./jql-selection.ts";
 export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, JqlSelectionOptions, JqlSelectionRefusalCode, JqlSelectionRefusal, JqlSelectionChange, JqlSelectionExplanation, JqlSelectionResult } from "./jql-selection.ts";
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
@@ -309,7 +312,7 @@ export declare function extractJiraKey(text: string | undefined): {
 /**
  * Read a trimmed, non-empty string option under its kebab- or camel-case key.
  *
- * Returns `undefined` for a missing or blank value. The pm CLI normalizes loose
+ * Returns `undefined` only for an omitted value; blank supplied values are usage errors. The pm CLI normalizes loose
  * flags to camelCase, so both spellings are checked (see the section note).
  *
  * @param options - The raw option object.
@@ -343,7 +346,7 @@ export declare function readNumberOption(options: Record<string, unknown>, kebab
 /**
  * Read a boolean option under its kebab- or camel-case key.
  *
- * A bare flag (empty string) reads as true, as do the strings "true"/"1"/"yes";
+ * A bare CLI flag is boolean true, as are the strings "true"/"1"/"yes";
  * anything else falls back to JavaScript truthiness.
  *
  * @param options - The raw option object.
@@ -377,15 +380,9 @@ export declare function optionInt(options: Record<string, unknown>, defaultValue
  */
 export declare function optionEnabled(options: Record<string, unknown>, ...keys: string[]): boolean;
 /**
- * Coalesce a possibly-missing options bag to an empty object.
- *
- * Extension runtimes (and synthetic test contexts) sometimes omit `options`.
- * Reading properties off `undefined` would throw, so a missing bag is treated
- * as "no flags". Uses `||` rather than `??` so a caller-supplied empty string
- * or other falsy value cannot leak through as a non-object.
- *
- * @param options - The raw options bag, or a falsy stand-in.
- * @returns The given bag when it is truthy, otherwise `{}`.
+ * Validate and snapshot an option bag; only undefined denotes an omitted bag.
+ * Present null, false, zero or empty strings are typed usage errors, preserving
+ * the distinction between omitted configuration and unusable supplied input.
  */
 export declare function optionsOrEmpty(options: Record<string, unknown> | undefined | null | false | "" | 0): Record<string, unknown>;
 /**
@@ -752,10 +749,15 @@ export interface ExportPushResult {
     failed: number;
     failures: ExportPushFailure[];
 }
+/** Preview each create in an export plan; each bounded result hashes the exact body apply will send. */
+export declare function previewJiraExport(plan: ExportPlan, contract: unknown): JiraCreatePreviewResult[];
+/** Validate every create against metadata before writes, omitting optional empties and isolating HTTP failures. */
 export declare function runExportPush(plan: ExportPlan, opts: {
     authHeader: string;
     updateExisting: boolean;
+    createContract?: unknown;
 }, deps?: ExportPushDeps): Promise<ExportPushResult>;
+/** Read-only decision describing whether the configured write mirror would act. */
 export interface PushOnWriteDecision {
     shouldPush: boolean;
     reason: string;

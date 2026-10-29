@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "version": 1,
+    "revision": "demo-create-2026-10-26-r1",
+    "project": "DEMO",
+    "issueType": "Task",
+    "fields": [
+      { "id": "summary", "name": "Summary", "required": true, "type": "string" },
+      {
+        "id": "customfield_10001",
+        "name": "Team",
+        "required": true,
+        "type": "option",
+        "allowedValues": [{ "id": "10" }, { "id": "20" }]
+      }
+    ]
+  },
+  "project": "DEMO",
+  "issueType": "Task",
+  "answers": { "summary": "Example work" },
+  "budget": 8192,
+  "offset": 0
+}
