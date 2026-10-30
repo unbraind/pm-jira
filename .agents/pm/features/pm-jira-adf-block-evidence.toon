@@ -2,13 +2,19 @@ id: pm-jira-adf-block-evidence
 title: Capture selected structured Jira description blocks as portable evidence
 description: ""
 type: Feature
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-29T03:46:37.895Z"
-updated_at: "2026-10-29T05:29:35.781Z"
+updated_at: "2026-10-30T20:10:53.313Z"
+closed_at: "2026-10-30T20:10:50.527Z"
+completed_at: "2026-10-29T05:43:10.000Z"
 author: codex-agent
 acceptance_criteria: Table cell and code block round-trip with stable source coordinates; unsupported nodes are counted; changed source revision refuses approved capture.
+release: 2026.10.29
+resolution: "Delivered by PR #178 (9587dc2): Preserve selected Jira description blocks as revision-approved evidence"
+expected_result: Table cell and code block round-trip with stable source coordinates; unsupported nodes are counted; changed source revision refuses approved capture.
+actual_result: "PR #178 merged at 2026-10-29T05:43:10Z as 9587dc2; required CI passed on the merged head."
 comments[15]{created_at,author,text}:
   "2026-10-29T03:47:27.247Z",codex-agent,"Design: portable read-only capture packets preserve original RFC 6901 coordinates and ancestor scaffolding, never pull attachments or mutate native items. Approval compares both the caller-provided source revision and complete description digest, catching same-revision edits as well. Replay validates the exact producer schema and digest. No transaction isolation or remote freshness claim: callers supply a newly read source snapshot; this feature has no target writes, leases or frozen journal. Existing atomic replay work remains tracked separately by pm-jira-atomic-replay-revisions."
   "2026-10-29T03:53:18.949Z",codex-agent,"Implemented typed captureAdfEvidence/replayAdfEvidence plus jira capture-adf, with strict shared node schema, original JSON pointers, ancestor scaffolding, immutable copied attributes, digest/revision approval, complete exclusion counts and all-or-refuse output bounds. Added documented example and pm-evidence citation handoff. Seeded 500-sequence selection/approval property passed; native import/export/sync reference-model coverage now also asserts capture/replay against exact SDK readback. Targeted malformed-schema, sparse-array, CRLF, foreign packet and non-git CLI checks are in progress."
@@ -54,4 +60,5 @@ tests[7]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
 docs[2]{path,scope,note}:
   docs/adf-evidence-validation.md,project,Measured public tracker and behavioral revert evidence
   docs/adf-evidence.md,project,Strict contract and freshness boundary
+close_reason: "Delivered by PR #178 (9587dc2): Preserve selected Jira description blocks as revision-approved evidence"
 body: "Overlap rechecked against main: pm-jira adfToPlainText flattens descriptions; existing export emits plain text as ADF; older attachment proposal is separate. pm-evidence owns generic citations, retention and freshness, not ADF structure. New scope: strict offline source snapshot plus explicit JSON-pointer selection; portable evidence packet with source revision and original coordinates, code/list/table boundaries, exclusion counts, approval bound to source digest, bounded agent output and typed refusals. No tracker mutations, journals, remote actions or attachment reads on this path; pm-evidence can cite the retained JSON output. Reuse the host command renderer, supported SDK loader, bounded file adapter and SDK testing harness. Existing native import/export/sync model regression will run in CI; new model checks capture against SDK-read native state without modifying it."

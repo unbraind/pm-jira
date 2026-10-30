@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.10.29 - 2026-10-29
+
+### Added
+
+- Capture selected structured Jira description blocks as portable evidence ([pm-jira-adf-block-evidence](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-adf-block-evidence.toon))
+- Preview required Jira create fields before export ([pm-jira-create-field-previews](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-create-field-previews.toon))
+
 ## 2026.10.28 - 2026-10-28
 
 ### Changed
@@ -9,6 +16,12 @@
 ### Other
 
 - Stop Hound from linting generated dist/ output ([pm-jira-92cf](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-92cf.toon))
+
+## 2026.10.26 - 2026-10-26
+
+### Other
+
+- Point the npm homepage at the package catalog and link the author ([pm-jira-avbu](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-avbu.toon))
 
 ## 2026.10.25 - 2026-10-25
 
