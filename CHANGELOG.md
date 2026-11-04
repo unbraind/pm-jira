@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+No changes.
+
+## 2026.11.3 - 2026-11-03
+
+No changes.
+
+## 2026.11.1 - 2026-11-01
+
+No changes.
+
+## 2026.10.31 - 2026-10-31
+
+No changes.
+
+## 2026.10.30 - 2026-10-30
+
+No changes.
+
 ## 2026.10.29 - 2026-10-29
 
 ### Added
@@ -30,6 +50,10 @@
 - Explain entries and exits between explicit JQL selections ([pm-jira-0x0e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-0x0e.toon))
 - Plan permitted Jira lifecycle transitions before writes ([pm-jira-9h54](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-9h54.toon))
 
+## 2026.10.24 - 2026-10-24
+
+No changes.
+
 ## 2026.10.23 - 2026-10-23
 
 ### Changed
@@ -53,6 +77,38 @@
 
 - Closed: Fix release publish ordering ahead of protected main push ([pm-jira-i3jb](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-i3jb.toon))
 
+## 2026.10.20 - 2026-10-20
+
+No changes.
+
+## 2026.10.18 - 2026-10-18
+
+No changes.
+
+## 2026.10.17 - 2026-10-17
+
+No changes.
+
+## 2026.10.16 - 2026-10-16
+
+No changes.
+
+## 2026.10.15 - 2026-10-15
+
+No changes.
+
+## 2026.10.14 - 2026-10-14
+
+No changes.
+
+## 2026.10.10 - 2026-10-10
+
+No changes.
+
+## 2026.10.9 - 2026-10-09
+
+No changes.
+
 ## 2026.10.8 - 2026-10-08
 
 ### Fixed
@@ -64,6 +120,10 @@
 ### Other
 
 - Auto-merge green Dependabot updates and group the pm toolchain into one daily PR ([pm-jira-uo3f](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-uo3f.toon))
+
+## 2026.10.4 - 2026-10-04
+
+No changes.
 
 ## 2026.9.26 - 2026-09-26
 
@@ -194,11 +254,19 @@
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-jira-w72d](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-w72d.toon))
 
+## 2026.8.3 - 2026-08-03
+
+No changes.
+
 ## 2026.8.1 - 2026-08-01
 
 ### Fixed
 
 - Release commits discard the rebuilt dist, so the git-install path serves the previous version ([pm-jira-1zhr](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-1zhr.toon))
+
+## 2026.7.31 - 2026-07-31
+
+No changes.
 
 ## 2026.7.29 - 2026-07-29
 
@@ -254,17 +322,29 @@
 
 - Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-jira-xa9c](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-xa9c.toon))
 
+## 2026.7.22 - 2026-07-22
+
+No changes.
+
 ## 2026.7.20-1 - 2026-07-20
 
 ### Added
 
 - adopt commitItemMutations for atomic import ([pm-jira-c5vc](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-c5vc.toon))
 
+## 2026.7.20 - 2026-07-20
+
+No changes.
+
 ## 2026.7.13-1 - 2026-07-13
 
 ### Fixed
 
 - Route jira export dry-run preview to stderr + return payloads so stdout stays valid JSON ([pm-jira-rhyu](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-rhyu.toon))
+
+## 2026.7.13 - 2026-07-13
+
+No changes.
 
 ## 2026.7.11 - 2026-07-11
 
@@ -282,6 +362,14 @@
 - Adversarial review: clean pass, no defects found ([pm-jira-pz02](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-pz02.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
 
+## 2026.7.10 - 2026-07-10
+
+No changes.
+
+## 2026.7.7 - 2026-07-07
+
+No changes.
+
 ## 2026.7.6 - 2026-07-06
 
 ### Fixed
@@ -293,11 +381,23 @@
 - Align Node engine with pm CLI runtime ([pm-jira-1qmd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-1qmd.toon))
 - Regenerate CHANGELOG after pm close item ([pm-jira-0ygy](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-0ygy.toon))
 
+## 2026.6.14 - 2026-06-14
+
+No changes.
+
 ## 2026.6.13 - 2026-06-13
 
 ### Other
 
 - Daily Release publish step runs prepublishOnly post-tag: align npm publish with --ignore-scripts ([pm-jira-elhd](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-elhd.toon))
+
+## 2026.6.10 - 2026-06-10
+
+No changes.
+
+## 2026.6.9 - 2026-06-09
+
+No changes.
 
 ## 2026.6.8 - 2026-06-08
 
@@ -359,6 +459,14 @@
 ### Fixed
 
 - jira sync threw plain Error (no exitCode) → runtime double-invocation ([pm-jira-6cr5](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-6cr5.toon))
+
+## 2026.5.31 - 2026-05-31
+
+No changes.
+
+## 2026.5.30 - 2026-05-30
+
+No changes.
 
 ## 2026.5.29-1 - 2026-05-29
 

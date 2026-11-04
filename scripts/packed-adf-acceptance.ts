@@ -25,19 +25,19 @@ try {
   for (const file of ["dist/adf-evidence.js", "dist/adf-evidence.d.ts", "docs/adf-evidence.md", "docs/examples/adf-capture.json"]) assert.ok(packed[0]!.files.some(entry => entry.path === file), file);
   const extracted = join(root, "artifact"); mkdirSync(extracted); run("tar", ["-xzf", artifact, "-C", extracted], root);
   // Raw extracted SDK consumers need the declared peer, just like installed consumers.
-  run("npm", ["install", "--prefix", extracted, "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.10.28"], root);
+  run("npm", ["install", "--prefix", extracted, "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.11.4"], root);
   let passed = 0; let assertions = 0;
   for (const mode of ["npm-global", "bun-global", "npx", "bunx", "npm-local", "bun-local"]) {
     const cwd = join(root, mode); mkdirSync(cwd);
     const prefix = join(cwd, "prefix"); let command = ""; let leading: string[] = []; let packageRoot = join(extracted, "package");
     const extra = { BUN_INSTALL_GLOBAL_DIR: join(prefix, "global"), BUN_INSTALL_BIN: join(prefix, "bin"), BUN_INSTALL_CACHE_DIR: join(root, "bun-cache") };
-    if (mode === "npm-global") { run("npm", ["install", "--global", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.10.28", artifact], cwd); command = join(prefix, "bin", "pm"); packageRoot = join(prefix, "lib", "node_modules", "pm-jira"); }
-    if (mode === "bun-global") { run("bun", ["add", "--global", "--ignore-scripts", "@unbrained/pm-cli@2026.10.28", artifact], cwd, extra); command = join(prefix, "bin", "pm"); packageRoot = join(prefix, "global", "node_modules", "pm-jira"); }
-    if (mode === "npx") { command = "npx"; leading = ["--yes", "--package", "@unbrained/pm-cli@2026.10.28", "--package", artifact, "pm"]; }
-    if (mode === "bunx") { command = "bunx"; leading = ["--package", "@unbrained/pm-cli@2026.10.28", "pm"]; }
+    if (mode === "npm-global") { run("npm", ["install", "--global", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.11.4", artifact], cwd); command = join(prefix, "bin", "pm"); packageRoot = join(prefix, "lib", "node_modules", "pm-jira"); }
+    if (mode === "bun-global") { run("bun", ["add", "--global", "--ignore-scripts", "@unbrained/pm-cli@2026.11.4", artifact], cwd, extra); command = join(prefix, "bin", "pm"); packageRoot = join(prefix, "global", "node_modules", "pm-jira"); }
+    if (mode === "npx") { command = "npx"; leading = ["--yes", "--package", "@unbrained/pm-cli@2026.11.4", "--package", artifact, "pm"]; }
+    if (mode === "bunx") { command = "bunx"; leading = ["--package", "@unbrained/pm-cli@2026.11.4", "pm"]; }
     if (mode.endsWith("-local")) {
       writeFileSync(join(cwd, "package.json"), '{"private":true,"type":"module"}\n');
-      run(mode.startsWith("npm") ? "npm" : "bun", mode.startsWith("npm") ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.10.28", artifact] : ["add", "--ignore-scripts", "@unbrained/pm-cli@2026.10.28", artifact], cwd, extra);
+      run(mode.startsWith("npm") ? "npm" : "bun", mode.startsWith("npm") ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@unbrained/pm-cli@2026.11.4", artifact] : ["add", "--ignore-scripts", "@unbrained/pm-cli@2026.11.4", artifact], cwd, extra);
       command = join(cwd, "node_modules", ".bin", "pm"); packageRoot = join(cwd, "node_modules", "pm-jira");
     }
     const invoke = (args: string[]) => run(command, [...leading, "--path", join(cwd, "tracker"), ...args], cwd, extra);
@@ -73,5 +73,5 @@ try {
     console.log(JSON.stringify({ mode, passed: true }));
   }
   assert.equal(createHash("sha256").update(readFileSync(artifact)).digest("hex"), artifactHash);
-  console.log(JSON.stringify({ artifact: packed[0]!.filename, sha256: artifactHash, files: packed[0]!.files.length, modes: passed, assertions, host: "2026.10.28" }));
+  console.log(JSON.stringify({ artifact: packed[0]!.filename, sha256: artifactHash, files: packed[0]!.files.length, modes: passed, assertions, host: "2026.11.4" }));
 } finally { rmSync(root, { recursive: true, force: true }); }
