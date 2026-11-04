@@ -75,7 +75,7 @@ node scripts/packed-adf-acceptance.ts
 
 The packed acceptance script captures one npm pack artifact, checks its required
 files and SHA-256 before/after use, and exercises npm global, Bun global, npx,
-bunx, npm local and Bun local hosts (2026.10.28). Each mode verifies preview,
+bunx, npm local and Bun local hosts (2026.11.4). Each mode verifies preview,
 approved capture, exact packet equality and TOON, for both table/code selections
 and code-only selections beside an unselected default-valued table. TOON rows
 are restored using SDK `decodePmTableRows` and their host encoding receipts;

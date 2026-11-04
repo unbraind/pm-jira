@@ -36,8 +36,8 @@ test("installed JSON/TOON capture works without git, preserving native fields, c
   execFileSync(process.execPath, [cli, "--path", root, "package", "install", pkg, "--project"], { env: childEnv, stdio: "pipe" });
   const client = new PmClient({ pmRoot: root, cwd: root, noExtensions: true, author: "adf-fixture" });
   await client.schemaAddStatus("investigating_custom", { role: ["active"] });
-  const parent = await client.create({ title: "Parent", type: "Epic", status: "open", parent: "none", goal: "none", objective: "none", sprint: "none", release: "none" });
-  await client.create({ title: "Child", type: "Task", status: "investigating_custom", body: " independent\r\nnotes ", parent: parent.item.id, dep: [`id=${parent.item.id},kind=related`], goal: "none", objective: "none", sprint: "none", release: "none" });
+  const parent = await client.create({ title: "Parent", type: "Epic", status: "open", unset: ["parent", "goal", "objective", "sprint", "release"] });
+  await client.create({ title: "Child", type: "Task", status: "investigating_custom", body: " independent\r\nnotes ", parent: parent.item.id, dep: [`id=${parent.item.id},kind=related`], unset: ["goal", "objective", "sprint", "release"] });
   const before = await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
   const contract = JSON.parse(readFileSync(resolve("docs/examples/adf-capture.json"), "utf8")) as AdfCaptureInput;
   writeFileSync(join(root, "capture.json"), JSON.stringify(contract));
