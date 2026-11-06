@@ -132,7 +132,7 @@ pm jira import --project PROJ --atomic
 | `--host` | string | `$JIRA_BASE_URL` | Jira base URL override. |
 | `--max-results` | number | `500` | Maximum number of issues to pull. |
 | `--dry-run` | boolean | `false` | Print the JQL + exact GET request that would run; **no network call**. |
-| `--atomic` | boolean | `false` | Import all creates in ONE all-or-nothing, crash-recoverable, workspace-writer-locked transaction via the official `commitItemMutations` SDK helper (pm-cli >= 2026.7.20). On failure every applied create is compensated (deleted) so the tracker keeps zero committed items from the import; an interrupted run resumes on re-invocation. A `--dry-run` + `--atomic` invocation previews like a normal dry-run and commits no transaction. |
+| `--atomic` | boolean | `false` | Import all creates in ONE crash-recoverable, workspace-writer-locked transaction via the official `commitItemMutations` SDK helper (pm-cli >= 2026.7.20). Ordinary failures request delete compensation; an exception alone does not confirm rollback. Interrupted runs retain applied work and resume with the same input. A `--dry-run` + `--atomic` invocation previews like a normal dry-run and commits no transaction. |
 
 When no `--jql` is given, the convenience filters are AND-combined; if you don't
 filter on status, a `statusCategory != Done` clause is appended so an unscoped
@@ -649,3 +649,7 @@ items and Jira remain untouched. The SDK exports `captureAdfEvidence`,
 `replayAdfEvidence` and their typed contracts. See [the contract and refusal guide](docs/adf-evidence.md)
 and [the runnable example](docs/examples/adf-capture.json). Snapshot approval
 requires a fresh caller-supplied source read; it does not attest live Jira freshness.
+
+Programmatic callers can reuse a bound filesystem tracker via `bindJiraPersistence`.
+See [persistence scope and remaining backend roadmap](docs/backend-persistence.md)
+for its guarantees, recovery diagnostics and conformance limits.

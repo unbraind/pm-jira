@@ -6,6 +6,9 @@
 import type { ExtensionApi } from "@unbrained/pm-cli/sdk/authoring";
 import type { BulkItemCreateMutation, CommitItemMutationsOptions, CommitItemMutationsResult } from "@unbrained/pm-cli/sdk";
 import { type PmSdkModule } from "./sdk-importer.ts";
+import { type JiraPersistenceTarget } from "./persistence.ts";
+export { bindJiraPersistence, JiraPersistence } from "./persistence.ts";
+export type { JiraPersistenceTarget } from "./persistence.ts";
 import type { JiraCreatePreviewResult } from "./create-preview.ts";
 export { previewJiraCreate, compileJiraCreate as buildJiraCreateBody } from "./create-preview.ts";
 export type { JiraCreateSources, JiraCreateCompilation, JiraCreateReference, JiraCreateValue, JiraCreateField, JiraCreateMetadata, JiraCreatePreviewInput, JiraCreateRefusal, JiraCreateDiagnostic, JiraCreatePreview, JiraCreatePreviewResult } from "./create-preview.ts";
@@ -546,14 +549,15 @@ export declare function deriveAtomicTransactionId(jql: string, issueKeys: readon
 export declare function buildAtomicCreateMutation(item: IssueToItem, jiraKey: string, transactionId: string, idPrefix: string, normalizeItemId: (input: string, prefix: string) => string): BulkItemCreateMutation;
 /**
  * Commit every imported create in one atomic, crash-recoverable transaction
- * via the official `commitItemMutations` SDK helper. On failure every applied
- * create is compensated (deleted) so no committed items remain, and a clear
- * {@link createCommandError} is thrown. Returns the count of items committed by
+ * via the official `commitItemMutations` SDK helper. Failures request delete
+ * compensation; interruptions retain applied work for recovery. Diagnostics
+ * never infer successful rollback from an exception alone. Returns the count
+ * of items committed by
  * this attempt (already-applied steps from a prior interrupted run are
  * resumed, not double-counted). Throws createCommandError (USAGE) when the SDK
  * cannot be resolved.
  */
-export declare function importJiraAtomic(pmRoot: string, jql: string, filtered: readonly {
+export declare function importJiraAtomic(pmRoot: JiraPersistenceTarget, jql: string, filtered: readonly {
     issue: JiraIssue;
     item: IssueToItem;
 }[], opts: ImportRunOptions): Promise<{
@@ -631,11 +635,11 @@ export interface ImportRunOptions {
  * Sequential mode retains its per-item error reporting and partial success.
  *
  * @param options - CLI/importer options, with credentials read from the environment.
- * @param pmRoot - Destination PM tracker, used only after fetching and mapping.
+ * @param pmRoot - Destination path or binding, pinned before fetching and read after mapping.
  * @param opts - Import controls and explicitly injected test dependencies.
  * @returns The dry-run request or import counts and optional transaction receipt.
  */
-export declare function runImport(options: Record<string, unknown>, pmRoot: string, opts?: ImportRunOptions): Promise<{
+export declare function runImport(options: Record<string, unknown>, pmRoot: JiraPersistenceTarget, opts?: ImportRunOptions): Promise<{
     success: boolean;
     dryRun: boolean;
     jql: string;
@@ -687,7 +691,7 @@ export declare function certifyPmItems(candidate: unknown): Promise<PmItem[]>;
  * @param pmRoot - Explicit tracker root supplied by the host.
  * @returns Certified item rows with bodies and all lifecycle states.
  */
-export declare function readPmItems(pmRoot: string): Promise<PmItem[]>;
+export declare function readPmItems(pmRoot: JiraPersistenceTarget): Promise<PmItem[]>;
 /** Jira issue fields emitted after the local corpus has passed certification. */
 export interface JiraCreatePayload {
     fields: {

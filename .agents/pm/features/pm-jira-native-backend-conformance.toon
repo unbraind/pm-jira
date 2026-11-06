@@ -1,0 +1,13 @@
+id: pm-jira-native-backend-conformance
+title: Certify Jira workflows on filesystem and a native non-filesystem backend
+description: Roadmap acceptance requires native backend conformance beyond the delivered filesystem binding. Depends on the native SDK context and upstream conformance/migration contracts.
+type: Feature
+status: open
+priority: 2
+tags[3]: sdk-gap,"upstream:pm-cli#1588","upstream:pm-cli#1589"
+created_at: "2026-11-06T16:50:20.331Z"
+updated_at: "2026-11-06T16:50:20.331Z"
+author: codex-astra
+acceptance_criteria: "Run identical synthetic import/export/reconcile scenarios on filesystem and a native backend with no tracker directory; Verify custom fields, body, status, references, complete-read refusal, deterministic replay, interruption/resume, concurrent writers and local edits, unsupported capability refusal, and CLI/SDK parity with real SDK calls and OS processes; Record migration fidelity and precise supported surfaces without whole-package parity claims"
+parent: pm-jira-backend-context
+body: ""
