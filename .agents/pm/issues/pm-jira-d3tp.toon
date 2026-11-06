@@ -6,15 +6,14 @@ status: in_progress
 priority: 2
 tags: []
 created_at: "2026-10-07T12:04:04.395Z"
-updated_at: "2026-11-06T16:51:50.285Z"
-assignee: codex-astra
-claim_principal: codex-astra
+updated_at: "2026-11-06T17:18:11.112Z"
 author: codex-sol
-comments[4]{created_at,author,text}:
+comments[5]{created_at,author,text}:
   "2026-10-07T12:06:45.843Z",codex-sol,"Deferred diagnostic fix. The real WorkspaceTransactionInterruptedError fixture leaves one applied item and a resumable journal, while importJiraAtomic reports compensation. The complete-read change preserves recovery and verifies that retry creates the remaining two items; the misleading interruption message remains separate work."
   "2026-10-25T23:23:19.316Z",codex-agent,"The create-preview seeded state model reproduces an additional misleading diagnostic: replaying older content for a previously atomic-imported key can trigger the SDK journal-plan mismatch guard, while importJiraAtomic reports that all creates were deleted. SDK readback proves the tracker is unchanged. See test/create-preview-model.test.ts; this test permits only that exact refusal and verifies all native fields and relationships survive."
   "2026-11-06T16:48:57.235Z",codex-astra,"Failing-first diagnostic tests reproduce both outcomes using real SDK transactions: deliberate step_applied interruption retains one item; changed-plan replay refuses without deleting the previously committed pair. Both messages falsely assert rollback on main. Updated diagnostics distinguish resumable interruption from unconfirmed rollback, keep the transaction identity and underlying error, and leave compensation/recovery to the SDK."
   "2026-11-06T16:51:50.285Z",codex-astra,"Behavioral revert proof: restoring only the original importJiraAtomic catch diagnostic in a disposable source copy makes both real-SDK outcome tests fail (0/2 pass). Restored implementation passes both: interruption retains one item and resumes the remaining item; changed-plan refusal preserves existing items. Compensation policy is unchanged; no rollback claim is inferred from an error."
+  "2026-11-06T17:18:04.232Z",codex-astra,"Delivered in PR https://github.com/unbraind/pm-jira/pull/194. Final real-SDK diagnostic regressions pass 2/2; both complete npm and Bun release gates pass 318/318 at unchanged 100 percent line/branch/function thresholds. Existing SDK compensation and resumable journal semantics are preserved. Releasing the claim without closing; orchestrator verification and exact-head external review/CI remain required."
 files[3]{path,scope}:
   index.ts,project
   test/atomic-outcome.test.ts,project
