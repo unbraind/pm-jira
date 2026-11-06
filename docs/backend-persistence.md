@@ -50,6 +50,12 @@ history on one non-Git tracker, even after each worker changes cwd.
 
 ## Recovery reporting
 
+Empty direct atomic batches and invalid transaction identities (including blank
+authors) refuse before tracker access, without journal recovery advice. The
+SDK validates transaction identity; successful calls retain the existing item-ID
+derivation and the SDK-owned author/journal normalization for replay compatibility.
+Ordinary imports with no selected issues continue to succeed without a transaction.
+
 `WorkspaceTransactionInterruptedError` reports retained work and instructs retry
 with the same input. Other errors report that rollback is unconfirmed and retain
 the transaction ID and underlying error for journal inspection. A thrown error

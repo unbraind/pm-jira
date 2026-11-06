@@ -63,7 +63,7 @@ export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, Jql
 
 
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
-const { createPmCliExpectedError, EXIT_CODE, WorkspaceTransactionInterruptedError } = await importPmSdk();
+const { createPmCliExpectedError, EXIT_CODE, WorkspaceTransactionInterruptedError, validateWorkspaceTransactionIdentity } = await importPmSdk();
 export { EXIT_CODE };
 
 /** Create a host-recognized expected failure, retaining the package's default exit code. */
@@ -1778,6 +1778,12 @@ export async function importJiraAtomic(
   const issueKeys = filtered.map(({ issue }) => issue.key);
   const transactionId = opts.atomicTransactionId ?? deriveAtomicTransactionId(jql, issueKeys);
   const author = opts.atomicAuthor ?? "pm-jira";
+  try {
+    if (filtered.length === 0) throw new TypeError("Atomic Jira import requires at least one create.");
+    validateWorkspaceTransactionIdentity({ pmRoot: persistence.pmRoot, transactionId, author });
+  } catch (error) {
+    throw createCommandError(`Atomic Jira import validation failed: ${String(error)}`, EXIT_CODE.USAGE);
+  }
 
   // Resolve the SDK helpers once: commitItemMutations (guarded), plus the
   // synchronous normalizeItemId and async readSettings used for stable id +

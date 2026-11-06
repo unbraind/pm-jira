@@ -40,7 +40,7 @@ export { captureAdfEvidence, replayAdfEvidence } from "./adf-evidence.js";
 import { registerJqlSelectionCommand } from "./jql-selection-command.js";
 export { explainJqlSelectionChanges } from "./jql-selection.js";
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
-const { createPmCliExpectedError, EXIT_CODE, WorkspaceTransactionInterruptedError } = await importPmSdk();
+const { createPmCliExpectedError, EXIT_CODE, WorkspaceTransactionInterruptedError, validateWorkspaceTransactionIdentity } = await importPmSdk();
 export { EXIT_CODE };
 /** Create a host-recognized expected failure, retaining the package's default exit code. */
 export function createCommandError(message, exitCode = EXIT_CODE.GENERIC_FAILURE) {
@@ -1377,6 +1377,14 @@ export async function importJiraAtomic(pmRoot, jql, filtered, opts) {
     const issueKeys = filtered.map(({ issue }) => issue.key);
     const transactionId = opts.atomicTransactionId ?? deriveAtomicTransactionId(jql, issueKeys);
     const author = opts.atomicAuthor ?? "pm-jira";
+    try {
+        if (filtered.length === 0)
+            throw new TypeError("Atomic Jira import requires at least one create.");
+        validateWorkspaceTransactionIdentity({ pmRoot: persistence.pmRoot, transactionId, author });
+    }
+    catch (error) {
+        throw createCommandError(`Atomic Jira import validation failed: ${String(error)}`, EXIT_CODE.USAGE);
+    }
     // Resolve the SDK helpers once: commitItemMutations (guarded), plus the
     // synchronous normalizeItemId and async readSettings used for stable id +
     // prefix derivation. An injected commitItemMutations (tests) short-circuits

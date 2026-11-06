@@ -111,8 +111,9 @@ pm jira import --host https://company.atlassian.net --jql "project = PROJ AND as
 # Override status mapping
 pm jira import --project PROJ --status-map "QA=blocked,Done=closed"
 
-# All-or-nothing atomic import (pm-cli >= 2026.7.20): one crash-recoverable
-# transaction; rolls back (deletes) every create on failure; resumes on re-run.
+# Atomic import (pm-cli >= 2026.7.20): one crash-recoverable transaction.
+# Ordinary failures request delete compensation; rollback is not guaranteed.
+# Interruptions can retain creates; retry the same input to resume.
 pm jira import --project PROJ --atomic
 ```
 
