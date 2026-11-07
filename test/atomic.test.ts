@@ -251,10 +251,10 @@ test("atomic rollback: a failing mutation leaves ZERO committed items", async ()
       (err: unknown) => {
         assert.match(
           (err as Error).message,
-          /Atomic Jira import failed and was rolled back/,
-          "throws the rolled-back error",
+          /Atomic Jira import did not complete/,
+          "reports failure without presuming the compensation outcome",
         );
-        assert.match((err as Error).message, /compensated \(deleted\)/);
+        assert.match((err as Error).message, /rollback is not confirmed/);
         assert.strictEqual((err as PmCliExpectedError).exitCode, EXIT_CODE.GENERIC_FAILURE);
         return true;
       },

@@ -35,7 +35,6 @@ import type {
 } from "@unbrained/pm-cli/sdk/authoring";
 import https from "node:https";
 import { URL } from "node:url";
-import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 
 import type {
@@ -46,6 +45,9 @@ import type {
 } from "@unbrained/pm-cli/sdk";
 import { parseJiraOptions } from "./option-boundary.ts";
 import { importPmSdk, type PmSdkModule } from "./sdk-importer.ts";
+import { bindJiraPersistence, type JiraPersistenceTarget, type JiraPersistence } from "./persistence.ts";
+export { bindJiraPersistence, JiraPersistence } from "./persistence.ts";
+export type { JiraPersistenceTarget } from "./persistence.ts";
 import { compileJiraCreate } from "./create-preview.ts";
 import type { JiraCreateCompilation, JiraCreatePreviewResult } from "./create-preview.ts";
 import { readCreateContract, registerCreatePreviewCommand } from "./create-preview-command.ts";
@@ -61,7 +63,7 @@ export type { JqlSelectionPage, JqlVisibilityEvidence, JqlSelectionSnapshot, Jql
 
 
 /** Host-owned semantic codes and expected-error factory resolved through the supported loader. */
-const { createPmCliExpectedError, EXIT_CODE } = await importPmSdk();
+const { createPmCliExpectedError, EXIT_CODE, WorkspaceTransactionInterruptedError, validateWorkspaceTransactionIdentity } = await importPmSdk();
 export { EXIT_CODE };
 
 /** Create a host-recognized expected failure, retaining the package's default exit code. */
@@ -1529,12 +1531,9 @@ export function issueToItem(
 }
 
 /** Create one ordinary import in process; preserve per-item failure and partial-success reporting. */
-async function createPmItem(pmRoot: string, item: IssueToItem): Promise<boolean> {
+async function createPmItem(persistence: JiraPersistence, item: IssueToItem): Promise<boolean> {
   try {
-    const { PmClient } = await importPmSdk();
-    const root = resolve(pmRoot);
-    const client = new PmClient({ pmRoot: root, cwd: root });
-    await client.create({
+    await persistence.create({
       title: item.title,
       status: item.status,
       type: item.type,
@@ -1554,10 +1553,10 @@ async function createPmItem(pmRoot: string, item: IssueToItem): Promise<boolean>
 // Atomic import (pm-cli >= 2026.7.20 commitItemMutations)
 //
 // `pm jira import --atomic` commits ALL imported creates in ONE
-// all-or-nothing, crash-recoverable, workspace-writer-locked transaction via
-// the official high-level SDK helper `commitItemMutations`. On failure every
-// applied create is compensated (deleted) so the tracker keeps zero committed
-// items from the import. An interrupted run resumes on re-invocation because
+// crash-recoverable, workspace-writer-locked transaction via the official
+// high-level SDK helper `commitItemMutations`. Ordinary failures request delete
+// compensation; an error alone cannot prove that compensation completed.
+// An interrupted run resumes on re-invocation because
 // the transaction id and per-create ids are derived deterministically from
 // the imported content (same issues => same ids => resume, never duplicate).
 // ---------------------------------------------------------------------------
@@ -1761,22 +1760,30 @@ export function buildAtomicCreateMutation(
 
 /**
  * Commit every imported create in one atomic, crash-recoverable transaction
- * via the official `commitItemMutations` SDK helper. On failure every applied
- * create is compensated (deleted) so no committed items remain, and a clear
- * {@link createCommandError} is thrown. Returns the count of items committed by
+ * via the official `commitItemMutations` SDK helper. Failures request delete
+ * compensation; interruptions retain applied work for recovery. Diagnostics
+ * never infer successful rollback from an exception alone. Returns the count
+ * of items committed by
  * this attempt (already-applied steps from a prior interrupted run are
  * resumed, not double-counted). Throws createCommandError (USAGE) when the SDK
  * cannot be resolved.
  */
 export async function importJiraAtomic(
-  pmRoot: string,
+  pmRoot: JiraPersistenceTarget,
   jql: string,
   filtered: readonly { issue: JiraIssue; item: IssueToItem }[],
   opts: ImportRunOptions,
 ): Promise<{ created: number; recovered: boolean; transactionId: string }> {
+  const persistence = bindJiraPersistence(pmRoot);
   const issueKeys = filtered.map(({ issue }) => issue.key);
   const transactionId = opts.atomicTransactionId ?? deriveAtomicTransactionId(jql, issueKeys);
   const author = opts.atomicAuthor ?? "pm-jira";
+  try {
+    if (filtered.length === 0) throw new TypeError("Atomic Jira import requires at least one create.");
+    validateWorkspaceTransactionIdentity({ pmRoot: persistence.pmRoot, transactionId, author });
+  } catch (error) {
+    throw createCommandError(`Atomic Jira import validation failed: ${String(error)}`, EXIT_CODE.USAGE);
+  }
 
   // Resolve the SDK helpers once: commitItemMutations (guarded), plus the
   // synchronous normalizeItemId and async readSettings used for stable id +
@@ -1796,16 +1803,15 @@ export async function importJiraAtomic(
       (await getSdk()).normalizeItemId,
       "normalizeItemId",
     );
-  const readSettings: (pmRoot: string) => Promise<{ id_prefix?: string }> =
-    opts.readSettings ??
-    assertSdkFunction<(pmRoot: string) => Promise<{ id_prefix?: string }>>(
-      (await getSdk()).readSettings,
-      "readSettings",
-    );
+  // Preserve the existing fail-fast SDK capability guard before the settings fallback.
+  if (!opts.readSettings) assertSdkFunction((await getSdk()).readSettings, "readSettings");
+  const readSettings = opts.readSettings
+    ? () => opts.readSettings!(persistence.pmRoot)
+    : () => persistence.readSettings();
 
   let idPrefix = "pm-";
   try {
-    const settings = await readSettings(pmRoot);
+    const settings = await readSettings();
     if (settings?.id_prefix) idPrefix = settings.id_prefix.toString();
   } catch {
     // Settings unreadable: fall back to the default prefix so the atomic path
@@ -1818,19 +1824,19 @@ export async function importJiraAtomic(
 
   let result: CommitItemMutationsResult;
   try {
-    result = await commit({
-      pmRoot,
+    result = await persistence.commit({
       transactionId,
       author,
       mutations,
       createCompensation: "delete",
-    });
+    }, commit);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Every applied create has been compensated (deleted) by the helper; no
-    // committed items from this import remain in the tracker.
+    const outcome = err instanceof WorkspaceTransactionInterruptedError
+      ? "was interrupted; applied creates may remain. Retry the same input to resume"
+      : "did not complete; rollback is not confirmed. Inspect the SDK transaction journal before retrying";
     throw createCommandError(
-      `Atomic Jira import failed and was rolled back — every applied create was compensated (deleted); the tracker has no committed items from this import. Transaction id: ${transactionId}. Underlying error: ${msg}`,
+      `Atomic Jira import ${outcome}. Transaction id: ${transactionId}. Underlying error: ${msg}`,
       EXIT_CODE.GENERIC_FAILURE,
     );
   }
@@ -1948,13 +1954,13 @@ export interface ImportRunOptions {
  * Sequential mode retains its per-item error reporting and partial success.
  *
  * @param options - CLI/importer options, with credentials read from the environment.
- * @param pmRoot - Destination PM tracker, used only after fetching and mapping.
+ * @param pmRoot - Destination path or binding, pinned before fetching and read after mapping.
  * @param opts - Import controls and explicitly injected test dependencies.
  * @returns The dry-run request or import counts and optional transaction receipt.
  */
 export async function runImport(
   options: Record<string, unknown>,
-  pmRoot: string,
+  pmRoot: JiraPersistenceTarget,
   opts: ImportRunOptions = {}
 ) {
   options = parseJiraOptions(options);
@@ -2004,6 +2010,8 @@ export async function runImport(
       ...(statusFilter.pmStatus ? { pmStatusFilter: statusFilter.pmStatus } : {}),
     };
   }
+
+  const persistence = bindJiraPersistence(pmRoot);
 
   // Live import: resolve creds now (throws a structured createCommandError if any are
   // missing). The preflight gate normally aborts earlier with a clearer message,
@@ -2097,14 +2105,14 @@ export async function runImport(
     console.error(`Filtered to ${filtered.length} issues with pm status "${statusFilter.pmStatus}"`);
   }
 
-  const existing = await existingJiraUrls(pmRoot);
+  const existing = await existingJiraUrls(persistence);
   let pending = filtered.filter(({ item }) => !existing.has(item.jiraUrl));
   let transactionId: string | undefined;
   if (atomic && filtered.length > 0) {
     const originalTransactionId = deriveAtomicTransactionId(jql, filtered.map(({ issue }) => issue.key));
     transactionId = originalTransactionId;
     const sdk = await importPmSdk();
-    const settings = await sdk.readSettings(pmRoot);
+    const settings = await persistence.readSettings();
     // Retain this transaction's own applied steps so the SDK can recover its
     // original plan after interruption. Other imported identities stay skipped.
     pending = filtered.filter(({ issue, item }) => {
@@ -2115,12 +2123,12 @@ export async function runImport(
   let created = 0;
   let atomicTransactionId: string | undefined;
   if (atomic && pending.length > 0) {
-    // --atomic: commit ALL creates in one all-or-nothing, crash-recoverable
-    // transaction via the official commitItemMutations SDK helper. On
-    // failure every applied create is compensated (deleted); an interrupted
+    // --atomic: commit ALL creates in one crash-recoverable transaction via
+    // the official commitItemMutations SDK helper, requesting delete
+    // compensation on ordinary failure; an interrupted
     // run resumes on re-invocation. The dry-run path returns earlier above, so
     // no transaction is committed for a dry-run or an empty result set.
-    const atomicResult = await importJiraAtomic(pmRoot, jql, pending, { ...opts, atomicTransactionId: transactionId });
+    const atomicResult = await importJiraAtomic(persistence, jql, pending, { ...opts, atomicTransactionId: transactionId });
     created = Math.max(0, atomicResult.created - pending.filter(({ item }) => existing.has(item.jiraUrl)).length);
     atomicTransactionId = atomicResult.transactionId;
     if (atomicResult.recovered) {
@@ -2130,7 +2138,7 @@ export async function runImport(
     }
   } else {
     for (const { issue, item } of pending) {
-      if (await createPmItem(pmRoot, item)) created++;
+      if (await createPmItem(persistence, item)) created++;
       else console.error(`Failed to create item for ${issue.key}`);
     }
   }
@@ -2231,12 +2239,10 @@ export async function certifyPmItems(candidate: unknown): Promise<PmItem[]> {
  * @param pmRoot - Explicit tracker root supplied by the host.
  * @returns Certified item rows with bodies and all lifecycle states.
  */
-export async function readPmItems(pmRoot: string): Promise<PmItem[]> {
+export async function readPmItems(pmRoot: JiraPersistenceTarget): Promise<PmItem[]> {
   let candidate: unknown;
   try {
-    const sdk = await importPmSdk();
-    const root = resolve(pmRoot);
-    candidate = await sdk.listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true });
+    candidate = await bindJiraPersistence(pmRoot).readComplete();
   } catch (error) {
     throw createCommandError(`Cannot read complete local items: ${String(error)} ${COMPLETE_READ_RECOVERY}`);
   }
@@ -2250,7 +2256,7 @@ export async function readPmItems(pmRoot: string): Promise<PmItem[]> {
  * @param pmRoot - Tracker whose complete corpus must be certified first.
  * @returns Existing Jira identities and their IDs, including recoverable atomic steps.
  */
-async function existingJiraUrls(pmRoot: string): Promise<Map<string, Set<string>>> {
+async function existingJiraUrls(pmRoot: JiraPersistenceTarget): Promise<Map<string, Set<string>>> {
   const items = await readPmItems(pmRoot);
   const urls = new Map<string, Set<string>>();
   for (const item of items) {
@@ -2614,7 +2620,7 @@ const PULL_FLAGS = [
   { long: "--map", value_name: "pairs", description: 'Override field mapping, e.g. "issuetype=Task,assignee=skip". Alias: --field-map.' },
   { long: "--field-map", value_name: "pairs", description: 'Alias for --map (override field mapping, e.g. "issuetype=Task,assignee=skip").' },
   { long: "--dry-run", description: "Preview the JQL + request without any network call" },
-  { long: "--atomic", description: "Import all creates atomically under one workspace writer-locked, crash-recoverable transaction (pm-cli >=2026.7.20). On failure every applied create is compensated (deleted); interrupted runs resume" },
+  { long: "--atomic", description: "Import all creates atomically under one workspace writer-locked, crash-recoverable transaction (pm-cli >=2026.7.20). Requests delete compensation on ordinary failure; interrupted runs retain work and resume" },
 ];
 
 const EXPORT_FLAGS = [
@@ -2755,6 +2761,7 @@ export default defineExtension({
     // Credentials may arrive via options (importer config) or env.
     // -----------------------------------------------------------------------
     api.registerImporter("jira-sync", async (ctx: ImportExportContext) => {
+      const persistence = bindJiraPersistence(ctx.pm_root);
       const options = optionsOrEmpty(ctx.options);
       // Merge importer-config creds into a virtual env so resolveCreds can read
       // them uniformly without leaking secrets into process.env.
@@ -2798,12 +2805,12 @@ export default defineExtension({
         );
       }
 
-      const existing = await existingJiraUrls(ctx.pm_root);
+      const existing = await existingJiraUrls(persistence);
       let created = 0;
       for (const issue of issues) {
         const item = issueToItem(issue, creds.baseUrl, { statusMap, fieldMap });
         if (existing.has(item.jiraUrl)) continue;
-        if (await createPmItem(ctx.pm_root, item)) {
+        if (await createPmItem(persistence, item)) {
           created++;
           existing.set(item.jiraUrl, new Set());
         }

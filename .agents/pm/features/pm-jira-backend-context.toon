@@ -1,0 +1,27 @@
+id: pm-jira-backend-context
+title: Bind Jira persistence operations to one SDK context
+description: Deliver the filesystem SDK context slice of roadmap issue #164; inventory native backend requirements and track conformance follow-ups without claiming backend parity.
+type: Feature
+status: in_progress
+priority: 2
+tags[1]: "gh:unbraind/pm-jira#164"
+created_at: "2026-11-06T16:43:08.190Z"
+updated_at: "2026-11-06T21:20:01.942Z"
+author: codex-astra
+comments[6]{created_at,author,text}:
+  "2026-11-06T16:43:15.851Z",codex-astra,"Main e6ce396 includes SDK ordinary creates from PR #165 (84d1cde), but certified reads, settings, normalization and recoverable transactions remain independently root-bound. Pinned SDK 2026.11.4 is retained; registry reports 2026.11.6. Investigating a single bound filesystem context and explicit capability/fidelity documentation. Existing interruption diagnostic item pm-jira-d3tp and replay identity item pm-jira-atomic-replay-revisions remain canonical."
+  "2026-11-06T16:45:49.182Z",codex-astra,"Failing-first reproduction at main e6ce396: node --test --test-concurrency=2 test/persistence-context.test.ts fails all 3 tests. A relative tracker path is resolved after an await; changing cwd in the meantime reads or writes a second tracker with the same relative name. The bound filesystem context now pins identity synchronously and keeps reads, settings, ordinary creates and atomic commits on the intended root. Native adapter selection is absent from PmClientOptions (only pmRoot/cwd/author/noExtensions); commitItemMutations and commitWorkspaceTransaction require pmRoot. Searched installed SDK declarations and open upstream backend issues #1399/#1587/#1588/#1589."
+  "2026-11-06T16:51:48.139Z",codex-astra,"Behavioral revert proof in disposable source copies: changing only JiraPersistence constructor binding from resolve(pmRoot) back to pmRoot makes all 4 binding tests fail, including two real OS writers on one no-git tracker. Fixed tree passes 10/10 combined binding, recovery-outcome and prior SDK adoption tests. Linked pm test passes 8/8 binding/adoption tests. Native backend work is split into child Features pm-jira-native-backend-context and pm-jira-native-backend-conformance with acceptance criteria; #164 remains Refs."
+  "2026-11-06T17:08:26.667Z",codex-astra,"Final source self-review preserves the existing readSettings function-availability guard before fallback. Rebuilt focused suite passes 10/10; base-build differential passes all 10 comparisons across 114 baseline public items. Typecheck, test typecheck and docstring gate pass (21 files, 108 declarations). CI-equivalent pinned project extension setup gives strict pm health with zero warnings. Initial npm release gate passed 318/318 with 100 percent lines/branches/functions across 10 sources; the overlapping Bun coverage run was invalidated by a source edit despite all 318 tests passing, so both gates are rerunning serially on frozen source before final handoff."
+  "2026-11-06T17:18:02.414Z",codex-astra,"PR https://github.com/unbraind/pm-jira/pull/194 source head 357b740: frozen-source npm run release:check AND bun run release:check both pass, each 318 tests with zero failures/skips and 100 percent lines, branches and functions across 10 sources. Both ran with isolated HOME and disabled global/system Git configuration, unchanged thresholds. Final targeted tests pass 10/10; baseline differential passes 10/10 comparisons; strict pm health passes with zero warnings using the CI-pinned project extension. The initial invalidated Bun coverage result is superseded by this clean rerun. CodeRabbit automatic review was skipped and the explicit queue is still pending; this is missing approval. Node 26 CI advanced through its full gates, Node 22 was queued at last inspection. This tracker-only handoff push will require fresh exact-head CI and review. Native backend support remains the two child Features; issue #164 stays open."
+  "2026-11-06T21:19:58.465Z",codex-astra,"Resumed PR #194 at source 62828da, with green CI and two CodeRabbit findings. Both are valid and fixed under canonical diagnostic item pm-jira-d3tp: truthful pre-commit refusals and the remaining README rollback example. No outside-diff or nitpick findings were present in the full CodeRabbit review body. Focused recovery suite passes 5/5 with a 3-case behavioral revert proof; dependency pins and successful-input ID derivation remain unchanged. This push will be queued for review immediately and requires new CI evidence. Native backend Features remain open; Refs #164 remains correct."
+files[4]{path,scope}:
+  index.ts,project
+  persistence.ts,project
+  test/fixtures/persistence-worker.ts,project
+  test/persistence-context.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 test/persistence-context.test.ts test/sdk-adoption.test.ts,project,codex-astra,"2026-11-06T16:51:10.608Z",local_mutation,backend-bound-sdk-persistence
+docs[1]{path,scope}:
+  docs/backend-persistence.md,project
+body: ""
