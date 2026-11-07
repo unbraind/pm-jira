@@ -2652,7 +2652,7 @@ const defineExtension = <TModule extends ExtensionModule>(module: TModule): TMod
 
 export default defineExtension({
   name: "pm-jira",
-  version: "2026.11.5",
+  version: "2026.11.7",
 
   activate(api: ExtensionApi) {
     registerJqlSelectionCommand(api);
