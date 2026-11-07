@@ -1,6 +1,6 @@
 {
   "name": "pm-jira",
-  "version": "2026.11.5",
+  "version": "2026.11.7",
   "description": "Jira issue sync for pm-cli",
   "repository": {
     "type": "git",
