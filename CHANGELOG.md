@@ -1,12 +1,18 @@
 # Changelog
 
+## Unreleased
+
+No changes.
+
 ## 2026.11.7 - 2026-11-07
 
 No changes.
 
 ## 2026.11.5 - 2026-11-05
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#191](https://github.com/unbraind/pm-jira/pull/191))
 
 ## 2026.11.3 - 2026-11-03
 
