@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2026.11.11 - 2026-11-11
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 2 updates ([#200](https://github.com/unbraind/pm-jira/pull/200))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#198](https://github.com/unbraind/pm-jira/pull/198))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#197](https://github.com/unbraind/pm-jira/pull/197))
+- Bump the codeql-action group across 1 directory with 2 updates ([#196](https://github.com/unbraind/pm-jira/pull/196))
+- Bump the pm-toolchain group with 3 updates ([#199](https://github.com/unbraind/pm-jira/pull/199))
 
 ## 2026.11.7 - 2026-11-07
 
