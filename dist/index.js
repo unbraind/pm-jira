@@ -1989,7 +1989,7 @@ const VALIDATE_FLAGS = [
 const defineExtension = (module) => module;
 export default defineExtension({
     name: "pm-jira",
-    version: "2026.11.7",
+    version: "2026.11.11",
     activate(api) {
         registerJqlSelectionCommand(api);
         registerCreatePreviewCommand(api);
