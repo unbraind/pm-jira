@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2026.11.12 - 2026-11-12
 
-No changes.
+### Dependencies
+
+- Bump @unbrained/pm-cli ([#204](https://github.com/unbraind/pm-jira/pull/204))
+- Bump @unbrained/pm-cli from 2026.11.7 to 2026.11.8 in the pm-toolchain group ([#202](https://github.com/unbraind/pm-jira/pull/202))
 
 ## 2026.11.11 - 2026-11-11
 
