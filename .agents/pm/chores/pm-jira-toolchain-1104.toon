@@ -2,11 +2,13 @@ id: pm-jira-toolchain-1104
 title: Migrate ADF capture fixtures to literal typed SDK fields
 description: "Verify issue #192 on pm-cli 2026.11.4 and certify the newest pm toolchain for https://github.com/unbraind/pm-jira/pull/191"
 type: Chore
-status: in_progress
+status: closed
 priority: 2
 tags[5]: dependencies,"gh:unbraind/pm-jira#191","gh:unbraind/pm-jira#192",migration,sdk
 created_at: "2026-11-04T19:04:03.390Z"
-updated_at: "2026-11-04T20:40:22.975Z"
+updated_at: "2026-11-14T08:54:30.158Z"
+closed_at: "2026-11-14T08:54:30.050Z"
+completed_at: "2026-11-14T08:54:30.050Z"
 author: codex-toolchain-1104
 acceptance_criteria: "Reproduce installed ADF fixture refusal, preserve every native state and capture assertion, pass full coverage and typecheck, update secondary toolchain pins."
 comments[6]{created_at,author,text}:
@@ -28,4 +30,5 @@ tests[2]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,
 docs[2]{path,scope}:
   CHANGELOG.md,project
   docs/adf-evidence-validation.md,project
+close_reason: "https://github.com/unbraind/pm-jira/pull/191 merged 2026-11-04T23:38:45Z; merge SHA 41aaa8c5ed7430aff4eb9721967ff2ff8534247d; PR head e1aee74e2c925b5a969b9995b2dab61b893b6499. Delivered: Typed ADF capture fixtures and toolchain pins preserve native-state/capture assertions with full coverage, packed consumers and Node 22/26 acceptance. Green at that head: test (22), codeql, enable-auto-merge, test (26), CodeQL, DeepScan, Hound, Sourcery review. Other check outcomes: CodeRabbit: SKIPPED (not counted as green)."
 body: ""

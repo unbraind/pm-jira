@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Distinguish resumable atomic interruption from compensated import failure ([pm-jira-d3tp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-d3tp.toon))
+
+### Other
+
+- Migrate ADF capture fixtures to literal typed SDK fields ([pm-jira-toolchain-1104](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-toolchain-1104.toon))
+
 ## 2026.11.13 - 2026-11-13
 
 ### Dependencies
