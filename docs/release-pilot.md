@@ -52,6 +52,8 @@ tracked centrally by `ops-release-diagnosis-propagation`. Both pilot PR URLs and
 final validation receipts are recorded in the package pilot items. No additional
 pm-ops code/tracker PR or push to #275 is part of this continuation.
 
+Draft pilot PRs: [pm-lint #85](https://github.com/unbraind/pm-lint/pull/85) and [pm-jira #209](https://github.com/unbraind/pm-jira/pull/209). Neither is merged or activated.
+
 After pm-lint and pm-jira, the remaining 34 authorized packages are:
 
 pm-ado, pm-beads, pm-brand, pm-brief, pm-case, pm-changelog, pm-context, pm-csv, pm-evidence, pm-gantt-chart, pm-github, pm-glossary, pm-graph, pm-http, pm-hypothesis, pm-jev, pm-linear, pm-memory, pm-presets, pm-reduce, pm-review, pm-rl, pm-rlm, pm-rust, pm-screen, pm-slack, pm-slack-standup, pm-starter, pm-swarm, pm-todos, pm-ts-starter, pm-unit, pm-vcs, pm-web.
