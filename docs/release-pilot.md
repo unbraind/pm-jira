@@ -33,14 +33,14 @@ No merge, release dispatch or publication is performed by the pilot PR.
 
 ## Pre-merge prerequisite and validation
 
-The installed pm-ops 2026.11.6 validator rejects the caller's required
-`checks: read` permission. The released canonical checker verifies this caller,
-but the package's attestation gate remains blocked until a compatible validator
-dependency lands. The dependency pin is retained under Dependabot ownership;
-permissions and attestation checks are not weakened. Full npm/Bun certification
-therefore remains outstanding.
+The orchestrator authorized the exact pm-ops devDependency update to 2026.11.14.
+The installed released validator now accepts this caller, including its required
+`checks: read` permission, without weakening permissions or attestation checks.
+package-lock.json records the same version; no Bun lockfile is present.
+Full npm/Bun certification remains with CI; no full local pass is claimed.
 
-Focused workflow tests pass 6/6. A real empty tracker and dependency-only Git
+Focused workflow, attestation and changelog-date contracts pass 35/35, including
+6/6 caller contracts. A real empty tracker and dependency-only Git
 window using the actual pinned pm-changelog 2026.11.10 and package hooks passes
 generation, notes, pre-tag checking and post-tag checking. Both pilots' actionlint,
 strict YAML parsing, canonical tag verification and changelog checks pass.
@@ -52,7 +52,7 @@ tracked centrally by `ops-release-diagnosis-propagation`. Both pilot PR URLs and
 final validation receipts are recorded in the package pilot items. No additional
 pm-ops code/tracker PR or push to #275 is part of this continuation.
 
-Draft pilot PRs: [pm-lint #85](https://github.com/unbraind/pm-lint/pull/85) and [pm-jira #209](https://github.com/unbraind/pm-jira/pull/209). Neither is merged or activated.
+Pilot PRs: [pm-jira #209](https://github.com/unbraind/pm-jira/pull/209) goes first for review and orchestrator activation; [pm-lint #85](https://github.com/unbraind/pm-lint/pull/85) remains a draft until pm-changelog #337 is fixed and released. Neither is merged or activated by this work.
 
 After pm-lint and pm-jira, the remaining 34 authorized packages are:
 
