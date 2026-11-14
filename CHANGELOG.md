@@ -8,6 +8,7 @@
 
 ### Other
 
+- Close delivered pm items and reserve in progress for active work (2026-10-24) ([pm-jira-cjh2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-cjh2.toon))
 - Migrate ADF capture fixtures to literal typed SDK fields ([pm-jira-toolchain-1104](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-toolchain-1104.toon))
 
 ## 2026.11.13 - 2026-11-13
