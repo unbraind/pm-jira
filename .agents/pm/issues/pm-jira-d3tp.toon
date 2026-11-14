@@ -6,11 +6,12 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-10-07T12:04:04.395Z"
-updated_at: "2026-11-14T08:54:23.881Z"
+updated_at: "2026-11-14T10:09:50.802Z"
 closed_at: "2026-11-14T08:54:23.810Z"
-completed_at: "2026-11-14T08:54:23.810Z"
+completed_at: "2026-11-07T00:49:46.000Z"
 author: codex-sol
-comments[7]{created_at,author,text}:
+release: 2026.11.7
+comments[8]{created_at,author,text}:
   "2026-10-07T12:06:45.843Z",codex-sol,"Deferred diagnostic fix. The real WorkspaceTransactionInterruptedError fixture leaves one applied item and a resumable journal, while importJiraAtomic reports compensation. The complete-read change preserves recovery and verifies that retry creates the remaining two items; the misleading interruption message remains separate work."
   "2026-10-25T23:23:19.316Z",codex-agent,"The create-preview seeded state model reproduces an additional misleading diagnostic: replaying older content for a previously atomic-imported key can trigger the SDK journal-plan mismatch guard, while importJiraAtomic reports that all creates were deleted. SDK readback proves the tracker is unchanged. See test/create-preview-model.test.ts; this test permits only that exact refusal and verifies all native fields and relationships survive."
   "2026-11-06T16:48:57.235Z",codex-astra,"Failing-first diagnostic tests reproduce both outcomes using real SDK transactions: deliberate step_applied interruption retains one item; changed-plan replay refuses without deleting the previously committed pair. Both messages falsely assert rollback on main. Updated diagnostics distinguish resumable interruption from unconfirmed rollback, keep the transaction identity and underlying error, and leave compensation/recovery to the SDK."
@@ -18,6 +19,7 @@ comments[7]{created_at,author,text}:
   "2026-11-06T17:18:04.232Z",codex-astra,"Delivered in PR https://github.com/unbraind/pm-jira/pull/194. Final real-SDK diagnostic regressions pass 2/2; both complete npm and Bun release gates pass 318/318 at unchanged 100 percent line/branch/function thresholds. Existing SDK compensation and resumable journal semantics are preserved. Releasing the claim without closing; orchestrator verification and exact-head external review/CI remain required."
   "2026-11-06T21:11:02.599Z",codex-astra,"Resumed PR #194 after CodeRabbit reviewed source 62828da. Two valid findings: pre-commit refusals for empty atomic batches or blank authors incorrectly suggest inspecting a journal that was never created; README atomic example still promises deletion on every failure. Existing CI is green. Will reproduce against real SDK trackers, preserve SDK-owned validation and normalization, correct both diagnostics and documentation, and prove the runtime correction fails on revert."
   "2026-11-06T21:19:56.750Z",codex-astra,"CodeRabbit round 1 findings are fixed: PRRT_kwDOSYpLFc60ruKm now validates nonempty batches and SDK transaction identity before tracker access, returning USAGE validation diagnostics without journal/rollback guidance; PRRT_kwDOSYpLFc60ruKs corrects the README atomic example. Real-SDK test/atomic-outcome.test.ts passes 5/5, including three refusal cases with unchanged tracker files and allow/replay checks for valid padded controls and Unicode authors. Existing item-ID derivation is retained for journal compatibility. Reverting only the guard in a disposable source copy makes all three new cases fail while the two prior recovery cases still pass (2 pass, 3 fail). The pinned SDK and declared minimum remain unchanged; validateWorkspaceTransactionIdentity is exported by both root declarations and runtime at minimum 2026.10.4. Typecheck, test typecheck, docstring gate and whitespace checks pass. Full npm/Bun and CI checks will run on the fix head."
+  "2026-11-14T10:09:50.802Z",codex-sweep-1114,"Release-attribution correction: completed_at = 2026-11-07T00:49:46Z from https://github.com/unbraind/pm-jira/pull/194 (merge SHA 486d2b0be71b41a52dce2a44ec80c3716230baf1); first containing release tag v2026.11.07, recorded release 2026.11.7."
 files[4]{path,scope}:
   index.ts,project
   README.md,project
