@@ -71,3 +71,9 @@ were 1m10s/1m39s and Bun repetitions 1m08s/1m36s. The slowest reference-model
 property took about 34s. Full depth is deferred to deep CI after merge. Local
 quick proof and the PR CI snapshot are recorded in the tracker and PR; no CI
 wait is part of this rollout.
+
+Local quick proof: 319 tests passed; all 10 inventoried source files reported
+100% lines/branches/functions. Complete coverage command 6m49.07s, suite
+6m25.52s. Touched suites passed 29/29 in 28.22s; final generated diagnostic
+suites passed 14/14. These host timings are not a same-hardware quick/full
+comparison. Strict health passed with three existing stale-item advisories.

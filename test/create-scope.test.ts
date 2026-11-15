@@ -149,5 +149,5 @@ console.log('packed scope refused');`);
   }
   assert.equal(calls.length, prior);
   assert.deepEqual((await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true })).items, before);
-  t.diagnostic("512 mismatched targets refused with zero HTTP; 512 matching digest-equal POSTs; 90 whole-layer cases; registered SDK, packed Node/Bun and installed JSON/TOON refusal paths; SDK state unchanged");
+  t.diagnostic(`${testDepth(512)} mismatched targets refused with zero HTTP; ${testDepth(512)} matching digest-equal POSTs; 90 whole-layer cases; registered SDK, packed Node/Bun and installed JSON/TOON refusal paths; SDK state unchanged`);
 });

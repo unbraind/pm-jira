@@ -209,7 +209,7 @@ test("packet reader rejects corrupt/foreign records before replay, including val
   const restored = replayAdfEvidence(preview(empty)); assert.equal(restored.kind, "replayed");
 });
 
-test("seed 0xadf1029: 500 operation sequences preserve producer/validator agreement, order and exact text", () => {
+test("seed 0xadf1029: seeded operation sequences preserve producer/validator agreement, order and exact text", () => {
   let seed = 0xadf1029;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
   for (let sequence = 0; sequence < testDepth(500); sequence++) {

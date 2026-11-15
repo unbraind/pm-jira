@@ -191,5 +191,5 @@ test("seed 0x454d5054: MUST-ALLOW optional empties and MUST-REFUSE required empt
   assert.equal(allowed, testDepth(512) * 2); assert.equal(refusedRequired, testDepth(512)); assert.equal(refusedOptions, testDepth(512));
   assert.ok(posts.every(post => post.accepted)); assert.ok(methods.every(method => method === "POST"));
   assert.deepEqual(await readback(), before);
-  t.diagnostic(`512 seeded metadata sequences; ${allowed} MUST-ALLOW POSTs plus fixed optional labels; ${refusedRequired} required-empty and ${refusedOptions} CLI-blank MUST-REFUSE cases; all posted bodies schema-accepted; SDK state unchanged`);
+  t.diagnostic(`${testDepth(512)} seeded metadata sequences; ${allowed} MUST-ALLOW POSTs plus fixed optional labels; ${refusedRequired} required-empty and ${refusedOptions} CLI-blank MUST-REFUSE cases; all posted bodies schema-accepted; SDK state unchanged`);
 });
