@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 /** Bound persistence regressions using real SDK trackers outside Git. */
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
@@ -60,7 +61,7 @@ for (const atomic of [false, true]) test(`imports keep reads, settings and write
 });
 
 
-test("reusable bindings are immutable and separate processes preserve shared tracker writes", { timeout: 60000 }, async t => {
+test("reusable bindings are immutable and separate processes preserve shared tracker writes", { timeout: testTime(60000) }, async t => {
   const root = await trackers();
   t.after(() => rm(root, { recursive: true, force: true }));
   const target = bindJiraPersistence(join(root, "first", "tracker"));

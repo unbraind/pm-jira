@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Seeded agreement law for final create bodies, precedence, references and fail-closed exports. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -81,7 +82,7 @@ test("seed 0x424f4459: ready preview equals exact POST digest; refused preview e
   let seed = 0x424f4459;
   const next = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
   const coverage = new Set<string>(); let ready = 0; let refused = 0;
-  for (let sequence = 0; sequence < 512; sequence++) {
+  for (let sequence = 0; sequence < testDepth(512); sequence++) {
     const input = base(); input.metadata.revision = `law-${sequence}`;
     input.answers.summary = "Explicit title";
     input.generatedFields = { summary: "Generated title", customfield_text: "Generated" };
@@ -145,7 +146,7 @@ test("seed 0x424f4459: ready preview equals exact POST digest; refused preview e
     assert.equal(calls.length, callsBefore); refused++;
   }
   assert.equal(coverage.size, 26); assert.deepEqual(await readback(), before);
-  t.diagnostic(`512 sequences: ${ready} ready/digest-equal schema-accepted POSTs plus fixed rich priority; ${refused} same-reason refusals with zero HTTP; 26 schema/role/reference cells`);
+  t.diagnostic(`${testDepth(512)} sequences: ${ready} ready/digest-equal schema-accepted POSTs plus fixed rich priority; ${refused} same-reason refusals with zero HTTP; 26 schema/role/reference cells`);
 });
 
 /** Boundary extremes include source JSON, schema reference restrictions, exact alias matching and scope. */

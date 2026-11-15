@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Seeded model-based state preservation across create previews and existing import/export paths. */
 import https from "node:https";
 import { once } from "node:events";
@@ -28,7 +29,7 @@ async function state(root: string, excludeClocks = true) {
   })).sort((a, b) => a.id.localeCompare(b.id));
 }
 
-test("seed 0x4a495241: 500 random operation sequences compare SDK readback with a separate SDK reference tracker", async t => {
+test("seed 0x4a495241: seeded operation sequences compare SDK readback with a separate SDK reference tracker", async t => {
   const base = await mkdtemp(join(tmpdir(), "create-model-")); t.after(() => rm(base, { recursive: true, force: true }));
   const roots = [join(base, "actual"), join(base, "reference")];
   const cli = resolve("node_modules/@unbrained/pm-cli/dist/cli.js");
@@ -106,7 +107,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
     assignee: { displayName: "Fixture", emailAddress: "fixture@example.invalid" }, attachment: [{}], comment: { total: 1 },
   } }));
   let posts = 0; let refusedReplays = 0;
-  for (let sequence = 0; sequence < 500; sequence++) {
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     const index = rand() % nativeIds.length; const id = nativeIds[index]!;
     // Each sequence has an edit, older-input replay, export and guarded create preview.
     const options = { title: `Native ${sequence} ${rand()}`, body: `  body ${rand()}\r\nline\n `,
@@ -168,7 +169,7 @@ test("seed 0x4a495241: 500 random operation sequences compare SDK readback with 
     assert.deepEqual(await state(roots[0]!), await state(roots[1]!), `sequence ${sequence}: SDK reference model`);
   }
   assert.equal(posts, 0);
-  t.diagnostic(`500 sequences, 2000 native operations plus 2000 evidence operations, ${refusedReplays} safely refused older atomic replays`);
+  t.diagnostic(`${testDepth(500)} sequences, ${testDepth(500) * 4} native operations plus ${testDepth(500) * 4} evidence operations, ${refusedReplays} safely refused older atomic replays`);
   assert.ok(refusedReplays > 0);
   assert.equal(visited.size, 8, "all import/sync entrypoints and atomic selections were exercised");
 });
