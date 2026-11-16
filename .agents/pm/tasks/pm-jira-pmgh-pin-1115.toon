@@ -1,0 +1,22 @@
+id: pm-jira-pmgh-pin-1115
+title: Verify the pm-github 2026.11.15 caller pins and review concerns
+description: ""
+type: Task
+status: in_progress
+priority: 2
+tags[1]: "gh:unbraind/pm-jira#212"
+created_at: "2026-11-16T12:12:10.218Z"
+updated_at: "2026-11-16T12:23:26.358Z"
+assignee: codex-sol
+claim_principal: codex-sol
+author: codex-sol
+comments[2]{created_at,author,text}:
+  "2026-11-16T12:12:22.062Z",codex-sol,"Merged current main and retained both caller pins. No failing checks at the inspected PR head. Thread PRRT_kwDOSYpLFc63oZTO is a valid conditional concern: GITHUB_TOKEN merges do not start push workflows. Current read-only APIs show allow_auto_merge=true, required checks strict=false and no applicable branch rules. Both pinned callees refuse auto-merge unless required checks enforce freshness (sync lines 770-785; closeout lines 738-753), so it is currently unarmed. Refuse credential or repository-setting changes forbidden by this task, and do not disable CI dispatch with empty ci-workflows. Record the caveat without claiming the future token behavior is solved."
+  "2026-11-16T12:23:26.337Z",codex-sol,"Read-only GraphQL confirms requiresStatusChecks=true and requiresStrictStatusChecks=false; applicable branch rules list is empty. This corroborates the current auto-merge refusal guard for the unresolved review thread. Exact caller-contract test, typecheck and tracker validation pass. The repository defines no npm lint script. Retried dependency-gated commands only after npm ci completed; quick npm suite remains running."
+files[3]{path,scope}:
+  .github/workflows/pm-github-closeout.yml,project
+  .github/workflows/pm-github-sync.yml,project
+  test/pm-github-callers.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/pm-github-callers.test.ts,project,codex-sol,"2026-11-16T12:13:45.664Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
+body: ""
