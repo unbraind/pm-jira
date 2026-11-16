@@ -1,0 +1,35 @@
+id: pm-jira-ci-v2
+title: Split quick PR checks from exhaustive local CI
+description: "Apply Fleet CI v2; companion pm-cli-website-dyhg. Preserve required checks and all original gate contracts, full defaults and unchanged coverage thresholds."
+type: Task
+status: in_progress
+priority: 2
+tags[2]: ci,performance
+created_at: "2026-11-15T16:06:08.564Z"
+updated_at: "2026-11-15T16:16:48.452Z"
+author: codex-sol
+comments[4]{created_at,author,text}:
+  "2026-11-15T16:07:36.325Z",codex-sol,"Only test (22) and test (26) are required; CodeQL gets the requested docs/tracker/lockfile filters and keeps its weekly schedule. Retain explicit project extension installation for strict health and SDK adoption differential on code PR Node 26/deep. Main run 43638869967: wall 493s/488s for Node 22/26, full npm gates 70s/99s and repeated Bun gates 68s/96s. Slowest model sequence ~34s. No lint script exists. Docs path retains identity audit, doc-consuming suites, pack dry-run and both release verifiers; no verifier/release file is edited."
+  "2026-11-15T16:08:33.252Z",codex-sol,"Correction to baseline wall notation: Node 22 is 553s (9m13s), Node 26 is 488s (8m08s). Earlier 493s for Node 22 was a transcription error; raw job timestamps were 20:42:00 to 20:51:13 UTC."
+  "2026-11-15T16:10:59.772Z",codex-sol,"Typecheck, test typecheck and docstring gate passed; linked static checks passed in 4.988s. Touched quick suites passed 29 tests, zero failures, 28.218s. All 26 schema/reference cells remain exercised; generated allowed/required-refused/CLI-refused totals are derived from testDepth(512), not seeded starting counts. No elapsed-time product assertion is scaled; the only testTime use is the worker harness test timeout evaluated before spawning. Strict YAML/timeout validation passed; actionlint is unavailable. Quick coverage remains running under its twenty-minute watchdog."
+  "2026-11-15T16:16:46.472Z",codex-sol,"Quick coverage passed: 319 tests, zero failures; all 10 inventoried source files at unchanged 100% lines/branches/functions. Entire command 409.07s (6m49s), suite 385.516s on the contended development host; not comparable to baseline hosted full gates. Final generated diagnostics suites passed 14/14 in 33.836s. Strict health passed with three pre-existing stale-item advisories; changelog and attestation passed. No flaky failure was reproduced; the fixed sixty-second worker harness now scales safely for slow runners. No product budget changes. First PR #213 CI run 43734037214 is queued; PR wall completion time is unavailable and CI is not awaited. Full depth and independent statement/source-scope expansion remain outside local proof. Claim released; item stays in progress for orchestrator verification."
+files[12]{path,scope}:
+  .github/workflows/ci-deep.yml,project
+  .github/workflows/ci.yml,project
+  .github/workflows/codeql.yml,project
+  test/adf-evidence.test.ts,project
+  test/create-preview-model.test.ts,project
+  test/create-preview.test.ts,project
+  test/create-scope.test.ts,project
+  test/payload-completeness.test.ts,project
+  test/persistence-context.test.ts,project
+  test/preview-apply-law.test.ts,project
+  test/support/depth.ts,project
+  test/support/time.ts,project
+tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+  npm run typecheck && npm run docstring,project,600,codex-sol,"2026-11-15T16:09:09.178Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/create-scope.test.ts test/payload-completeness.test.ts test/preview-apply-law.test.ts test/create-preview.test.ts test/create-preview-model.test.ts test/adf-evidence.test.ts test/persistence-context.test.ts,project,1200,codex-sol,"2026-11-15T16:10:50.367Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 npm run coverage,project,1200,codex-sol,"2026-11-15T16:10:54.940Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+docs[1]{path,scope}:
+  docs/ci-tiers.md,project
+body: ""

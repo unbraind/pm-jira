@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Behavioral contracts for strict create metadata and all-batch export validation. */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -139,7 +140,7 @@ test("seeded extreme input/output fuzz keeps numeric and byte contracts finite",
   let seed = 0x43524541;
   const random = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
   const extremes = [NaN, Infinity, -Infinity, Number.MAX_VALUE, Number.MIN_VALUE, -1e12, 1e12, 1e12 + 1, -0, [], Array(2), null, {}, { id: "1" }, "雪".repeat(512)];
-  for (let n = 0; n < 1000; n++) {
+  for (let n = 0; n < testDepth(1000); n++) {
     const input = contract(); const chosen = extremes[random() % extremes.length];
     if (random() % 2) Object.assign(input, { budget: chosen }); else Object.assign(input.answers, { summary: chosen });
     const output = previewJiraCreate(input);

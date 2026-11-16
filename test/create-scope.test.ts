@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Target identity is invariant under every contract/native field overlay and published entry point. */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -84,7 +85,7 @@ test("seed 0x53434f50: scope mismatches never reach recording Jira; matching sco
   const address = server.address(); assert.ok(address && typeof address === "object"); const host = `https://127.0.0.1:${address.port}`;
   let seed = 0x53434f50; const next = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
   const covered = new Set<string>();
-  for (let sequence = 0; sequence < 512; sequence++) {
+  for (let sequence = 0; sequence < testDepth(512); sequence++) {
     const input = contract(`P${next()}`, `Type${next()}`);
     const projectMismatch = Boolean(next() & 1); const typeMismatch = !projectMismatch || Boolean(next() & 1);
     const plan = buildExportPlan([{ title: "Mapped" }], host, { projectKey: projectMismatch ? `OTHER${sequence}` : input.project });
@@ -148,5 +149,5 @@ console.log('packed scope refused');`);
   }
   assert.equal(calls.length, prior);
   assert.deepEqual((await listAllComplete({ includeBody: true }, { pmRoot: root, cwd: root, noExtensions: true })).items, before);
-  t.diagnostic("512 mismatched targets refused with zero HTTP; 512 matching digest-equal POSTs; 90 whole-layer cases; registered SDK, packed Node/Bun and installed JSON/TOON refusal paths; SDK state unchanged");
+  t.diagnostic(`${testDepth(512)} mismatched targets refused with zero HTTP; ${testDepth(512)} matching digest-equal POSTs; 90 whole-layer cases; registered SDK, packed Node/Bun and installed JSON/TOON refusal paths; SDK state unchanged`);
 });

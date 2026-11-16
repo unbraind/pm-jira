@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 2026.11.14 - 2026-11-14
 
-### Other
+### Dependencies
 
-- Close delivered pm items and reserve in progress for active work (2026-10-24) ([pm-jira-cjh2](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-cjh2.toon))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#211](https://github.com/unbraind/pm-jira/pull/211))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#210](https://github.com/unbraind/pm-jira/pull/210))
+- Bump the pm-toolchain group with 2 updates ([#206](https://github.com/unbraind/pm-jira/pull/206))
 
 ## 2026.11.13 - 2026-11-13
 
@@ -25,15 +27,13 @@
 
 ## 2026.11.7 - 2026-11-07
 
-### Fixed
-
-- Distinguish resumable atomic interruption from compensated import failure ([pm-jira-d3tp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-d3tp.toon))
+No changes.
 
 ## 2026.11.5 - 2026-11-05
 
-### Other
+### Dependencies
 
-- Migrate ADF capture fixtures to literal typed SDK fields ([pm-jira-toolchain-1104](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-toolchain-1104.toon))
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#191](https://github.com/unbraind/pm-jira/pull/191))
 
 ## 2026.11.3 - 2026-11-03
 
