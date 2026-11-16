@@ -124,13 +124,48 @@ test("the fail-open guard still admits a genuinely attested publish", () => {
 });
 
 test("this repository's own workflows pass the gate", () => {
-  // The gate pointed at this checkout, which is what CI runs. Reported through
-  // captured streams rather than the process ones so a failure is readable.
+  // A reusable caller delegates enforcement; an unavailable canonical tag
+  // lookup must remain an explicit deferral rather than claim attestation.
+  const audited = verify(root);
   const lines: string[] = [];
   let exitCode = 0;
-  report(verify(root), (line) => lines.push(line), (code) => { exitCode = code; });
+  report(audited, (line) => lines.push(line), (code) => { exitCode = code; });
   assert.equal(exitCode, 0, `the gate must pass on this repository:\n${lines.join("\n")}`);
-  assert.ok(lines.some((line) => line.includes("every publish invocation is attested")));
+  assert.deepEqual(audited.failures, []);
+  assert.notEqual(audited.recognition.kind, "none", "the pinned release caller must be recognized");
+  assert.ok(lines.some((line) => line.includes("unbraind/pm-ops/.github/workflows/daily-release.yml@")));
+  if (audited.recognition.kind === "unverified-offline") {
+    assert.ok(lines.some((line) => line.includes("unverified-offline; attestation deferred")));
+    assert.ok(lines.every((line) => !line.includes("every publish invocation is attested")));
+  } else {
+    assert.equal(audited.recognition.kind, "recognized");
+    assert.ok(lines.some((line) => line.includes("every publish invocation is attested")));
+  }
+});
+
+test("offline delegation stays deferred and never exempts an adjacent unattested publisher", () => {
+  const previous = process.env.PM_OPS_OFFLINE;
+  process.env.PM_OPS_OFFLINE = "1";
+  try {
+    // A synthetic future pin cannot become verified by a newer bundled snapshot.
+    const caller = { file: ".github/workflows/release.yml", text: readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8")
+      .replace(/daily-release\.yml@[^\n]+/u, `daily-release.yml@${"1".repeat(40)} # v2099.01.01`) };
+    const audited = auditPublishAttestation([caller]);
+    assert.deepEqual(audited.failures, []);
+    assert.equal(audited.recognition.kind, "unverified-offline");
+    const lines: string[] = [];
+    report(audited, (line) => lines.push(line), () => assert.fail("a deferred caller is not a refusal"));
+    assert.ok(lines.some((line) => line.includes("unverified-offline; attestation deferred")));
+    assert.ok(lines.every((line) => !line.includes("every publish invocation is attested")));
+    const unsafe = auditPublishAttestation([caller, { file: ".github/publish.sh", text: "#!/bin/sh\nnpm publish --access public\n" }]);
+    assert.equal(unsafe.failures.length, 1, "delegation must not hide a local unattested publish");
+    let exitCode = 0;
+    report(unsafe, () => {}, (code) => { exitCode = code; });
+    assert.equal(exitCode, 1);
+  } finally {
+    if (previous === undefined) delete process.env.PM_OPS_OFFLINE;
+    else process.env.PM_OPS_OFFLINE = previous;
+  }
 });
 
 test("the launcher runs only as the process entry point", () => {

@@ -6,19 +6,23 @@ status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-jira#212"
 created_at: "2026-11-16T12:12:10.218Z"
-updated_at: "2026-11-16T12:36:44.043Z"
+updated_at: "2026-11-16T19:35:07.304Z"
 author: codex-sol
-comments[4]{created_at,author,text}:
+comments[6]{created_at,author,text}:
   "2026-11-16T12:12:22.062Z",codex-sol,"Merged current main and retained both caller pins. No failing checks at the inspected PR head. Thread PRRT_kwDOSYpLFc63oZTO is a valid conditional concern: GITHUB_TOKEN merges do not start push workflows. Current read-only APIs show allow_auto_merge=true, required checks strict=false and no applicable branch rules. Both pinned callees refuse auto-merge unless required checks enforce freshness (sync lines 770-785; closeout lines 738-753), so it is currently unarmed. Refuse credential or repository-setting changes forbidden by this task, and do not disable CI dispatch with empty ci-workflows. Record the caveat without claiming the future token behavior is solved."
   "2026-11-16T12:23:26.337Z",codex-sol,"Read-only GraphQL confirms requiresStatusChecks=true and requiresStrictStatusChecks=false; applicable branch rules list is empty. This corroborates the current auto-merge refusal guard for the unresolved review thread. Exact caller-contract test, typecheck and tracker validation pass. The repository defines no npm lint script. Retried dependency-gated commands only after npm ci completed; quick npm suite remains running."
   "2026-11-16T12:30:18.019Z",codex-sol,"Prepared verification commit 2ce0ff9 records exact caller tests and disposition of PRRT_kwDOSYpLFc63oZTO. The current freshness guard prevents arming token-based auto-merge; no credential or settings change is made. Typecheck, caller contract, tracker validation and changelog:check pass. Quick npm tests remain running."
   "2026-11-16T12:36:40.118Z",codex-sol,"Complete PM_TEST_DEPTH=quick npm test exited 1: 320 tests, 319 pass, 1 fail, 0 cancelled/skipped/todo, duration 1094793 ms. Failure is test/persistence-context.test.ts:81: concurrent atomic import reports a live sdk-workspace-transaction lock after waiting 3077 ms and unconfirmed rollback. Focused retry also fails with the same lock at 3071 ms (1 test, 0 pass, 1 fail). Follow-up pm-jira-shared-transaction-wait owns this unchanged runtime failure. Caller tests, typecheck and changelog checks pass; no broad-suite success is claimed."
-files[3]{path,scope}:
+  "2026-11-16T19:28:43.804Z",codex-sol,"Root cause verified: pm-ops 2026.11.14 report() emits unverified-offline; attestation deferred when canonical tag lookup cannot verify the reusable caller pin. The checkout and origin/main retain an assertion requiring the local-publisher attested sentence. PM_OPS_OFFLINE=1 reproduces deterministically; no pin-sync change caused this pre-existing main failure. Keep structured recognition, explicit deferral and local unattested-publish refusal coverage."
+  "2026-11-16T19:35:05.376Z",codex-sol,"Review Q validation: origin/main 6837fb135b00cd34df0f9546fbb0d1c80a6aef4c reproduces the same stale assertion with PM_OPS_OFFLINE=1. Updated the consumer contract and added a synthetic future-pin offline regression plus adjacent unattested-publisher refusal. Offline and online targeted workflow/attestation tests each pass 15/15; linked pm tests pass both commands (1 caller test and 15 workflow/attestation tests). npm run typecheck and npm run changelog:check pass. package.json defines no lint script or lint configuration; git diff --check passes, without claiming a lint run. Full suite remains delegated to CI."
+files[4]{path,scope}:
   .github/workflows/pm-github-closeout.yml,project
   .github/workflows/pm-github-sync.yml,project
   test/pm-github-callers.test.ts,project
-tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  test/verify-release-publish-attestation.test.ts,project
+tests[2]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/pm-github-callers.test.ts,project,codex-sol,"2026-11-16T12:13:45.664Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
+  node --test test/verify-release-publish-attestation.test.ts test/release-workflow.test.ts,project,codex-sol,"2026-11-16T19:32:55.715Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
 docs[1]{path,scope}:
   docs/ci-tiers.md,project
 body: ""
