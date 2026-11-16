@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Selection/privacy/replay laws exercise the public SDK, never a second text normalizer. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -47,7 +48,7 @@ test("nullable editor defaults: 500 seeded selections preserve every recognized 
   let seed = 0x178c011;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
   const variants = [undefined, null, [0], [1000000], [0, 1000000]];
-  for (let sequence = 0; sequence < 500; sequence++) {
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     const request = fixture();
     const cells = request.source.document.content![1]!.content![0]!.content!;
     for (const [i, cell] of cells.entries()) {
@@ -208,10 +209,10 @@ test("packet reader rejects corrupt/foreign records before replay, including val
   const restored = replayAdfEvidence(preview(empty)); assert.equal(restored.kind, "replayed");
 });
 
-test("seed 0xadf1029: 500 operation sequences preserve producer/validator agreement, order and exact text", () => {
+test("seed 0xadf1029: seeded operation sequences preserve producer/validator agreement, order and exact text", () => {
   let seed = 0xadf1029;
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
-  for (let sequence = 0; sequence < 500; sequence++) {
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     const input = fixture(); const text = ` ${rand()}${rand() % 2 ? "\r\n" : "\n"}tail `;
     input.source.revision = `revision-${sequence}`; input.source.document.content![2]!.content![0]!.text = text;
     input.select = rand() % 2 ? ["/content/2", "/content/1/content/0/content/0"] : ["/content/2", "/content/3"];

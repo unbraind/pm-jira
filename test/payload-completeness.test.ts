@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Independent refuse/allow corpora separate CLI values from metadata-driven create payloads. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -146,7 +147,7 @@ test("seed 0x454d5054: MUST-ALLOW optional empties and MUST-REFUSE required empt
   ];
   let allowed = 0; let refusedRequired = 0; let refusedOptions = 0;
   const roles = new Set<string>(); const emptyCoverage = new Set<string>();
-  for (let sequence = 0; sequence < 512; sequence++) {
+  for (let sequence = 0; sequence < testDepth(512); sequence++) {
     const metadata = base(); metadata.revision = `seed-${sequence}`;
     metadata.fields = [metadata.fields[0]!, ...schemas.map(({ field }) => ({ ...field, required: Boolean(next() & 1) }))];
     const payload = buildExportPlan(items, host, { projectKey: "DEMO" });
@@ -187,8 +188,8 @@ test("seed 0x454d5054: MUST-ALLOW optional empties and MUST-REFUSE required empt
     for (const { field } of schemas) assert.equal(Object.hasOwn(posts.at(-1)!.fields, field.id), false);
   }
   assert.equal(roles.size, schemas.length * 2); assert.equal(emptyCoverage.size, 8 * EMPTY.length);
-  assert.equal(allowed, 1024); assert.equal(refusedRequired, 512); assert.equal(refusedOptions, 512);
+  assert.equal(allowed, testDepth(512) * 2); assert.equal(refusedRequired, testDepth(512)); assert.equal(refusedOptions, testDepth(512));
   assert.ok(posts.every(post => post.accepted)); assert.ok(methods.every(method => method === "POST"));
   assert.deepEqual(await readback(), before);
-  t.diagnostic(`512 seeded metadata sequences; ${allowed} MUST-ALLOW POSTs plus fixed optional labels; ${refusedRequired} required-empty and ${refusedOptions} CLI-blank MUST-REFUSE cases; all posted bodies schema-accepted; SDK state unchanged`);
+  t.diagnostic(`${testDepth(512)} seeded metadata sequences; ${allowed} MUST-ALLOW POSTs plus fixed optional labels; ${refusedRequired} required-empty and ${refusedOptions} CLI-blank MUST-REFUSE cases; all posted bodies schema-accepted; SDK state unchanged`);
 });
