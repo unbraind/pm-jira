@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.16 - 2026-11-16
+
+### Dependencies
+
+- Bump the pm-toolchain group with 2 updates
+
 ## 2026.11.14 - 2026-11-14
 
 ### Dependencies
