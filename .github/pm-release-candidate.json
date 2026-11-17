@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "repository": "unbraind/pm-jira",
-  "baseSha": "8930ebfef8f79df6f5d33d20d1fe8bd5c5230e25",
+  "baseSha": "77139d81289592cb0b6f2a2ddda588d9c7319fb9",
   "version": "2026.11.16",
-  "runId": 43860908293,
+  "runId": 44080238493,
   "runAttempt": 1,
   "configDigest": "8473bb6708cc7e769b8bad538160052226631f89b6e07f2524414196dc719072"
 }
