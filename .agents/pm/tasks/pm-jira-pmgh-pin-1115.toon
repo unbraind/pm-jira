@@ -6,9 +6,9 @@ status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-jira#212"
 created_at: "2026-11-16T12:12:10.218Z"
-updated_at: "2026-11-16T19:45:04.198Z"
+updated_at: "2026-11-17T02:02:19.858Z"
 author: codex-sol
-comments[8]{created_at,author,text}:
+comments[10]{created_at,author,text}:
   "2026-11-16T12:12:22.062Z",codex-sol,"Merged current main and retained both caller pins. No failing checks at the inspected PR head. Thread PRRT_kwDOSYpLFc63oZTO is a valid conditional concern: GITHUB_TOKEN merges do not start push workflows. Current read-only APIs show allow_auto_merge=true, required checks strict=false and no applicable branch rules. Both pinned callees refuse auto-merge unless required checks enforce freshness (sync lines 770-785; closeout lines 738-753), so it is currently unarmed. Refuse credential or repository-setting changes forbidden by this task, and do not disable CI dispatch with empty ci-workflows. Record the caveat without claiming the future token behavior is solved."
   "2026-11-16T12:23:26.337Z",codex-sol,"Read-only GraphQL confirms requiresStatusChecks=true and requiresStrictStatusChecks=false; applicable branch rules list is empty. This corroborates the current auto-merge refusal guard for the unresolved review thread. Exact caller-contract test, typecheck and tracker validation pass. The repository defines no npm lint script. Retried dependency-gated commands only after npm ci completed; quick npm suite remains running."
   "2026-11-16T12:30:18.019Z",codex-sol,"Prepared verification commit 2ce0ff9 records exact caller tests and disposition of PRRT_kwDOSYpLFc63oZTO. The current freshness guard prevents arming token-based auto-merge; no credential or settings change is made. Typecheck, caller contract, tracker validation and changelog:check pass. Quick npm tests remain running."
@@ -17,14 +17,38 @@ comments[8]{created_at,author,text}:
   "2026-11-16T19:35:05.376Z",codex-sol,"Review Q validation: origin/main 6837fb135b00cd34df0f9546fbb0d1c80a6aef4c reproduces the same stale assertion with PM_OPS_OFFLINE=1. Updated the consumer contract and added a synthetic future-pin offline regression plus adjacent unattested-publisher refusal. Offline and online targeted workflow/attestation tests each pass 15/15; linked pm tests pass both commands (1 caller test and 15 workflow/attestation tests). npm run typecheck and npm run changelog:check pass. package.json defines no lint script or lint configuration; git diff --check passes, without claiming a lint run. Full suite remains delegated to CI."
   "2026-11-16T19:35:50.014Z",codex-sol,"Review Q implementation commit: d4a0335 (consumer contract and regression tests, with tracker history). Validation commands: npm run typecheck; node --test test/verify-release-publish-attestation.test.ts test/release-workflow.test.ts, both online and with PM_OPS_OFFLINE=1; pm test pm-jira-pmgh-pin-1115 --run --progress --timeout 180; npm run changelog:check; git diff --check. All pass. No item or review thread was closed."
   "2026-11-16T19:45:04.198Z",codex-sol,"Pushed commits d4a0335 and f79afae; exact published PR212 head is f79afaec8dc088303fd2949b50b299275b88999a. PR body was read back and verified, including the main reproduction and deferred-attestation contract. CI run 43941090021 is cancelled: test22 job 133558456957 and test26 job 133558456399 executed zero steps; log API endpoints return HTTP404. No new test failure is established and no rerun was requested. The renewed shared-runner hold expires at 2026-11-16T21:00:00Z, beyond the last-push cutoff 2026-11-16T20:06:18Z; this additional receipt remains local rather than bypassing the hold."
-files[4]{path,scope}:
+  "2026-11-17T01:51:22.706Z",codex-sol,"Review round AA: pulled and verified the open PR head. Source inspection confirms changelog dependencies can drift when main gains linked Dependabot merges. Plan: merge origin/main, regenerate with the documented changelog command, then check caller pins and types."
+  "2026-11-17T02:02:13.083Z",codex-sol,"Merged origin/main as requested. Before regeneration, changelog:check reproduced the missing Dependencies link to PR #215. npm run changelog:full generated the link; CHANGELOG.md was never hand-edited. npm run typecheck, node --test test/pm-github-callers.test.ts (1 passed), and npm run changelog:check all passed through pm test --run --only-last --progress. No caller pins changed. Full-suite certification remains with CI."
+files[5]{path,scope}:
   .github/workflows/pm-github-closeout.yml,project
   .github/workflows/pm-github-sync.yml,project
+  CHANGELOG.md,project
   test/pm-github-callers.test.ts,project
   test/verify-release-publish-attestation.test.ts,project
-tests[2]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
-  node --test test/pm-github-callers.test.ts,project,codex-sol,"2026-11-16T12:13:45.664Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
-  node --test test/verify-release-publish-attestation.test.ts test/release-workflow.test.ts,project,codex-sol,"2026-11-16T19:32:55.715Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
-docs[1]{path,scope}:
+tests[3]:
+  - command: node --test test/pm-github-callers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T12:13:45.664Z"
+      source_kind: local_mutation
+      source_ref: ci/pm-github-2026.11.15-bounded-ci-dispatch
+  - command: node --test test/verify-release-publish-attestation.test.ts test/release-workflow.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T19:32:55.715Z"
+      source_kind: local_mutation
+      source_ref: ci/pm-github-2026.11.15-bounded-ci-dispatch
+  - command: "npm run typecheck && node --test test/pm-github-callers.test.ts && npm run changelog:check"
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T01:56:36.017Z"
+      source_kind: local_mutation
+      source_ref: ci/pm-github-2026.11.15-bounded-ci-dispatch
+docs[2]{path,scope}:
+  CHANGELOG.md,project
   docs/ci-tiers.md,project
 body: ""

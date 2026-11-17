@@ -4,7 +4,7 @@
 
 ### Dependencies
 
-- Bump the pm-toolchain group with 2 updates
+- Bump the pm-toolchain group with 2 updates ([#215](https://github.com/unbraind/pm-jira/pull/215))
 
 ## 2026.11.14 - 2026-11-14
 
