@@ -4,7 +4,7 @@
 
 ### Dependencies
 
-- Bump @unbrained/pm-cli
+- Bump @unbrained/pm-cli from 2026.11.13 to 2026.11.14 in the pm-toolchain group ([#217](https://github.com/unbraind/pm-jira/pull/217))
 - Bump the pm-toolchain group with 2 updates ([#215](https://github.com/unbraind/pm-jira/pull/215))
 
 ## 2026.11.14 - 2026-11-14
