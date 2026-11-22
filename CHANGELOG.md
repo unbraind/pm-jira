@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.22 - 2026-11-22
+
+### Dependencies
+
+- Bump unbraind/pm-ops/.github/workflows/daily-release.yml ([#225](https://github.com/unbraind/pm-jira/pull/225))
+
 ## 2026.11.20 - 2026-11-20
 
 No changes.
