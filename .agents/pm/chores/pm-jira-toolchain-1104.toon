@@ -2,20 +2,24 @@ id: pm-jira-toolchain-1104
 title: Migrate ADF capture fixtures to literal typed SDK fields
 description: "Verify issue #192 on pm-cli 2026.11.4 and certify the newest pm toolchain for https://github.com/unbraind/pm-jira/pull/191"
 type: Chore
-status: in_progress
+status: closed
 priority: 2
 tags[5]: dependencies,"gh:unbraind/pm-jira#191","gh:unbraind/pm-jira#192",migration,sdk
 created_at: "2026-11-04T19:04:03.390Z"
-updated_at: "2026-11-04T20:40:22.975Z"
+updated_at: "2026-11-14T10:10:11.590Z"
+closed_at: "2026-11-14T08:54:30.050Z"
+completed_at: "2026-11-04T23:38:45.000Z"
 author: codex-toolchain-1104
 acceptance_criteria: "Reproduce installed ADF fixture refusal, preserve every native state and capture assertion, pass full coverage and typecheck, update secondary toolchain pins."
-comments[6]{created_at,author,text}:
+release: 2026.11.5
+comments[7]{created_at,author,text}:
   "2026-11-04T19:05:27.749Z",codex-toolchain-1104,"Verified issue #192: installed ADF test fails 1/2 on SDK 2026.11.4 with parent placeholder refusal. Root cause: pm-cli 2026.10.30 GH-1614 (test contract). Replace fixture parent/goal/objective/sprint/release sentinels with explicit unset arrays, preserving child parent/custom status, relationships and every readback/capture assertion. Secondary pins updated in scripts/packed-adf-acceptance.ts and docs/adf-evidence-validation.md. No production change."
   "2026-11-04T19:09:26.216Z",codex-toolchain-1104,"Additional verified cause: pm-changelog 2026.10.31 GH-302 now refuses MISSING_REQUESTED_RELEASE for package version 2026.11.3 because that daily release has no qualifying closed items; existing CHANGELOG stops at 2026.10.29. Classification: generated-release contract. Explicitly include intentionally empty release windows in package scripts and release workflow; keep closed-only item selection, preserve missing-work diagnostics, and regenerate notes rather than substituting an older section."
   "2026-11-04T19:14:51.285Z",codex-toolchain-1104,"Focused installed ADF tests passed 2/2 after explicit unset; typecheck, build and docstring checks passed. The release-date verifier and its tests pass with the explicit empty-window flags. Changelog full regeneration and check pass. No lint script is declared. Packed acceptance is still running; full coverage remains queued behind the earlier package and shared-host suite."
   "2026-11-04T19:22:29.179Z",codex-toolchain-1104,"Packed ADF acceptance passed all six modes (npm global, Bun global, npx, bunx, npm local, Bun local), 108 assertions on host 2026.11.4. The same immutable 45-file artifact retained SHA-256 f0e79a933ae06aa63a7f403e7695cface486ada4fe4499306165be1048fd26fa throughout. Strict tracker health passed. Full coverage remains pending the shared-host slot."
   "2026-11-04T19:51:26.349Z",codex-toolchain-1104,"ADF command regressions pass 2/2 on Node 22.23.4 and 2/2 on Node 26.13.0. Test compilation and production audit pass. The only remaining verification is full coverage, queued under the shared-host suite constraint. Classify the additional pm-changelog GH-302 change as a test/release-gate contract update for empty tracker-selected windows."
   "2026-11-04T20:40:20.277Z",codex-toolchain-1104,"Full verification passed: nice -n 10 env NPM_CONFIG_USERCONFIG=/dev/null npm run coverage completed 312/312 tests, with 100% lines, branches and functions across all 9 source files measured by the unchanged native gate. Statements are not independently reported by this gate. ADF fixtures pass 2/2 on Node 22 and 26; six packed npm/Bun modes and 108 assertions pass. Typecheck, test compilation, build, docstrings, release-date tests/verifier, production audit, strict health and changelog checks pass. No lint script exists. Both roots are test contracts: GH-1614 typed clears and pm-changelog GH-302 requested-release notes. No upstream regression identified."
+  "2026-11-14T10:10:11.590Z",codex-sweep-1114,"Release-attribution correction: completed_at = 2026-11-04T23:38:45Z from https://github.com/unbraind/pm-jira/pull/191 (merge SHA 41aaa8c5ed7430aff4eb9721967ff2ff8534247d); first containing release tag v2026.11.05, recorded release 2026.11.5."
 files[5]{path,scope}:
   .github/workflows/release.yml,project
   package-lock.json,project
@@ -28,4 +32,5 @@ tests[2]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,
 docs[2]{path,scope}:
   CHANGELOG.md,project
   docs/adf-evidence-validation.md,project
+close_reason: "https://github.com/unbraind/pm-jira/pull/191 merged 2026-11-04T23:38:45Z; merge SHA 41aaa8c5ed7430aff4eb9721967ff2ff8534247d; PR head e1aee74e2c925b5a969b9995b2dab61b893b6499. Delivered: Typed ADF capture fixtures and toolchain pins preserve native-state/capture assertions with full coverage, packed consumers and Node 22/26 acceptance. Green at that head: test (22), codeql, enable-auto-merge, test (26), CodeQL, DeepScan, Hound, Sourcery review. Other check outcomes: CodeRabbit: SKIPPED (not counted as green)."
 body: ""

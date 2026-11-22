@@ -44,13 +44,15 @@ No changes.
 
 ## 2026.11.7 - 2026-11-07
 
-No changes.
+### Fixed
+
+- Distinguish resumable atomic interruption from compensated import failure ([pm-jira-d3tp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-d3tp.toon))
 
 ## 2026.11.5 - 2026-11-05
 
-### Dependencies
+### Other
 
-- Bump the pm-toolchain group across 1 directory with 3 updates ([#191](https://github.com/unbraind/pm-jira/pull/191))
+- Migrate ADF capture fixtures to literal typed SDK fields ([pm-jira-toolchain-1104](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-toolchain-1104.toon))
 
 ## 2026.11.3 - 2026-11-03
 
