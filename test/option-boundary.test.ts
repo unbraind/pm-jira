@@ -91,13 +91,23 @@ test("every command option: absent / empty / spaces / tab / CRLF / valid, with z
   try { await assert.rejects(invoke("jira export", { host, project: "DEMO", push: true, "create-contract": " " }), usage); }
   finally { t.diagnostic(`fixed review case HTTP calls: ${calls.length - reviewCount}`); }
   assert.equal(calls.length, 0);
+  await assert.rejects(invoke("jira validate", { host, project: "DEMO" }), (error: unknown) => {
+    assert.ok(isPmCliExpectedError(error));
+    assert.equal(error.exitCode, 2);
+    assert.equal(error.code, "unknown_option");
+    assert.match(error.message, /'project'.*'jira validate'/);
+    return true;
+  });
+  assert.equal(calls.length, 0);
   for (const [command, fields] of Object.entries(JIRA_OPTION_TABLE)) {
     const switches = registrations.filter(row => row.target_command === command).flatMap(row => row.flags).filter(flag => !flag.value_name).map(flag => flag.long!.slice(2));
     for (const field of [...fields, ...switches]) {
       optionPairs++;
       const camel = field.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
       for (const spelling of new Set([field, camel])) for (const value of [absent, ...blanks, valid[field] ?? "true"]) {
-        const options: Record<string, unknown> = { host, project: "DEMO" };
+        const options: Record<string, unknown> = {};
+        if (fields.includes("host")) options.host = host;
+        if (fields.includes("project")) options.project = "DEMO";
         if (command === "jira export") Object.assign(options, { push: true, "create-contract": contract });
         if (command === "jira plan-transition") Object.assign(options, { issue: "DEMO-1", to: "closed" });
         if (command === "jira explain-selection") Object.assign(options, { before: snapshot, after: snapshot });
