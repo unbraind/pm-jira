@@ -58,6 +58,10 @@ No changes.
 
 - Migrate ADF capture fixtures to literal typed SDK fields ([pm-jira-toolchain-1104](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-toolchain-1104.toon))
 
+### Dependencies
+
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#191](https://github.com/unbraind/pm-jira/pull/191))
+
 ## 2026.11.3 - 2026-11-03
 
 No changes.
