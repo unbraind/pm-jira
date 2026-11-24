@@ -64,19 +64,29 @@ No changes.
 
 ## 2026.11.3 - 2026-11-03
 
-No changes.
+### Dependencies
+
+- Bump @types/node ([#189](https://github.com/unbraind/pm-jira/pull/189))
+- Bump the pm-toolchain group with 3 updates ([#188](https://github.com/unbraind/pm-jira/pull/188))
 
 ## 2026.11.1 - 2026-11-01
 
-No changes.
+### Dependencies
+
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#185](https://github.com/unbraind/pm-jira/pull/185))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#186](https://github.com/unbraind/pm-jira/pull/186))
 
 ## 2026.10.31 - 2026-10-31
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#182](https://github.com/unbraind/pm-jira/pull/182))
 
 ## 2026.10.30 - 2026-10-30
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#180](https://github.com/unbraind/pm-jira/pull/180))
 
 ## 2026.10.29 - 2026-10-29
 
@@ -84,6 +94,10 @@ No changes.
 
 - Capture selected structured Jira description blocks as portable evidence ([pm-jira-adf-block-evidence](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-adf-block-evidence.toon))
 - Preview required Jira create fields before export ([pm-jira-create-field-previews](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-create-field-previews.toon))
+
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#177](https://github.com/unbraind/pm-jira/pull/177))
 
 ## 2026.10.28 - 2026-10-28
 
@@ -94,6 +108,11 @@ No changes.
 ### Other
 
 - Stop Hound from linting generated dist/ output ([pm-jira-92cf](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-92cf.toon))
+
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#175](https://github.com/unbraind/pm-jira/pull/175))
+- Bump the pm-toolchain group with 3 updates ([#171](https://github.com/unbraind/pm-jira/pull/171))
 
 ## 2026.10.26 - 2026-10-26
 
@@ -108,9 +127,17 @@ No changes.
 - Explain entries and exits between explicit JQL selections ([pm-jira-0x0e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-0x0e.toon))
 - Plan permitted Jira lifecycle transitions before writes ([pm-jira-9h54](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/features/pm-jira-9h54.toon))
 
+### Dependencies
+
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#160](https://github.com/unbraind/pm-jira/pull/160))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#161](https://github.com/unbraind/pm-jira/pull/161))
+- Bump the codeql-action group with 2 updates ([#159](https://github.com/unbraind/pm-jira/pull/159))
+
 ## 2026.10.24 - 2026-10-24
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#153](https://github.com/unbraind/pm-jira/pull/153))
 
 ## 2026.10.23 - 2026-10-23
 
@@ -137,35 +164,52 @@ No changes.
 
 ## 2026.10.20 - 2026-10-20
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#150](https://github.com/unbraind/pm-jira/pull/150))
 
 ## 2026.10.18 - 2026-10-18
 
-No changes.
+### Dependencies
+
+- Bump the codeql-action group with 2 updates ([#148](https://github.com/unbraind/pm-jira/pull/148))
 
 ## 2026.10.17 - 2026-10-17
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#146](https://github.com/unbraind/pm-jira/pull/146))
 
 ## 2026.10.16 - 2026-10-16
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#143](https://github.com/unbraind/pm-jira/pull/143))
 
 ## 2026.10.15 - 2026-10-15
 
-No changes.
+### Dependencies
+
+- Bump @unbrained/pm-cli ([#141](https://github.com/unbraind/pm-jira/pull/141))
 
 ## 2026.10.14 - 2026-10-14
 
-No changes.
+### Dependencies
+
+- Bump @types/node ([#138](https://github.com/unbraind/pm-jira/pull/138))
+- Bump @unbrained/pm-cli ([#137](https://github.com/unbraind/pm-jira/pull/137))
 
 ## 2026.10.10 - 2026-10-10
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#135](https://github.com/unbraind/pm-jira/pull/135))
 
 ## 2026.10.9 - 2026-10-09
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 2 updates ([#133](https://github.com/unbraind/pm-jira/pull/133))
 
 ## 2026.10.8 - 2026-10-08
 
@@ -199,6 +243,10 @@ No changes.
 
 - Certify pm CLI 2026.9.21 and install merge drivers through the canonical pm-ops launcher ([pm-jira-jrkg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-jrkg.toon))
 
+### Dependencies
+
+- Bump @types/node from 26.5.1 to 26.6.2 ([#113](https://github.com/unbraind/pm-jira/pull/113))
+
 ## 2026.9.18 - 2026-09-18
 
 ### Other
@@ -210,6 +258,12 @@ No changes.
 ### Other
 
 - Certify pm CLI 2026.9.12 and the pm-ops 2026.9.11 auditor ([pm-jira-rspz](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-rspz.toon))
+
+### Dependencies
+
+- Bump @types/node from 26.4.1 to 26.5.1 ([#105](https://github.com/unbraind/pm-jira/pull/105))
+- Bump pm-changelog from 2026.9.6 to 2026.9.9 ([#106](https://github.com/unbraind/pm-jira/pull/106))
+- Bump the codeql-action group with 2 updates ([#107](https://github.com/unbraind/pm-jira/pull/107))
 
 ## 2026.9.11 - 2026-09-11
 
@@ -235,6 +289,10 @@ No changes.
 
 - Pin the pm toolchain to 2026.9.5 ([pm-jira-kg3e](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-kg3e.toon))
 
+### Dependencies
+
+- Bump @types/node from 26.4.0 to 26.4.1 ([#93](https://github.com/unbraind/pm-jira/pull/93))
+
 ## 2026.9.1 - 2026-09-01
 
 ### Fixed
@@ -243,11 +301,20 @@ No changes.
 - This repository has never produced a static analysis, because it runs no CodeQL workflow ([pm-jira-z97p](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-z97p.toon))
 - Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-jira-8euj](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-8euj.toon))
 
+### Dependencies
+
+- Bump @types/node from 26.3.0 to 26.4.0 ([#89](https://github.com/unbraind/pm-jira/pull/89))
+
 ## 2026.8.31 - 2026-08-31
 
 ### Closed
 
 - Closed: Pin pm-changelog 2026.8.30 before the next release ([pm-jira-5whg](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-5whg.toon))
+
+### Dependencies
+
+- Bump @types/node from 26.2.0 to 26.3.0 ([#84](https://github.com/unbraind/pm-jira/pull/84))
+- Bump pm-ops from 2026.8.10 to 2026.8.17 ([#85](https://github.com/unbraind/pm-jira/pull/85))
 
 ## 2026.8.29 - 2026-08-29
 
@@ -273,6 +340,12 @@ No changes.
 
 - Closed: The identity gate deadlocks the one remediation its own failure message prescribes ([pm-jira-c3rp](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-c3rp.toon))
 
+### Dependencies
+
+- Bump pm-changelog from 2026.8.12 to 2026.8.17 ([#71](https://github.com/unbraind/pm-jira/pull/71))
+- Bump @unbrained/pm-cli from 2026.8.15 to 2026.8.19 ([#70](https://github.com/unbraind/pm-jira/pull/70))
+- Bump pm-ops from 2026.8.10 to 2026.8.17 ([#69](https://github.com/unbraind/pm-jira/pull/69))
+
 ## 2026.8.17 - 2026-08-17
 
 ### Fixed
@@ -288,6 +361,12 @@ No changes.
 ### Deprecated
 
 - The deprecated jira-sync importer alias loses its credential gate when the preflight override is scoped ([pm-jira-2m0s](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/issues/pm-jira-2m0s.toon))
+
+### Dependencies
+
+- Bump pm-changelog from 2026.8.6 to 2026.8.12 ([#63](https://github.com/unbraind/pm-jira/pull/63))
+- Bump @types/node from 26.1.2 to 26.2.0 ([#64](https://github.com/unbraind/pm-jira/pull/64))
+- Bump pm-ops from 2026.8.8 to 2026.8.10 ([#61](https://github.com/unbraind/pm-jira/pull/61))
 
 ## 2026.8.10 - 2026-08-10
 
@@ -314,7 +393,10 @@ No changes.
 
 ## 2026.8.3 - 2026-08-03
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog from 2026.7.25 to 2026.7.29 ([#52](https://github.com/unbraind/pm-jira/pull/52))
+- Bump @types/node from 26.1.1 to 26.1.2 ([#53](https://github.com/unbraind/pm-jira/pull/53))
 
 ## 2026.8.1 - 2026-08-01
 
@@ -360,6 +442,10 @@ No changes.
 
 - Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-jira-e4q3](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-e4q3.toon))
 
+### Dependencies
+
+- Bump pm-changelog from 2026.7.24 to 2026.7.25 ([#39](https://github.com/unbraind/pm-jira/pull/39))
+
 ## 2026.7.25 - 2026-07-25
 
 ### Other
@@ -392,7 +478,11 @@ No changes.
 
 ## 2026.7.20 - 2026-07-20
 
-No changes.
+### Dependencies
+
+- Bump actions/setup-node from 6 to 7 ([#27](https://github.com/unbraind/pm-jira/pull/27))
+- Bump pm-changelog from 2026.7.11 to 2026.7.18 ([#28](https://github.com/unbraind/pm-jira/pull/28))
+- Bump @unbrained/pm-cli from 2026.7.11 to 2026.7.18 ([#29](https://github.com/unbraind/pm-jira/pull/29))
 
 ## 2026.7.13-1 - 2026-07-13
 
@@ -402,7 +492,10 @@ No changes.
 
 ## 2026.7.13 - 2026-07-13
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog from 2026.7.10 to 2026.7.11 ([#25](https://github.com/unbraind/pm-jira/pull/25))
+- Bump @unbrained/pm-cli from 2026.7.10 to 2026.7.11 ([#24](https://github.com/unbraind/pm-jira/pull/24))
 
 ## 2026.7.11 - 2026-07-11
 
@@ -419,6 +512,11 @@ No changes.
 - Ecosystem release readiness pass 2026-07-06 ([pm-jira-8r0w](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-8r0w.toon))
 - Adversarial review: clean pass, no defects found ([pm-jira-pz02](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/tasks/pm-jira-pz02.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-jira-h1vn](https://github.com/unbraind/pm-jira/blob/main/.agents/pm/chores/pm-jira-h1vn.toon))
+
+### Dependencies
+
+- Bump pm-changelog from 2026.7.8 to 2026.7.10
+- Bump actions/checkout from 6 to 7
 
 ## 2026.7.10 - 2026-07-10
 
